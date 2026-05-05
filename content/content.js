@@ -12,7 +12,7 @@ const A4_WIDTH_PX = 793.7;
 const A4_HEIGHT_PX = 1122.52;
 const DEFAULT_HORIZONTAL_MARGIN_PX = 100;
 const DEFAULT_TOP_MARGIN_PX = 100;
-const DEFAULT_BOTTOM_MARGIN_PX = 147;
+const DEFAULT_BOTTOM_MARGIN_PX = 100;
 const PAGE_BODY_WIDTH_PX = A4_WIDTH_PX - DEFAULT_HORIZONTAL_MARGIN_PX * 2;
 const PAGE_BODY_HEIGHT_PX = A4_HEIGHT_PX - DEFAULT_TOP_MARGIN_PX - DEFAULT_BOTTOM_MARGIN_PX;
 const MIN_SCALE_PERCENT = 11;
@@ -363,7 +363,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
 
   switch (type) {
     case "pageTitle":
-      return estimateWrappedLines(text, 40, layoutWidth) * 52 + 40;
+      return estimateWrappedLines(text, 40, layoutWidth) * 52 + 0;
     case "h2":
       return estimateWrappedLines(text, 30, layoutWidth) * 44 + 34;
     case "h3":
