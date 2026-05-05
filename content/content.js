@@ -498,8 +498,48 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
     blocks: measuredBlocks,
     estimatedPages: Math.max(1, Math.ceil(Math.max(1, totalHeight) / (PAGE_BODY_HEIGHT_PX / scaleFactor))),
     layoutWidth,
-    pageHeight: PAGE_BODY_HEIGHT_PX / scaleFactor
+    pageHeight: (PAGE_BODY_HEIGHT_PX / scaleFactor) * 1.025
   };
+}
+
+function isHeadingType(type) {
+  return type === "h2" || type === "h3" || type === "h4";
+}
+
+function getVisibleHeightForBreak(block) {
+  // Page-break 판단에서는 afterGap까지 heading에 포함시키면 너무 보수적임.
+  // Notion native PDF는 heading만 페이지 하단에 남기고 다음 본문을 다음 페이지로 넘기는 경우가 있음.
+  const lineCount = Math.max(
+    1,
+    estimateWrappedLines(
+      block.text,
+      block.type === "h2" ? ptToPx(22.5) :
+      block.type === "h3" ? ptToPx(18) :
+      block.type === "h4" ? ptToPx(15) :
+      ptToPx(12),
+      previewState?.layout?.layoutWidth || PAGE_BODY_WIDTH_PX
+    )
+  );
+
+  switch (block.type) {
+    case "h2":
+      // Notion # / HTML h2
+      // visible = 27n + 5.58 pt
+      return blockHeightFromPt(lineCount, 27, 5.58, 0);
+
+    case "h3":
+      // Notion ## / HTML h3
+      // visible = 21.75n + 4.31 pt
+      return blockHeightFromPt(lineCount, 21.75, 4.31, 0);
+
+    case "h4":
+      // Notion ### / HTML h4
+      // visible = 18n + 3.72 pt
+      return blockHeightFromPt(lineCount, 18, 3.72, 0);
+
+    default:
+      return block.height;
+  }
 }
 
 function findPageBreaks(blocks, pageHeight, estimatedPages) {
@@ -507,21 +547,51 @@ function findPageBreaks(blocks, pageHeight, estimatedPages) {
   let accumulatedHeight = 0;
   let blockIndex = 0;
 
+  // Notion native PDF는 페이지 끝 근처 heading을 약간 더 관대하게 이전 페이지에 남김.
+  // 60% PDF에서 `5. 중간 점검 지점`이 실제로 1페이지 끝에 들어가는 것에 맞춘 보정값.
+  const headingKeepTolerancePx = 64;
+
   for (let pageNumber = 1; pageNumber < estimatedPages; pageNumber += 1) {
     const pageEnd = pageHeight * pageNumber;
 
-    while (blockIndex < blocks.length && accumulatedHeight + blocks[blockIndex].height < pageEnd) {
+    while (
+      blockIndex < blocks.length &&
+      accumulatedHeight + blocks[blockIndex].height < pageEnd
+    ) {
       accumulatedHeight += blocks[blockIndex].height;
       blockIndex += 1;
     }
 
-    const block = blocks[Math.min(blockIndex, blocks.length - 1)];
+    let block = blocks[Math.min(blockIndex, blocks.length - 1)];
     if (!block) {
       continue;
     }
 
     const previousHeight = accumulatedHeight;
-    const offsetRatio = block.height > 0 ? Math.min(1, Math.max(0, (pageEnd - previousHeight) / block.height)) : 0;
+    const remainingOnPage = pageEnd - previousHeight;
+
+    // 핵심 보정:
+    // pageEnd가 heading 근처에 걸리면, heading의 afterGap까지 요구하지 말고
+    // heading visible text만 이전 페이지에 들어갈 수 있는지 본다.
+    if (isHeadingType(block.type)) {
+      const visibleHeadingHeight = getVisibleHeightForBreak(block);
+
+      if (remainingOnPage + headingKeepTolerancePx >= visibleHeadingHeight) {
+        breaks.push({
+          element: block.element,
+          offsetRatio: 1,
+          pageNumber
+        });
+
+        continue;
+      }
+    }
+
+    const offsetRatio =
+      block.height > 0
+        ? Math.min(1, Math.max(0, remainingOnPage / block.height))
+        : 0;
+
     breaks.push({
       element: block.element,
       offsetRatio,
