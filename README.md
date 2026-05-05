@@ -23,9 +23,10 @@ The extension does not control Notion's export UI. It reads the visible Notion d
 
 ## How It Estimates
 
-The content script finds the Notion page content, measures its visible block height, and compares that with an A4 content area using an internal default margin. The entered scale changes the effective content height per PDF page:
+The content script finds the Notion page content, reads visible Notion blocks, estimates each block's PDF layout height, and compares the accumulated height with an A4 content area using an internal default margin. The entered scale changes both the virtual PDF layout width and effective content height per page:
 
 ```text
+layout width = A4 body width / (scale percent / 100)
 effective page height = A4 body height / (scale percent / 100)
 ```
 

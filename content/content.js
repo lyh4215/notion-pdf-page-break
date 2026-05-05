@@ -7,8 +7,10 @@ window.__notionPdfPreviewInstalled = true;
 const OVERLAY_ID = "notion-pdf-preview-overlay";
 const PANEL_ID = "notion-pdf-preview-panel";
 
+const A4_WIDTH_PX = 793.7;
 const A4_HEIGHT_PX = 1122.52;
 const DEFAULT_MARGIN_PX = 52;
+const PAGE_BODY_WIDTH_PX = A4_WIDTH_PX - DEFAULT_MARGIN_PX * 2;
 const PAGE_BODY_HEIGHT_PX = A4_HEIGHT_PX - DEFAULT_MARGIN_PX * 2;
 const MIN_SCALE_PERCENT = 11;
 const MAX_SCALE_PERCENT = 199;
@@ -46,6 +48,14 @@ function getVisibleRect(element) {
   return rect;
 }
 
+function getElementText(element) {
+  return (element.innerText || element.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function getPrimaryTextElement(block) {
+  return block.querySelector("h1, h2, h3, [contenteditable='true'], [data-content-editable-leaf], span") || block;
+}
+
 function findNotionContentRoot() {
   const selectors = [
     ".notion-page-content",
@@ -77,45 +87,214 @@ function findNotionContentRoot() {
   return Array.from(roots.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
 }
 
-function getContentMetrics(contentRoot) {
-  const blockRects = Array.from(contentRoot.querySelectorAll("[data-block-id], h1, h2, h3, p, ul, ol, table, figure, img"))
-    .map(getVisibleRect)
-    .filter(Boolean);
+function isNestedBlock(block, allBlocks) {
+  const parentBlock = block.parentElement?.closest("[data-block-id]");
+  return parentBlock ? allBlocks.includes(parentBlock) : false;
+}
 
-  const fallbackRect = contentRoot.getBoundingClientRect();
-  const fallbackTop = fallbackRect.top;
-  const fallbackBottom = fallbackRect.bottom;
-  if (!blockRects.length) {
-    return {
-      contentTopOffset: 0,
-      height: Math.max(1, contentRoot.scrollHeight || fallbackBottom - fallbackTop),
-      left: fallbackRect.left,
-      rootTop: fallbackTop,
-      width: fallbackRect.width
-    };
+function getContentBlocks(contentRoot) {
+  const notionBlocks = Array.from(contentRoot.querySelectorAll("[data-block-id]"));
+  const visibleBlocks = notionBlocks
+    .filter((block) => getVisibleRect(block))
+    .filter((block) => !isNestedBlock(block, notionBlocks));
+
+  if (visibleBlocks.length) {
+    return visibleBlocks;
   }
 
-  const top = Math.min(...blockRects.map((rect) => rect.top));
-  const bottom = Math.max(...blockRects.map((rect) => rect.bottom));
-  const left = Math.max(16, fallbackRect.left);
-  const width = Math.max(280, Math.min(fallbackRect.width || 720, document.documentElement.clientWidth - left - 16));
-  const visibleBlockHeight = Math.max(1, bottom - top);
-  const rootContentHeight = Math.max(0, (contentRoot.scrollHeight || 0) - Math.max(0, top - fallbackTop));
+  return Array.from(contentRoot.querySelectorAll("h1, h2, h3, p, li, table, pre, blockquote, figure, img, hr"))
+    .filter((block) => getVisibleRect(block));
+}
+
+function classifyBlock(block) {
+  const tagName = block.tagName.toLowerCase();
+  const text = getElementText(block);
+  const blockInfo = `${tagName} ${block.className || ""} ${block.getAttribute("role") || ""} ${block.getAttribute("aria-label") || ""}`.toLowerCase();
+  const primaryTextElement = getPrimaryTextElement(block);
+  const primaryStyle = window.getComputedStyle(primaryTextElement);
+  const fontSize = Number.parseFloat(primaryStyle.fontSize) || 14;
+  const fontWeight = Number.parseInt(primaryStyle.fontWeight, 10) || 400;
+
+  if (tagName === "hr" || block.querySelector("hr")) {
+    return "divider";
+  }
+
+  if (tagName === "img" || tagName === "figure" || block.querySelector("img, figure")) {
+    return "media";
+  }
+
+  if (
+    tagName === "table" ||
+    block.querySelector("table, [role='table'], [role='grid'], [role='row'], [role='cell'], [role='columnheader']") ||
+    blockInfo.includes("table") ||
+    blockInfo.includes("grid")
+  ) {
+    return "table";
+  }
+
+  if (tagName === "pre" || block.querySelector("pre, code") || blockInfo.includes("code") || primaryStyle.fontFamily.toLowerCase().includes("mono")) {
+    return "code";
+  }
+
+  if (tagName === "blockquote" || block.querySelector("blockquote") || blockInfo.includes("quote")) {
+    return "quote";
+  }
+
+  if (blockInfo.includes("callout")) {
+    return "callout";
+  }
+
+  const heading = block.querySelector("h1, h2, h3");
+  if (tagName === "h1" || heading?.tagName.toLowerCase() === "h1" || blockInfo.includes("header-block") || fontSize >= 28) {
+    return "heading1";
+  }
+
+  if (tagName === "h2" || heading?.tagName.toLowerCase() === "h2" || blockInfo.includes("sub_header") || fontSize >= 22) {
+    return "heading2";
+  }
+
+  if (tagName === "h3" || heading?.tagName.toLowerCase() === "h3" || blockInfo.includes("sub_sub_header") || (fontSize >= 17 && fontWeight >= 600)) {
+    return "heading3";
+  }
+
+  if (tagName === "li" || block.closest("ul, ol") || blockInfo.includes("bulleted") || blockInfo.includes("numbered") || /^(\d+\.|[*-])\s+/.test(text)) {
+    return "list";
+  }
+
+  if (!text) {
+    return "blank";
+  }
+
+  return "paragraph";
+}
+
+function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0) {
+  if (!text) {
+    return 1;
+  }
+
+  const averageCharWidth = fontSize * 0.53;
+  const availableWidth = Math.max(120, layoutWidth - reservedWidth);
+  const charsPerLine = Math.max(12, Math.floor(availableWidth / averageCharWidth));
+  return text.split("\n").reduce((lineCount, rawLine) => {
+    const line = rawLine.trim();
+    return lineCount + Math.max(1, Math.ceil(line.length / charsPerLine));
+  }, 0);
+}
+
+function estimateTableHeight(block, layoutWidth) {
+  const rows = Array.from(block.querySelectorAll("tr"));
+  if (rows.length) {
+    return 18 + rows.reduce((height, row) => {
+      const cellText = getElementText(row);
+      const lines = estimateWrappedLines(cellText, 13, layoutWidth, 48);
+      return height + Math.max(34, lines * 18 + 14);
+    }, 0);
+  }
+
+  const text = getElementText(block);
+  const rowCount = Math.max(2, text.split(/\n|\|/).filter(Boolean).length / 3);
+  return 18 + Math.ceil(rowCount) * 36;
+}
+
+function estimateMediaHeight(block, layoutWidth) {
+  const image = block.matches("img") ? block : block.querySelector("img");
+  const naturalWidth = image?.naturalWidth || 0;
+  const naturalHeight = image?.naturalHeight || 0;
+
+  if (naturalWidth > 0 && naturalHeight > 0) {
+    return Math.min(520, Math.max(120, layoutWidth * (naturalHeight / naturalWidth))) + 18;
+  }
+
+  const rect = getVisibleRect(block);
+  return Math.min(520, Math.max(140, rect?.height || 220)) + 18;
+}
+
+function estimateBlockHeight(block, layoutWidth) {
+  const type = classifyBlock(block);
+  const rawText = block.innerText || block.textContent || "";
+  const text = rawText.trim();
+
+  switch (type) {
+    case "heading1":
+      return estimateWrappedLines(text, 30, layoutWidth) * 38 + 18;
+    case "heading2":
+      return estimateWrappedLines(text, 24, layoutWidth) * 31 + 16;
+    case "heading3":
+      return estimateWrappedLines(text, 19, layoutWidth) * 25 + 14;
+    case "list":
+      return estimateWrappedLines(text, 14, layoutWidth, 28) * 22 + 6;
+    case "quote":
+      return estimateWrappedLines(text, 15, layoutWidth, 28) * 24 + 18;
+    case "callout":
+      return estimateWrappedLines(text, 14, layoutWidth, 54) * 22 + 24;
+    case "code":
+      return estimateWrappedLines(rawText, 13, layoutWidth, 32) * 20 + 28;
+    case "table":
+      return estimateTableHeight(block, layoutWidth);
+    case "media":
+      return estimateMediaHeight(block, layoutWidth);
+    case "divider":
+      return 26;
+    case "blank":
+      return 22;
+    default:
+      return estimateWrappedLines(text, 14, layoutWidth) * 22 + 8;
+  }
+}
+
+function estimateDocumentLayout(contentRoot, scalePercent) {
+  const scaleFactor = scalePercent / 100;
+  const layoutWidth = PAGE_BODY_WIDTH_PX / scaleFactor;
+  const blocks = getContentBlocks(contentRoot);
+  const measuredBlocks = blocks.map((element) => ({
+    element,
+    height: estimateBlockHeight(element, layoutWidth)
+  }));
+  const totalHeight = measuredBlocks.reduce((sum, block) => sum + block.height, 0);
 
   return {
-    contentTopOffset: top - fallbackTop,
-    height: Math.max(visibleBlockHeight, rootContentHeight),
-    left,
-    rootTop: fallbackTop,
-    width
+    blocks: measuredBlocks,
+    estimatedPages: Math.max(1, Math.ceil(Math.max(1, totalHeight) / (PAGE_BODY_HEIGHT_PX / scaleFactor))),
+    pageHeight: PAGE_BODY_HEIGHT_PX / scaleFactor
   };
 }
 
-function createPageLine(pageNumber) {
+function findPageBreaks(blocks, pageHeight, estimatedPages) {
+  const breaks = [];
+  let accumulatedHeight = 0;
+  let blockIndex = 0;
+
+  for (let pageNumber = 1; pageNumber < estimatedPages; pageNumber += 1) {
+    const pageEnd = pageHeight * pageNumber;
+
+    while (blockIndex < blocks.length && accumulatedHeight + blocks[blockIndex].height < pageEnd) {
+      accumulatedHeight += blocks[blockIndex].height;
+      blockIndex += 1;
+    }
+
+    const block = blocks[Math.min(blockIndex, blocks.length - 1)];
+    if (!block) {
+      continue;
+    }
+
+    const previousHeight = accumulatedHeight;
+    const offsetRatio = block.height > 0 ? Math.min(1, Math.max(0, (pageEnd - previousHeight) / block.height)) : 0;
+    breaks.push({
+      element: block.element,
+      offsetRatio,
+      pageNumber
+    });
+  }
+
+  return breaks;
+}
+
+function createPageLine(pageBreak) {
   const line = document.createElement("div");
   line.className = "notion-pdf-preview-line";
-  line.dataset.label = `Page ${pageNumber} end`;
-  line.dataset.pageNumber = String(pageNumber);
+  line.dataset.label = `Page ${pageBreak.pageNumber} end`;
+  line.dataset.pageNumber = String(pageBreak.pageNumber);
   return line;
 }
 
@@ -133,12 +312,16 @@ function updatePreviewPositions() {
     return;
   }
 
-  const { contentRoot, contentTopOffset, effectivePageHeight, overlay } = previewState;
+  const { contentRoot, pageBreaks, overlay } = previewState;
   const frame = getLineFrame(contentRoot);
+  const lines = Array.from(overlay.querySelectorAll(".notion-pdf-preview-line"));
 
-  for (const line of overlay.querySelectorAll(".notion-pdf-preview-line")) {
-    const pageNumber = Number(line.dataset.pageNumber);
-    line.style.top = `${frame.rootTop + contentTopOffset + effectivePageHeight * pageNumber}px`;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const pageBreak = pageBreaks[index];
+    const rect = pageBreak.element.getBoundingClientRect();
+    const top = rect.top + rect.height * pageBreak.offsetRatio;
+    line.style.top = `${top}px`;
     line.style.setProperty("--notion-pdf-preview-left", `${frame.left}px`);
     line.style.setProperty("--notion-pdf-preview-width", `${frame.width}px`);
   }
@@ -153,7 +336,7 @@ function schedulePreviewUpdate() {
   requestAnimationFrame(updatePreviewPositions);
 }
 
-function createPanel({ estimatedPages, scalePercent, effectivePageHeight }) {
+function createPanel({ estimatedPages, scalePercent }) {
   const panel = document.createElement("section");
   panel.id = PANEL_ID;
   panel.className = "notion-pdf-preview-panel";
@@ -162,7 +345,7 @@ function createPanel({ estimatedPages, scalePercent, effectivePageHeight }) {
   title.textContent = `Estimated pages: ${estimatedPages}`;
 
   const details = document.createElement("span");
-  details.textContent = `A4 portrait | ${scalePercent}% scale | ${Math.round(effectivePageHeight)}px per page`;
+  details.textContent = `A4 portrait | ${scalePercent}% scale | block-based estimate`;
 
   const clearButton = document.createElement("button");
   clearButton.type = "button";
@@ -180,9 +363,8 @@ function showPreview(scalePercentInput) {
     throw new Error("Could not find Notion page content.");
   }
 
-  const metrics = getContentMetrics(contentRoot);
-  const effectivePageHeight = PAGE_BODY_HEIGHT_PX / (scalePercent / 100);
-  const estimatedPages = Math.max(1, Math.ceil(metrics.height / effectivePageHeight));
+  const layout = estimateDocumentLayout(contentRoot, scalePercent);
+  const pageBreaks = findPageBreaks(layout.blocks, layout.pageHeight, layout.estimatedPages);
 
   clearPreview();
 
@@ -190,22 +372,21 @@ function showPreview(scalePercentInput) {
   overlay.id = OVERLAY_ID;
   overlay.className = "notion-pdf-preview-overlay";
 
-  for (let pageNumber = 1; pageNumber < estimatedPages; pageNumber += 1) {
-    overlay.append(createPageLine(pageNumber));
+  for (const pageBreak of pageBreaks) {
+    overlay.append(createPageLine(pageBreak));
   }
 
-  document.body.append(overlay, createPanel({ estimatedPages, scalePercent, effectivePageHeight }));
+  document.body.append(overlay, createPanel({ estimatedPages: layout.estimatedPages, scalePercent }));
   previewState = {
     contentRoot,
-    contentTopOffset: metrics.contentTopOffset,
-    effectivePageHeight,
+    pageBreaks,
     overlay
   };
   updatePreviewPositions();
   document.addEventListener("scroll", schedulePreviewUpdate, true);
   window.addEventListener("resize", schedulePreviewUpdate);
 
-  return { estimatedPages };
+  return { estimatedPages: layout.estimatedPages };
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
