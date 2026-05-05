@@ -8,18 +8,32 @@ const OVERLAY_ID = "notion-pdf-preview-overlay";
 const PANEL_ID = "notion-pdf-preview-panel";
 const PDF_PREVIEW_ID = "notion-pdf-preview-pages";
 
-const A4_WIDTH_PX = 793.7;
-const A4_HEIGHT_PX = 1122.52;
-const DEFAULT_HORIZONTAL_MARGIN_PX = 100;
-const DEFAULT_TOP_MARGIN_PX = 100;
-const DEFAULT_BOTTOM_MARGIN_PX = 100;
-const PAGE_BODY_WIDTH_PX = A4_WIDTH_PX - DEFAULT_HORIZONTAL_MARGIN_PX * 2;
-const PAGE_BODY_HEIGHT_PX = A4_HEIGHT_PX - DEFAULT_TOP_MARGIN_PX - DEFAULT_BOTTOM_MARGIN_PX;
+// Calibrated from Notion native PDF export: A4, scale 100%.
+// PDF units: 1pt = 4/3 CSS px.
+const PT_TO_CSS_PX = 4 / 3;
+
+const A4_WIDTH_PT = 595.92;
+const A4_HEIGHT_PT = 842.88;
+const A4_WIDTH_PX = A4_WIDTH_PT * PT_TO_CSS_PX;
+const A4_HEIGHT_PX = A4_HEIGHT_PT * PT_TO_CSS_PX;
+
+// Notion native PDF export content box, A4 scale 100%.
+// Approximately 1 inch margins.
+const PAGE_BODY_WIDTH_PT = 452.25;
+const PAGE_BODY_HEIGHT_PT = 698.88;
+const PAGE_BODY_WIDTH_PX = PAGE_BODY_WIDTH_PT * PT_TO_CSS_PX;   // ≈ 603px
+const PAGE_BODY_HEIGHT_PX = PAGE_BODY_HEIGHT_PT * PT_TO_CSS_PX; // ≈ 931.84px
 const MIN_SCALE_PERCENT = 11;
 const MAX_SCALE_PERCENT = 199;
 let previewState = null;
 let previewUpdateQueued = false;
+function ptToPx(pt) {
+  return pt * PT_TO_CSS_PX;
+}
 
+function blockHeightFromPt(lineCount, lineAdvancePt, extraPt = 0, afterGapPt = 0) {
+  return ptToPx(lineAdvancePt * Math.max(1, lineCount) + extraPt + afterGapPt);
+}
 function clampScale(scalePercent) {
   const value = Number(scalePercent);
   if (!Number.isFinite(value)) {
@@ -329,19 +343,21 @@ function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0) {
 }
 
 function estimateTableHeight(block, layoutWidth) {
+  // Calibrated Notion PDF table:
+  // font 10.5pt, row height 21.75pt, border about 0.75pt.
   const rows = Array.from(block.querySelectorAll("tr, [role='row']"));
+
   if (rows.length) {
-    return 18 + rows.reduce((height, row) => {
-      const cellText = getElementText(row);
-      const lines = estimateWrappedLines(cellText, 13, layoutWidth, 48);
-      return height + Math.max(31, lines * 17 + 10);
-    }, 0);
+    return ptToPx(21.75 * rows.length + 0.75);
   }
 
-  const text = getElementText(block);
-  const rowCount = Math.max(1, getElementRawText(block).split(/\n/).filter((line) => line.trim()).length);
-  const lines = estimateWrappedLines(text, 13, layoutWidth, 48);
-  return 18 + Math.max(rowCount * 31, lines * 17 + 10);
+  const rawLines = getElementRawText(block)
+    .split(/\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const rowCount = Math.max(1, rawLines.length);
+  return ptToPx(21.75 * rowCount + 0.75);
 }
 
 function estimateMediaHeight(block, layoutWidth) {
@@ -362,32 +378,94 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
   const text = rawText.trim();
 
   switch (type) {
-    case "pageTitle":
-      return estimateWrappedLines(text, 40, layoutWidth) * 52 + 0;
-    case "h2":
-      return estimateWrappedLines(text, 30, layoutWidth) * 44 + 34;
-    case "h3":
-      return estimateWrappedLines(text, 24, layoutWidth) * 34 + 22;
-    case "h4":
-      return estimateWrappedLines(text, 19, layoutWidth) * 28 + 18;
-    case "list":
-      return estimateWrappedLines(text, 14, layoutWidth, 72) * 23 + 15;
-    case "quote":
-      return estimateWrappedLines(text, 15, layoutWidth, 28) * 21 + 12;
-    case "callout":
-      return estimateWrappedLines(text, 14, layoutWidth, 54) * 20 + 18;
-    case "code":
-      return estimateWrappedLines(rawText, 13, layoutWidth, 32) * 18 + 22;
+    case "pageTitle": {
+      // Notion page title, not markdown #.
+      // Measured formula: 43.5n + 20.5 pt.
+      const lines = estimateWrappedLines(text, ptToPx(30), layoutWidth);
+      return blockHeightFromPt(lines, 43.5, 0, 20.5);
+    }
+
+    case "h2": {
+      // Important:
+      // In Notion DOM, markdown # is rendered as h2.
+      // Measured markdown # formula:
+      // visible = 27n + 5.58 pt, after gap = 14 pt.
+      const lines = estimateWrappedLines(text, ptToPx(22.5), layoutWidth);
+      return blockHeightFromPt(lines, 27, 5.58, 14);
+    }
+
+    case "h3": {
+      // Important:
+      // In Notion DOM, markdown ## is rendered as h3.
+      // Measured markdown ## formula:
+      // visible = 21.75n + 4.31 pt, after gap = 12.5 pt.
+      const lines = estimateWrappedLines(text, ptToPx(18), layoutWidth);
+      return blockHeightFromPt(lines, 21.75, 4.31, 12.5);
+    }
+
+    case "h4": {
+      // Important:
+      // In Notion DOM, markdown ### is rendered as h4.
+      // Measured markdown ### formula:
+      // visible = 18n + 3.72 pt, after gap = 8 pt.
+      const lines = estimateWrappedLines(text, ptToPx(15), layoutWidth);
+      return blockHeightFromPt(lines, 18, 3.72, 8);
+    }
+
+    case "list": {
+      // Bullet / numbered list text uses the same 12pt / 18pt line rhythm as paragraph.
+      // Measured list formula: 18n - 0.62 + 7.8 pt.
+      const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth, ptToPx(21.6));
+      return blockHeightFromPt(lines, 18, -0.62, 7.8);
+    }
+
+    case "quote": {
+      // Quote text uses paragraph rhythm, with larger after spacing.
+      // Measured quote formula: 18n - 0.62 + 12.6 pt.
+      const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth, ptToPx(14.25));
+      return blockHeightFromPt(lines, 18, -0.62, 12.6);
+    }
+
+    case "callout": {
+      // Not yet calibrated.
+      // Use paragraph rhythm plus callout padding.
+      const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth, ptToPx(40));
+      return blockHeightFromPt(lines, 18, -0.62, 18);
+    }
+
+    case "code": {
+      // Measured code block formula: 18n + 24 pt.
+      // n is visual line slots, including blank lines and wrapped long code lines.
+      const rawLines = rawText.replace(/\r\n/g, "\n").split("\n");
+
+      const lineSlots = Math.max(
+        1,
+        rawLines.reduce((sum, line) => {
+          return sum + estimateWrappedLines(line || " ", ptToPx(12), layoutWidth, ptToPx(24));
+        }, 0)
+      );
+
+      return blockHeightFromPt(lineSlots, 18, 0, 24);
+    }
+
     case "table":
       return estimateTableHeight(block, layoutWidth);
+
     case "media":
       return estimateMediaHeight(block, layoutWidth);
+
     case "divider":
-      return 22;
+      return ptToPx(18);
+
     case "blank":
-      return 18;
-    default:
-      return estimateWrappedLines(text, 14, layoutWidth) * 23.5 + 12.5;
+      return ptToPx(18);
+
+    default: {
+      // Paragraph formula:
+      // visible = 18n - 0.62 pt, after gap = 6.6 pt.
+      const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth);
+      return blockHeightFromPt(lines, 18, -0.62, 6.6);
+    }
   }
 }
 
@@ -691,7 +769,12 @@ function showPreview(scalePercentInput) {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   try {
     if (message?.type === "NOTION_PDF_PREVIEW_SHOW") {
-      sendResponse(showPreview(message.scalePercent));
+      const scalePercent =
+        message.scalePercent ??
+        message.settings?.scale ??
+        message.settings?.scalePercent;
+
+      sendResponse(showPreview(scalePercent));
       return true;
     }
 
