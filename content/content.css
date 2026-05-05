@@ -174,6 +174,11 @@
   border-color: #bfdbfe;
 }
 
+.notion-pdf-preview-page-block[data-type="pageTitle"] {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+
 .notion-pdf-preview-page-block[data-type="list"] {
   background: #f0fdf4;
   border-color: #bbf7d0;

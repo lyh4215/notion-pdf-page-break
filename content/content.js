@@ -54,6 +54,10 @@ function getElementText(element) {
   return (element.innerText || element.textContent || "").replace(/\s+/g, " ").trim();
 }
 
+function getElementRawText(element) {
+  return (element.innerText || element.textContent || "").trim();
+}
+
 function getPrimaryTextElement(block) {
   return block.querySelector("h1, h2, h3, [contenteditable='true'], [data-content-editable-leaf], span") || block;
 }
@@ -106,6 +110,39 @@ function getContentBlocks(contentRoot) {
 
   return Array.from(contentRoot.querySelectorAll("h1, h2, h3, p, li, table, pre, blockquote, figure, img, hr"))
     .filter((block) => getVisibleRect(block));
+}
+
+function findPageTitleBlock(contentRoot) {
+  const contentRect = contentRoot.getBoundingClientRect();
+  const selectors = [
+    "[data-testid='page-title']",
+    ".notion-page-title",
+    "[placeholder='Untitled']",
+    "[aria-label='Untitled']",
+    "[contenteditable='true']",
+    "[data-content-editable-leaf]",
+    "h1"
+  ];
+  const candidates = Array.from(document.querySelectorAll(selectors.join(",")))
+    .filter((element) => !contentRoot.contains(element))
+    .map((element) => {
+      const rect = getVisibleRect(element);
+      const text = getElementText(element);
+      const style = rect ? window.getComputedStyle(element) : null;
+      const fontSize = style ? Number.parseFloat(style.fontSize) || 0 : 0;
+      return { element, fontSize, rect, text };
+    })
+    .filter((candidate) => candidate.rect && candidate.text && candidate.fontSize >= 28 && candidate.rect.bottom <= contentRect.top + 120);
+
+  if (!candidates.length) {
+    return null;
+  }
+
+  return candidates.sort((a, b) => {
+    const distanceA = Math.abs(contentRect.top - a.rect.bottom);
+    const distanceB = Math.abs(contentRect.top - b.rect.bottom);
+    return b.fontSize - a.fontSize || distanceA - distanceB;
+  })[0].element;
 }
 
 function classifyBlock(block) {
@@ -170,17 +207,56 @@ function classifyBlock(block) {
   return "paragraph";
 }
 
+function getCharacterWidth(character, fontSize) {
+  if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(character)) {
+    return fontSize * 0.95;
+  }
+
+  if (/\s/.test(character)) {
+    return fontSize * 0.28;
+  }
+
+  if (/[.,:;'"`!|()[\]{}]/.test(character)) {
+    return fontSize * 0.32;
+  }
+
+  if (/[A-Z]/.test(character)) {
+    return fontSize * 0.62;
+  }
+
+  if (/[0-9]/.test(character)) {
+    return fontSize * 0.55;
+  }
+
+  return fontSize * 0.5;
+}
+
 function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0) {
   if (!text) {
     return 1;
   }
 
-  const averageCharWidth = fontSize * 0.5;
   const availableWidth = Math.max(120, layoutWidth - reservedWidth);
-  const charsPerLine = Math.max(12, Math.floor(availableWidth / averageCharWidth));
   return text.split("\n").reduce((lineCount, rawLine) => {
     const line = rawLine.trim();
-    return lineCount + Math.max(1, Math.ceil(line.length / charsPerLine));
+    if (!line) {
+      return lineCount + 1;
+    }
+
+    let currentWidth = 0;
+    let wrappedLines = 1;
+
+    for (const character of line.replace(/\s+/g, " ")) {
+      const characterWidth = getCharacterWidth(character, fontSize);
+      if (currentWidth > 0 && currentWidth + characterWidth > availableWidth) {
+        wrappedLines += 1;
+        currentWidth = characterWidth;
+      } else {
+        currentWidth += characterWidth;
+      }
+    }
+
+    return lineCount + wrappedLines;
   }, 0);
 }
 
@@ -213,18 +289,20 @@ function estimateMediaHeight(block, layoutWidth) {
 }
 
 function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
-  const rawText = block.innerText || block.textContent || "";
+  const rawText = getElementRawText(block);
   const text = rawText.trim();
 
   switch (type) {
+    case "pageTitle":
+      return estimateWrappedLines(text, 40, layoutWidth) * 48 + 22;
     case "heading1":
-      return estimateWrappedLines(text, 30, layoutWidth) * 35 + 12;
+      return estimateWrappedLines(text, 30, layoutWidth) * 36 + 14;
     case "heading2":
-      return estimateWrappedLines(text, 24, layoutWidth) * 28 + 10;
+      return estimateWrappedLines(text, 24, layoutWidth) * 30 + 12;
     case "heading3":
-      return estimateWrappedLines(text, 19, layoutWidth) * 23 + 8;
+      return estimateWrappedLines(text, 19, layoutWidth) * 24 + 9;
     case "list":
-      return estimateWrappedLines(text, 14, layoutWidth, 28) * 19 + 2;
+      return estimateWrappedLines(text, 14, layoutWidth, 28) * 20 + 3;
     case "quote":
       return estimateWrappedLines(text, 15, layoutWidth, 28) * 21 + 12;
     case "callout":
@@ -240,14 +318,15 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     case "blank":
       return 18;
     default:
-      return estimateWrappedLines(text, 14, layoutWidth) * 19 + 5;
+      return estimateWrappedLines(text, 14, layoutWidth) * 20 + 4;
   }
 }
 
 function estimateDocumentLayout(contentRoot, scalePercent) {
   const scaleFactor = scalePercent / 100;
   const layoutWidth = PAGE_BODY_WIDTH_PX / scaleFactor;
-  const blocks = getContentBlocks(contentRoot);
+  const pageTitleElement = findPageTitleBlock(contentRoot);
+  const blocks = getContentBlocks(contentRoot).filter((element) => element !== pageTitleElement);
   const measuredBlocks = blocks.map((element) => {
     const type = classifyBlock(element);
     return {
@@ -257,6 +336,14 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
       height: estimateBlockHeight(element, layoutWidth, type)
     };
   });
+  if (pageTitleElement) {
+    measuredBlocks.unshift({
+      element: pageTitleElement,
+      type: "pageTitle",
+      text: getElementText(pageTitleElement),
+      height: estimateBlockHeight(pageTitleElement, layoutWidth, "pageTitle")
+    });
+  }
   const totalHeight = measuredBlocks.reduce((sum, block) => sum + block.height, 0);
 
   return {
