@@ -363,15 +363,15 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
 
   switch (type) {
     case "pageTitle":
-      return estimateWrappedLines(text, 40, layoutWidth) * 48 + 35;
+      return estimateWrappedLines(text, 40, layoutWidth) * 52 + 40;
     case "heading1":
-      return estimateWrappedLines(text, 30, layoutWidth) * 36 + 26;
+      return estimateWrappedLines(text, 30, layoutWidth) * 44 + 34;
     case "heading2":
-      return estimateWrappedLines(text, 24, layoutWidth) * 30 + 12;
+      return estimateWrappedLines(text, 24, layoutWidth) * 34 + 22;
     case "heading3":
-      return estimateWrappedLines(text, 19, layoutWidth) * 24 + 12;
+      return estimateWrappedLines(text, 19, layoutWidth) * 28 + 18;
     case "list":
-      return estimateWrappedLines(text, 14, layoutWidth, 28) * 20 + 18;
+      return estimateWrappedLines(text, 14, layoutWidth, 72) * 23 + 15;
     case "quote":
       return estimateWrappedLines(text, 15, layoutWidth, 28) * 21 + 12;
     case "callout":
