@@ -498,7 +498,7 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
     blocks: measuredBlocks,
     estimatedPages: Math.max(1, Math.ceil(Math.max(1, totalHeight) / (PAGE_BODY_HEIGHT_PX / scaleFactor))),
     layoutWidth,
-    pageHeight: (PAGE_BODY_HEIGHT_PX / scaleFactor) * 1.025
+    pageHeight: PAGE_BODY_HEIGHT_PX / scaleFactor
   };
 }
 
