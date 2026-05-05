@@ -1,10 +1,12 @@
 .notion-pdf-preview-overlay {
-  position: absolute;
+  position: fixed;
   left: 0;
   top: 0;
   z-index: 2147483646;
-  width: 100%;
+  width: 100vw;
+  height: 100vh;
   pointer-events: none;
+  overflow: visible;
 }
 
 .notion-pdf-preview-line {

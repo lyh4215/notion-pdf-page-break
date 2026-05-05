@@ -1,3 +1,9 @@
+(() => {
+if (window.__notionPdfPreviewInstalled) {
+  return;
+}
+window.__notionPdfPreviewInstalled = true;
+
 const OVERLAY_ID = "notion-pdf-preview-overlay";
 const PANEL_ID = "notion-pdf-preview-panel";
 
@@ -6,6 +12,8 @@ const DEFAULT_MARGIN_PX = 52;
 const PAGE_BODY_HEIGHT_PX = A4_HEIGHT_PX - DEFAULT_MARGIN_PX * 2;
 const MIN_SCALE_PERCENT = 11;
 const MAX_SCALE_PERCENT = 199;
+let previewState = null;
+let previewUpdateQueued = false;
 
 function clampScale(scalePercent) {
   const value = Number(scalePercent);
@@ -18,6 +26,10 @@ function clampScale(scalePercent) {
 function clearPreview() {
   document.getElementById(OVERLAY_ID)?.remove();
   document.getElementById(PANEL_ID)?.remove();
+  document.removeEventListener("scroll", schedulePreviewUpdate, true);
+  window.removeEventListener("resize", schedulePreviewUpdate);
+  previewState = null;
+  previewUpdateQueued = false;
 }
 
 function getVisibleRect(element) {
@@ -44,7 +56,7 @@ function findNotionContentRoot() {
   for (const selector of selectors) {
     const element = document.querySelector(selector);
     if (element && getVisibleRect(element)) {
-      return selector === "main [data-block-id]" ? element.closest("main") || element.parentElement : element;
+      return selector === "main [data-block-id]" ? element.closest(".notion-page-content") || element.parentElement : element;
     }
   }
 
@@ -71,31 +83,74 @@ function getContentMetrics(contentRoot) {
     .filter(Boolean);
 
   const fallbackRect = contentRoot.getBoundingClientRect();
+  const fallbackTop = fallbackRect.top;
+  const fallbackBottom = fallbackRect.bottom;
   if (!blockRects.length) {
     return {
-      top: fallbackRect.top + window.scrollY,
-      bottom: fallbackRect.bottom + window.scrollY,
-      left: fallbackRect.left + window.scrollX,
+      contentTopOffset: 0,
+      height: Math.max(1, contentRoot.scrollHeight || fallbackBottom - fallbackTop),
+      left: fallbackRect.left,
+      rootTop: fallbackTop,
       width: fallbackRect.width
     };
   }
 
-  const top = Math.min(...blockRects.map((rect) => rect.top)) + window.scrollY;
-  const bottom = Math.max(...blockRects.map((rect) => rect.bottom)) + window.scrollY;
-  const left = Math.max(16, fallbackRect.left + window.scrollX);
+  const top = Math.min(...blockRects.map((rect) => rect.top));
+  const bottom = Math.max(...blockRects.map((rect) => rect.bottom));
+  const left = Math.max(16, fallbackRect.left);
   const width = Math.max(280, Math.min(fallbackRect.width || 720, document.documentElement.clientWidth - left - 16));
+  const visibleBlockHeight = Math.max(1, bottom - top);
+  const rootContentHeight = Math.max(0, (contentRoot.scrollHeight || 0) - Math.max(0, top - fallbackTop));
 
-  return { top, bottom, left, width };
+  return {
+    contentTopOffset: top - fallbackTop,
+    height: Math.max(visibleBlockHeight, rootContentHeight),
+    left,
+    rootTop: fallbackTop,
+    width
+  };
 }
 
-function createPageLine(pageNumber, top, left, width) {
+function createPageLine(pageNumber) {
   const line = document.createElement("div");
   line.className = "notion-pdf-preview-line";
   line.dataset.label = `Page ${pageNumber} end`;
-  line.style.top = `${top}px`;
-  line.style.setProperty("--notion-pdf-preview-left", `${left}px`);
-  line.style.setProperty("--notion-pdf-preview-width", `${width}px`);
+  line.dataset.pageNumber = String(pageNumber);
   return line;
+}
+
+function getLineFrame(contentRoot) {
+  const rect = contentRoot.getBoundingClientRect();
+  const left = Math.max(16, rect.left);
+  const width = Math.max(280, Math.min(rect.width || 720, document.documentElement.clientWidth - left - 16));
+  return { left, rootTop: rect.top, width };
+}
+
+function updatePreviewPositions() {
+  previewUpdateQueued = false;
+
+  if (!previewState) {
+    return;
+  }
+
+  const { contentRoot, contentTopOffset, effectivePageHeight, overlay } = previewState;
+  const frame = getLineFrame(contentRoot);
+
+  for (const line of overlay.querySelectorAll(".notion-pdf-preview-line")) {
+    const pageNumber = Number(line.dataset.pageNumber);
+    line.style.top = `${frame.rootTop + contentTopOffset + effectivePageHeight * pageNumber}px`;
+    line.style.setProperty("--notion-pdf-preview-left", `${frame.left}px`);
+    line.style.setProperty("--notion-pdf-preview-width", `${frame.width}px`);
+  }
+}
+
+function schedulePreviewUpdate() {
+  if (!previewState || previewUpdateQueued) {
+    return;
+  }
+
+  previewUpdateQueued = true;
+  requestAnimationFrame(updatePreviewPositions);
 }
 
 function createPanel({ estimatedPages, scalePercent, effectivePageHeight }) {
@@ -126,29 +181,29 @@ function showPreview(scalePercentInput) {
   }
 
   const metrics = getContentMetrics(contentRoot);
-  const contentHeight = Math.max(1, metrics.bottom - metrics.top);
   const effectivePageHeight = PAGE_BODY_HEIGHT_PX / (scalePercent / 100);
-  const estimatedPages = Math.max(1, Math.ceil(contentHeight / effectivePageHeight));
+  const estimatedPages = Math.max(1, Math.ceil(metrics.height / effectivePageHeight));
 
   clearPreview();
 
   const overlay = document.createElement("div");
   overlay.id = OVERLAY_ID;
   overlay.className = "notion-pdf-preview-overlay";
-  overlay.style.height = `${Math.max(document.documentElement.scrollHeight, metrics.bottom + 80)}px`;
 
   for (let pageNumber = 1; pageNumber < estimatedPages; pageNumber += 1) {
-    overlay.append(
-      createPageLine(
-        pageNumber,
-        metrics.top + effectivePageHeight * pageNumber,
-        metrics.left,
-        metrics.width
-      )
-    );
+    overlay.append(createPageLine(pageNumber));
   }
 
   document.body.append(overlay, createPanel({ estimatedPages, scalePercent, effectivePageHeight }));
+  previewState = {
+    contentRoot,
+    contentTopOffset: metrics.contentTopOffset,
+    effectivePageHeight,
+    overlay
+  };
+  updatePreviewPositions();
+  document.addEventListener("scroll", schedulePreviewUpdate, true);
+  window.addEventListener("resize", schedulePreviewUpdate);
 
   return { estimatedPages };
 }
@@ -172,3 +227,4 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   return false;
 });
+})();
