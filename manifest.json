@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Notion PDF Preview",
+  "version": "0.1.0",
+  "description": "Preview estimated A4 PDF page breaks for a Notion page using a scale percentage.",
+  "action": {
+    "default_popup": "popup/popup.html"
+  },
+  "permissions": ["activeTab"],
+  "host_permissions": [
+    "https://notion.so/*",
+    "https://*.notion.so/*",
+    "https://notion.site/*",
+    "https://*.notion.site/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://notion.so/*",
+        "https://*.notion.so/*",
+        "https://notion.site/*",
+        "https://*.notion.site/*"
+      ],
+      "js": ["content/content.js"],
+      "css": ["content/content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

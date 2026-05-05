@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Notion PDF Preview</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup">
+      <header class="header">
+        <h1>PDF Preview</h1>
+        <span class="format">A4</span>
+      </header>
+
+      <form id="preview-form" class="controls">
+        <label for="scale">Scale percent</label>
+        <div class="scale-row">
+          <input id="scale" name="scale" type="number" min="11" max="199" value="100" inputmode="numeric" required>
+          <span>%</span>
+        </div>
+
+        <button id="preview-button" type="submit">Preview</button>
+        <button id="clear-button" type="button" class="secondary">Clear preview</button>
+      </form>
+
+      <p id="status" class="status" role="status">Open a Notion page and choose Preview.</p>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
