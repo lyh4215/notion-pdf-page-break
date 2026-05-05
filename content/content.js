@@ -64,6 +64,15 @@ function getPrimaryTextElement(block) {
   return block.querySelector("h1, h2, h3, [contenteditable='true'], [data-content-editable-leaf], span") || block;
 }
 
+function getBlockFontMetrics(block) {
+  const primaryTextElement = getPrimaryTextElement(block);
+  const primaryStyle = window.getComputedStyle(primaryTextElement);
+  return {
+    fontSize: Number.parseFloat(primaryStyle.fontSize) || 14,
+    fontWeight: Number.parseInt(primaryStyle.fontWeight, 10) || 400
+  };
+}
+
 function findNotionContentRoot() {
   const selectors = [
     ".notion-page-content",
@@ -166,14 +175,13 @@ function isTableLikeBlock(block, tagName, blockInfo) {
   return block.querySelectorAll(":scope > [role='row']").length >= 2;
 }
 
-function classifyBlock(block) {
+function classifyBlock(block, headingFontLevels = null) {
   const tagName = block.tagName.toLowerCase();
   const text = getElementText(block);
   const blockInfo = `${tagName} ${block.className || ""} ${block.getAttribute("role") || ""} ${block.getAttribute("aria-label") || ""}`.toLowerCase();
+  const { fontSize, fontWeight } = getBlockFontMetrics(block);
   const primaryTextElement = getPrimaryTextElement(block);
   const primaryStyle = window.getComputedStyle(primaryTextElement);
-  const fontSize = Number.parseFloat(primaryStyle.fontSize) || 14;
-  const fontWeight = Number.parseInt(primaryStyle.fontWeight, 10) || 400;
 
   if (tagName === "hr" || block.querySelector("hr")) {
     return "divider";
@@ -214,6 +222,18 @@ function classifyBlock(block) {
     return "heading1";
   }
 
+  if (headingFontLevels?.heading1 && Math.abs(fontSize - headingFontLevels.heading1) < 0.75) {
+    return "heading1";
+  }
+
+  if (headingFontLevels?.heading2 && Math.abs(fontSize - headingFontLevels.heading2) < 0.75) {
+    return "heading2";
+  }
+
+  if (headingFontLevels?.heading3 && Math.abs(fontSize - headingFontLevels.heading3) < 0.75) {
+    return "heading3";
+  }
+
   if (fontSize >= 22) {
     return "heading1";
   }
@@ -235,6 +255,24 @@ function classifyBlock(block) {
   }
 
   return "paragraph";
+}
+
+function getHeadingFontLevels(blocks) {
+  const fontSizes = blocks
+    .map((block) => {
+      const text = getElementText(block);
+      const { fontSize, fontWeight } = getBlockFontMetrics(block);
+      return { fontSize: Math.round(fontSize * 2) / 2, fontWeight, text };
+    })
+    .filter(({ fontSize, fontWeight, text }) => text && fontSize >= 14.5 && fontWeight >= 600)
+    .map(({ fontSize }) => fontSize);
+  const uniqueFontSizes = Array.from(new Set(fontSizes)).sort((a, b) => b - a);
+
+  return {
+    heading1: uniqueFontSizes[0] || null,
+    heading2: uniqueFontSizes[1] || null,
+    heading3: uniqueFontSizes[2] || null
+  };
 }
 
 function getCharacterWidth(character, fontSize) {
@@ -358,8 +396,9 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
   const layoutWidth = PAGE_BODY_WIDTH_PX / scaleFactor;
   const pageTitleElement = findPageTitleBlock(contentRoot);
   const blocks = getContentBlocks(contentRoot).filter((element) => element !== pageTitleElement);
+  const headingFontLevels = getHeadingFontLevels(blocks);
   const measuredBlocks = blocks.map((element) => {
-    const type = classifyBlock(element);
+    const type = classifyBlock(element, headingFontLevels);
     return {
       element,
       type,
