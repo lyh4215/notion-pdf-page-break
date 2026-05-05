@@ -210,15 +210,15 @@ function classifyBlock(block, headingFontLevels = null) {
   const heading = block.querySelector("h1, h2, h3, h4");
   const headingTagName = heading?.tagName.toLowerCase();
 
-  if (tagName === "h4" || headingTagName === "h4" || tagName === "h3" || headingTagName === "h3" || blockInfo.includes("sub_sub_header")) {
+  if (tagName === "h4" || headingTagName === "h4" || tagName === "h4" || headingTagName === "h4" || blockInfo.includes("sub_sub_header")) {
     return "h4";
   }
 
-  if (tagName === "h2" || headingTagName === "h2" || blockInfo.includes("sub_header")) {
+  if (tagName === "h3" || headingTagName === "h3" || blockInfo.includes("sub_header")) {
     return "h3";
   }
 
-  if (tagName === "h1" || headingTagName === "h1" || blockInfo.includes("header-block")) {
+  if (tagName === "h2" || headingTagName === "h2" || blockInfo.includes("header-block")) {
     return "h2";
   }
 
