@@ -209,7 +209,16 @@ function classifyBlock(block, headingFontLevels = null) {
     return "table";
   }
 
-  if (tagName === "pre" || block.querySelector("pre, code") || blockInfo.includes("code") || primaryStyle.fontFamily.toLowerCase().includes("mono")) {
+  if (isStandaloneEquationBlock(block, blockInfo)) {
+    return "equation";
+  }
+
+  if (
+    tagName === "pre" ||
+    block.querySelector("pre, code") ||
+    blockInfo.includes("code") ||
+    primaryStyle.fontFamily.toLowerCase().includes("mono")
+  ) {
     return "code";
   }
 
@@ -372,6 +381,56 @@ function estimateMediaHeight(block, layoutWidth) {
   const rect = getVisibleRect(block);
   return Math.min(520, Math.max(140, rect?.height || 220)) + 18;
 }
+function hasMathElement(block) {
+  return Boolean(
+    block.querySelector(
+      ".katex, .katex-display, math, [class*='equation'], [aria-label*='equation'], [aria-label*='Equation']"
+    )
+  );
+}
+
+function isStandaloneEquationBlock(block, blockInfo) {
+  if (!hasMathElement(block)) {
+    return false;
+  }
+
+  // Notion block equation은 보통 equation 관련 class/label이나 katex-display를 포함할 가능성이 큼.
+  // inline equation은 paragraph 내부의 .katex 정도로만 잡히는 경우가 많으므로 분리한다.
+  return (
+    blockInfo.includes("equation") ||
+    Boolean(block.querySelector(".katex-display")) ||
+    Boolean(block.querySelector("[class*='notion-equation']"))
+  );
+}
+
+function estimateDomRenderedHeight(block, fallbackHeight, extraPx = 0) {
+  const rect = getVisibleRect(block);
+
+  if (!rect) {
+    return fallbackHeight;
+  }
+
+  return Math.max(fallbackHeight, rect.height + extraPx);
+}
+
+function estimateEquationHeight(block) {
+  const rect = getVisibleRect(block);
+  const mathElement = block.querySelector(".katex-display, .katex, math");
+  const mathRect = mathElement?.getBoundingClientRect();
+
+  // block equation은 수식 자체 높이 + 약간의 위아래 여백으로 잡는다.
+  const blockHeight = rect?.height || 0;
+  const mathHeight = mathRect?.height || 0;
+
+  const measuredHeight = Math.max(blockHeight, mathHeight + ptToPx(12));
+
+  if (measuredHeight > 0) {
+    return measuredHeight + ptToPx(6);
+  }
+
+  // fallback: 일반 한 줄 수식 정도
+  return ptToPx(18 + 12);
+}
 
 function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
   const rawText = getElementRawText(block);
@@ -413,24 +472,33 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     }
 
     case "list": {
-      // Bullet / numbered list text uses the same 12pt / 18pt line rhythm as paragraph.
-      // Measured list formula: 18n - 0.62 + 7.8 pt.
       const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth, ptToPx(21.6));
-      return blockHeightFromPt(lines, 18, -0.62, 7.8);
+      const baseHeight = blockHeightFromPt(lines, 18, -0.62, 7.8);
+
+      return hasMathElement(block)
+        ? estimateDomRenderedHeight(block, baseHeight, ptToPx(3))
+        : baseHeight;
     }
 
     case "quote": {
-      // Quote text uses paragraph rhythm, with larger after spacing.
-      // Measured quote formula: 18n - 0.62 + 12.6 pt.
       const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth, ptToPx(14.25));
-      return blockHeightFromPt(lines, 18, -0.62, 12.6);
+      const baseHeight = blockHeightFromPt(lines, 18, -0.62, 12.6);
+
+      return hasMathElement(block)
+        ? estimateDomRenderedHeight(block, baseHeight, ptToPx(3))
+        : baseHeight;
     }
+    
+    case "equation":
+      return estimateEquationHeight(block);
 
     case "callout": {
-      // Not yet calibrated.
-      // Use paragraph rhythm plus callout padding.
       const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth, ptToPx(40));
-      return blockHeightFromPt(lines, 18, -0.62, 18);
+      const baseHeight = blockHeightFromPt(lines, 18, -0.62, 18);
+
+      return hasMathElement(block)
+        ? estimateDomRenderedHeight(block, baseHeight, ptToPx(3))
+        : baseHeight;
     }
 
     case "code": {
@@ -461,10 +529,12 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       return ptToPx(18);
 
     default: {
-      // Paragraph formula:
-      // visible = 18n - 0.62 pt, after gap = 6.6 pt.
       const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth);
-      return blockHeightFromPt(lines, 18, -0.62, 6.6);
+      const baseHeight = blockHeightFromPt(lines, 18, -0.62, 6.6);
+
+      return hasMathElement(block)
+        ? estimateDomRenderedHeight(block, baseHeight, ptToPx(3))
+        : baseHeight;
     }
   }
 }
