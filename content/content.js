@@ -6,6 +6,7 @@ window.__notionPdfPreviewInstalled = true;
 
 const OVERLAY_ID = "notion-pdf-preview-overlay";
 const PANEL_ID = "notion-pdf-preview-panel";
+const PDF_PREVIEW_ID = "notion-pdf-preview-pages";
 
 const A4_WIDTH_PX = 793.7;
 const A4_HEIGHT_PX = 1122.52;
@@ -28,6 +29,7 @@ function clampScale(scalePercent) {
 function clearPreview() {
   document.getElementById(OVERLAY_ID)?.remove();
   document.getElementById(PANEL_ID)?.remove();
+  document.getElementById(PDF_PREVIEW_ID)?.remove();
   document.removeEventListener("scroll", schedulePreviewUpdate, true);
   window.removeEventListener("resize", schedulePreviewUpdate);
   previewState = null;
@@ -210,8 +212,7 @@ function estimateMediaHeight(block, layoutWidth) {
   return Math.min(520, Math.max(140, rect?.height || 220)) + 18;
 }
 
-function estimateBlockHeight(block, layoutWidth) {
-  const type = classifyBlock(block);
+function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
   const rawText = block.innerText || block.textContent || "";
   const text = rawText.trim();
 
@@ -247,15 +248,21 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
   const scaleFactor = scalePercent / 100;
   const layoutWidth = PAGE_BODY_WIDTH_PX / scaleFactor;
   const blocks = getContentBlocks(contentRoot);
-  const measuredBlocks = blocks.map((element) => ({
-    element,
-    height: estimateBlockHeight(element, layoutWidth)
-  }));
+  const measuredBlocks = blocks.map((element) => {
+    const type = classifyBlock(element);
+    return {
+      element,
+      type,
+      text: getElementText(element),
+      height: estimateBlockHeight(element, layoutWidth, type)
+    };
+  });
   const totalHeight = measuredBlocks.reduce((sum, block) => sum + block.height, 0);
 
   return {
     blocks: measuredBlocks,
     estimatedPages: Math.max(1, Math.ceil(Math.max(1, totalHeight) / (PAGE_BODY_HEIGHT_PX / scaleFactor))),
+    layoutWidth,
     pageHeight: PAGE_BODY_HEIGHT_PX / scaleFactor
   };
 }
@@ -336,6 +343,134 @@ function schedulePreviewUpdate() {
   requestAnimationFrame(updatePreviewPositions);
 }
 
+function truncateText(text, maxLength = 260) {
+  if (!text) {
+    return "(empty block)";
+  }
+
+  return text.length > maxLength ? `${text.slice(0, maxLength).trim()}...` : text;
+}
+
+function paginatePreviewBlocks(blocks, pageHeight) {
+  const pages = [[]];
+  let usedHeight = 0;
+
+  for (const block of blocks) {
+    let remainingHeight = block.height;
+    let segmentIndex = 0;
+
+    while (remainingHeight > 0) {
+      let page = pages[pages.length - 1];
+      let availableHeight = pageHeight - usedHeight;
+
+      if (availableHeight <= 0) {
+        page = [];
+        pages.push(page);
+        usedHeight = 0;
+        availableHeight = pageHeight;
+      }
+
+      const segmentHeight = Math.min(remainingHeight, availableHeight);
+      page.push({
+        ...block,
+        continued: segmentIndex > 0,
+        segmentHeight,
+        splitAfter: remainingHeight > segmentHeight
+      });
+
+      usedHeight += segmentHeight;
+      remainingHeight -= segmentHeight;
+      segmentIndex += 1;
+
+      if (remainingHeight > 0) {
+        pages.push([]);
+        usedHeight = 0;
+      }
+    }
+  }
+
+  return pages;
+}
+
+function createPdfPreviewBlock(segment, pageScale) {
+  const block = document.createElement("article");
+  block.className = "notion-pdf-preview-page-block";
+  block.dataset.type = segment.type;
+  block.style.minHeight = `${Math.max(12, segment.segmentHeight * pageScale)}px`;
+
+  const meta = document.createElement("div");
+  meta.className = "notion-pdf-preview-page-block-meta";
+  meta.textContent = `${segment.type} | ${Math.round(segment.height)}px${segment.continued ? " | continued" : ""}${segment.splitAfter ? " | splits" : ""}`;
+
+  const text = document.createElement("p");
+  text.textContent = truncateText(segment.text);
+
+  block.append(meta, text);
+  return block;
+}
+
+function closePdfPreview() {
+  document.getElementById(PDF_PREVIEW_ID)?.remove();
+}
+
+function openPdfPreview() {
+  if (!previewState) {
+    return;
+  }
+
+  closePdfPreview();
+
+  const { layout, scalePercent } = previewState;
+  const pages = paginatePreviewBlocks(layout.blocks, layout.pageHeight);
+  const pageScale = 720 / layout.pageHeight;
+
+  const modal = document.createElement("section");
+  modal.id = PDF_PREVIEW_ID;
+  modal.className = "notion-pdf-preview-pages";
+
+  const header = document.createElement("header");
+  header.className = "notion-pdf-preview-pages-header";
+
+  const title = document.createElement("strong");
+  title.textContent = `Predicted PDF preview (${pages.length} pages)`;
+
+  const details = document.createElement("span");
+  details.textContent = `A4 | ${scalePercent}% scale | virtual body ${Math.round(layout.layoutWidth)} x ${Math.round(layout.pageHeight)}px`;
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.textContent = "Close";
+  closeButton.addEventListener("click", closePdfPreview);
+
+  header.append(title, details, closeButton);
+
+  const pageList = document.createElement("div");
+  pageList.className = "notion-pdf-preview-page-list";
+
+  pages.forEach((pageBlocks, pageIndex) => {
+    const page = document.createElement("section");
+    page.className = "notion-pdf-preview-page";
+    page.style.setProperty("--notion-pdf-preview-page-height", `${layout.pageHeight * pageScale}px`);
+
+    const pageLabel = document.createElement("div");
+    pageLabel.className = "notion-pdf-preview-page-label";
+    pageLabel.textContent = `Page ${pageIndex + 1}`;
+
+    const body = document.createElement("div");
+    body.className = "notion-pdf-preview-page-body";
+
+    for (const segment of pageBlocks) {
+      body.append(createPdfPreviewBlock(segment, pageScale));
+    }
+
+    page.append(pageLabel, body);
+    pageList.append(page);
+  });
+
+  modal.append(header, pageList);
+  document.body.append(modal);
+}
+
 function createPanel({ estimatedPages, scalePercent }) {
   const panel = document.createElement("section");
   panel.id = PANEL_ID;
@@ -347,12 +482,17 @@ function createPanel({ estimatedPages, scalePercent }) {
   const details = document.createElement("span");
   details.textContent = `A4 portrait | ${scalePercent}% scale | block-based estimate`;
 
+  const previewButton = document.createElement("button");
+  previewButton.type = "button";
+  previewButton.textContent = "Open PDF preview";
+  previewButton.addEventListener("click", openPdfPreview);
+
   const clearButton = document.createElement("button");
   clearButton.type = "button";
   clearButton.textContent = "Clear preview";
   clearButton.addEventListener("click", clearPreview);
 
-  panel.append(title, details, clearButton);
+  panel.append(title, details, previewButton, clearButton);
   return panel;
 }
 
@@ -379,7 +519,9 @@ function showPreview(scalePercentInput) {
   document.body.append(overlay, createPanel({ estimatedPages: layout.estimatedPages, scalePercent }));
   previewState = {
     contentRoot,
+    layout,
     pageBreaks,
+    scalePercent,
     overlay
   };
   updatePreviewPositions();
