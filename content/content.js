@@ -10,9 +10,11 @@ const PDF_PREVIEW_ID = "notion-pdf-preview-pages";
 
 const A4_WIDTH_PX = 793.7;
 const A4_HEIGHT_PX = 1122.52;
-const DEFAULT_MARGIN_PX = 40;
-const PAGE_BODY_WIDTH_PX = A4_WIDTH_PX - DEFAULT_MARGIN_PX * 2;
-const PAGE_BODY_HEIGHT_PX = A4_HEIGHT_PX - DEFAULT_MARGIN_PX * 2;
+const DEFAULT_HORIZONTAL_MARGIN_PX = 40;
+const DEFAULT_TOP_MARGIN_PX = 100;
+const DEFAULT_BOTTOM_MARGIN_PX = 147;
+const PAGE_BODY_WIDTH_PX = A4_WIDTH_PX - DEFAULT_HORIZONTAL_MARGIN_PX * 2;
+const PAGE_BODY_HEIGHT_PX = A4_HEIGHT_PX - DEFAULT_TOP_MARGIN_PX - DEFAULT_BOTTOM_MARGIN_PX;
 const MIN_SCALE_PERCENT = 11;
 const MAX_SCALE_PERCENT = 199;
 let previewState = null;
@@ -198,15 +200,29 @@ function classifyBlock(block) {
   }
 
   const heading = block.querySelector("h1, h2, h3");
-  if (tagName === "h1" || heading?.tagName.toLowerCase() === "h1" || blockInfo.includes("header-block") || fontSize >= 28) {
-    return "heading1";
+  const headingTagName = heading?.tagName.toLowerCase();
+
+  if (tagName === "h3" || headingTagName === "h3" || blockInfo.includes("sub_sub_header")) {
+    return "heading3";
   }
 
-  if (tagName === "h2" || heading?.tagName.toLowerCase() === "h2" || blockInfo.includes("sub_header") || fontSize >= 22) {
+  if (tagName === "h2" || headingTagName === "h2" || blockInfo.includes("sub_header")) {
     return "heading2";
   }
 
-  if (tagName === "h3" || heading?.tagName.toLowerCase() === "h3" || blockInfo.includes("sub_sub_header") || (fontSize >= 17 && fontWeight >= 600)) {
+  if (tagName === "h1" || headingTagName === "h1" || blockInfo.includes("header-block")) {
+    return "heading1";
+  }
+
+  if (fontSize >= 28) {
+    return "heading1";
+  }
+
+  if (fontSize >= 22) {
+    return "heading2";
+  }
+
+  if (fontSize >= 17 && fontWeight >= 600) {
     return "heading3";
   }
 
@@ -309,15 +325,15 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
 
   switch (type) {
     case "pageTitle":
-      return estimateWrappedLines(text, 40, layoutWidth) * 48 + 22;
+      return estimateWrappedLines(text, 40, layoutWidth) * 48 + 35;
     case "heading1":
-      return estimateWrappedLines(text, 30, layoutWidth) * 36 + 14;
+      return estimateWrappedLines(text, 30, layoutWidth) * 36 + 26;
     case "heading2":
       return estimateWrappedLines(text, 24, layoutWidth) * 30 + 12;
     case "heading3":
       return estimateWrappedLines(text, 19, layoutWidth) * 24 + 9;
     case "list":
-      return estimateWrappedLines(text, 14, layoutWidth, 28) * 20 + 3;
+      return estimateWrappedLines(text, 14, layoutWidth, 28) * 20 + 18;
     case "quote":
       return estimateWrappedLines(text, 15, layoutWidth, 28) * 21 + 12;
     case "callout":
@@ -333,7 +349,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     case "blank":
       return 18;
     default:
-      return estimateWrappedLines(text, 14, layoutWidth) * 20 + 4;
+      return estimateWrappedLines(text, 14, layoutWidth) * 25 + 5;
   }
 }
 
