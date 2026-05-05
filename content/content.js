@@ -382,11 +382,7 @@ function estimateMediaHeight(block, layoutWidth) {
   return Math.min(520, Math.max(140, rect?.height || 220)) + 18;
 }
 function hasMathElement(block) {
-  return Boolean(
-    block.querySelector(
-      ".katex, .katex-display, math, [class*='equation'], [aria-label*='equation'], [aria-label*='Equation']"
-    )
-  );
+  return Boolean(block.querySelector(".katex, .katex-display"));
 }
 
 function isStandaloneEquationBlock(block, blockInfo) {
@@ -394,8 +390,8 @@ function isStandaloneEquationBlock(block, blockInfo) {
     return false;
   }
 
-  // Notion block equation은 보통 katex-display 또는 equation 관련 class를 가짐.
-  // inline equation은 paragraph/list 내부의 .katex 정도로만 잡힐 수 있음.
+  // block equation만 true.
+  // inline equation은 paragraph로 남아야 함.
   return (
     blockInfo.includes("equation") ||
     Boolean(block.querySelector(".katex-display")) ||
@@ -426,50 +422,90 @@ function getUnionRect(elements) {
     height: bottom - top
   };
 }
+function getVisualMathRects(block) {
+  return Array.from(block.querySelectorAll(".katex-display, .katex"))
+    .filter((element) => {
+      // KaTeX 내부의 접근성용 MathML은 시각적 높이 계산에서 제외
+      if (element.closest(".katex-mathml")) {
+        return false;
+      }
 
-function getMathContentRect(block) {
-  const mathElements = Array.from(
-    block.querySelectorAll(".katex-display, .katex, math")
-  );
+      const rect = element.getBoundingClientRect();
 
-  return getUnionRect(mathElements);
+      if (!rect || rect.width <= 0 || rect.height <= 0) {
+        return false;
+      }
+
+      // 비정상적으로 큰 rect는 wrapper 오탐일 가능성이 큼
+      if (rect.height > 300) {
+        return false;
+      }
+
+      const style = window.getComputedStyle(element);
+
+      if (style.display === "none" || style.visibility === "hidden") {
+        return false;
+      }
+
+      return true;
+    })
+    .map((element) => element.getBoundingClientRect());
+}
+
+function getUnionRectFromRects(rects) {
+  if (!rects.length) {
+    return null;
+  }
+
+  const left = Math.min(...rects.map((rect) => rect.left));
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const right = Math.max(...rects.map((rect) => rect.right));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    width: right - left,
+    height: bottom - top
+  };
 }
 
 function estimateEquationHeight(block) {
-  const blockRect = getVisibleRect(block);
-  const mathRect = getMathContentRect(block);
+  const mathRects = getVisualMathRects(block);
+  const mathUnionRect = getUnionRectFromRects(mathRects);
 
-  // PDF calibration:
-  // Notion equation block advance ≈ visible math height + 16pt.
-  const calibratedFromMath = mathRect
-    ? mathRect.height + ptToPx(16)
-    : 0;
+  // Block equation만 이 공식을 사용.
+  // PDF 보정값: visible math height + 약 16pt.
+  if (mathUnionRect) {
+    return mathUnionRect.height + ptToPx(16);
+  }
 
-  // DOM block rect may already include Notion's internal padding.
-  // Add a tiny gap to avoid underestimation.
-  const calibratedFromBlock = blockRect
-    ? blockRect.height + ptToPx(4)
-    : 0;
-
-  const fallback = ptToPx(36);
-
-  return Math.max(calibratedFromMath, calibratedFromBlock, fallback);
+  return ptToPx(36);
 }
 
-function estimateMathAwareDomHeight(block, baseHeight, extraPt = 3) {
-  if (!hasMathElement(block)) {
+function estimateInlineMathAwareHeight(block, baseHeight) {
+  const mathRects = getVisualMathRects(block);
+
+  if (!mathRects.length) {
     return baseHeight;
   }
 
-  const blockRect = getVisibleRect(block);
-  const mathRect = getMathContentRect(block);
+  const maxMathHeight = Math.max(...mathRects.map((rect) => rect.height));
 
-  const domHeight = Math.max(
-    blockRect?.height || 0,
-    mathRect ? mathRect.height + ptToPx(extraPt) : 0
-  );
+  // 일반 본문 line-height: 18pt
+  const normalLineHeightPx = ptToPx(18);
 
-  return Math.max(baseHeight, domHeight);
+  // inline 수식이 일반 줄높이보다 클 때만 조금 보정
+  const extra = Math.max(0, maxMathHeight - normalLineHeightPx);
+
+  // 핵심:
+  // inline 수식 때문에 문단 전체가 600px 되는 일은 없음.
+  // 그래서 보정값을 강하게 cap 한다.
+  const cappedExtra = Math.min(extra + ptToPx(2), ptToPx(16));
+
+  return baseHeight + cappedExtra;
 }
 
 function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
@@ -514,13 +550,13 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     case "list": {
       const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth, ptToPx(21.6));
       const baseHeight = blockHeightFromPt(lines, 18, -0.62, 7.8);
-      return estimateMathAwareDomHeight(block, baseHeight, 3);
+      return estimateInlineMathAwareHeight(block, baseHeight);
     }
 
     case "quote": {
       const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth, ptToPx(14.25));
       const baseHeight = blockHeightFromPt(lines, 18, -0.62, 12.6);
-      return estimateMathAwareDomHeight(block, baseHeight, 3);
+      return estimateInlineMathAwareHeight(block, baseHeight);
     }
     
     case "equation":
@@ -529,7 +565,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     case "callout": {
       const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth, ptToPx(40));
       const baseHeight = blockHeightFromPt(lines, 18, -0.62, 18);
-      return estimateMathAwareDomHeight(block, baseHeight, 3);
+      return estimateInlineMathAwareHeight(block, baseHeight);
     }
 
     case "code": {
@@ -562,7 +598,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     default: {
       const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth);
       const baseHeight = blockHeightFromPt(lines, 18, -0.62, 6.6);
-      return estimateMathAwareDomHeight(block, baseHeight, 3);
+      return estimateInlineMathAwareHeight(block, baseHeight);
     }
   }
 }
