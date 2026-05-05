@@ -394,8 +394,8 @@ function isStandaloneEquationBlock(block, blockInfo) {
     return false;
   }
 
-  // Notion block equation은 보통 equation 관련 class/label이나 katex-display를 포함할 가능성이 큼.
-  // inline equation은 paragraph 내부의 .katex 정도로만 잡히는 경우가 많으므로 분리한다.
+  // Notion block equation은 보통 katex-display 또는 equation 관련 class를 가짐.
+  // inline equation은 paragraph/list 내부의 .katex 정도로만 잡힐 수 있음.
   return (
     blockInfo.includes("equation") ||
     Boolean(block.querySelector(".katex-display")) ||
@@ -403,33 +403,73 @@ function isStandaloneEquationBlock(block, blockInfo) {
   );
 }
 
-function estimateDomRenderedHeight(block, fallbackHeight, extraPx = 0) {
-  const rect = getVisibleRect(block);
+function getUnionRect(elements) {
+  const rects = elements
+    .map((element) => element.getBoundingClientRect())
+    .filter((rect) => rect && rect.width > 0 && rect.height > 0);
 
-  if (!rect) {
-    return fallbackHeight;
+  if (!rects.length) {
+    return null;
   }
 
-  return Math.max(fallbackHeight, rect.height + extraPx);
+  const left = Math.min(...rects.map((rect) => rect.left));
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const right = Math.max(...rects.map((rect) => rect.right));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    width: right - left,
+    height: bottom - top
+  };
+}
+
+function getMathContentRect(block) {
+  const mathElements = Array.from(
+    block.querySelectorAll(".katex-display, .katex, math")
+  );
+
+  return getUnionRect(mathElements);
 }
 
 function estimateEquationHeight(block) {
-  const rect = getVisibleRect(block);
-  const mathElement = block.querySelector(".katex-display, .katex, math");
-  const mathRect = mathElement?.getBoundingClientRect();
+  const blockRect = getVisibleRect(block);
+  const mathRect = getMathContentRect(block);
 
-  // block equation은 수식 자체 높이 + 약간의 위아래 여백으로 잡는다.
-  const blockHeight = rect?.height || 0;
-  const mathHeight = mathRect?.height || 0;
+  // PDF calibration:
+  // Notion equation block advance ≈ visible math height + 16pt.
+  const calibratedFromMath = mathRect
+    ? mathRect.height + ptToPx(16)
+    : 0;
 
-  const measuredHeight = Math.max(blockHeight, mathHeight + ptToPx(12));
+  // DOM block rect may already include Notion's internal padding.
+  // Add a tiny gap to avoid underestimation.
+  const calibratedFromBlock = blockRect
+    ? blockRect.height + ptToPx(4)
+    : 0;
 
-  if (measuredHeight > 0) {
-    return measuredHeight + ptToPx(6);
+  const fallback = ptToPx(36);
+
+  return Math.max(calibratedFromMath, calibratedFromBlock, fallback);
+}
+
+function estimateMathAwareDomHeight(block, baseHeight, extraPt = 3) {
+  if (!hasMathElement(block)) {
+    return baseHeight;
   }
 
-  // fallback: 일반 한 줄 수식 정도
-  return ptToPx(18 + 12);
+  const blockRect = getVisibleRect(block);
+  const mathRect = getMathContentRect(block);
+
+  const domHeight = Math.max(
+    blockRect?.height || 0,
+    mathRect ? mathRect.height + ptToPx(extraPt) : 0
+  );
+
+  return Math.max(baseHeight, domHeight);
 }
 
 function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
@@ -474,19 +514,13 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     case "list": {
       const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth, ptToPx(21.6));
       const baseHeight = blockHeightFromPt(lines, 18, -0.62, 7.8);
-
-      return hasMathElement(block)
-        ? estimateDomRenderedHeight(block, baseHeight, ptToPx(3))
-        : baseHeight;
+      return estimateMathAwareDomHeight(block, baseHeight, 3);
     }
 
     case "quote": {
       const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth, ptToPx(14.25));
       const baseHeight = blockHeightFromPt(lines, 18, -0.62, 12.6);
-
-      return hasMathElement(block)
-        ? estimateDomRenderedHeight(block, baseHeight, ptToPx(3))
-        : baseHeight;
+      return estimateMathAwareDomHeight(block, baseHeight, 3);
     }
     
     case "equation":
@@ -495,10 +529,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     case "callout": {
       const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth, ptToPx(40));
       const baseHeight = blockHeightFromPt(lines, 18, -0.62, 18);
-
-      return hasMathElement(block)
-        ? estimateDomRenderedHeight(block, baseHeight, ptToPx(3))
-        : baseHeight;
+      return estimateMathAwareDomHeight(block, baseHeight, 3);
     }
 
     case "code": {
@@ -531,10 +562,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     default: {
       const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth);
       const baseHeight = blockHeightFromPt(lines, 18, -0.62, 6.6);
-
-      return hasMathElement(block)
-        ? estimateDomRenderedHeight(block, baseHeight, ptToPx(3))
-        : baseHeight;
+      return estimateMathAwareDomHeight(block, baseHeight, 3);
     }
   }
 }
