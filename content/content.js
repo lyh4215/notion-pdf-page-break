@@ -9,7 +9,7 @@ const PANEL_ID = "notion-pdf-preview-panel";
 
 const A4_WIDTH_PX = 793.7;
 const A4_HEIGHT_PX = 1122.52;
-const DEFAULT_MARGIN_PX = 52;
+const DEFAULT_MARGIN_PX = 40;
 const PAGE_BODY_WIDTH_PX = A4_WIDTH_PX - DEFAULT_MARGIN_PX * 2;
 const PAGE_BODY_HEIGHT_PX = A4_HEIGHT_PX - DEFAULT_MARGIN_PX * 2;
 const MIN_SCALE_PERCENT = 11;
@@ -173,7 +173,7 @@ function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0) {
     return 1;
   }
 
-  const averageCharWidth = fontSize * 0.53;
+  const averageCharWidth = fontSize * 0.5;
   const availableWidth = Math.max(120, layoutWidth - reservedWidth);
   const charsPerLine = Math.max(12, Math.floor(availableWidth / averageCharWidth));
   return text.split("\n").reduce((lineCount, rawLine) => {
@@ -188,7 +188,7 @@ function estimateTableHeight(block, layoutWidth) {
     return 18 + rows.reduce((height, row) => {
       const cellText = getElementText(row);
       const lines = estimateWrappedLines(cellText, 13, layoutWidth, 48);
-      return height + Math.max(34, lines * 18 + 14);
+      return height + Math.max(31, lines * 17 + 10);
     }, 0);
   }
 
@@ -217,29 +217,29 @@ function estimateBlockHeight(block, layoutWidth) {
 
   switch (type) {
     case "heading1":
-      return estimateWrappedLines(text, 30, layoutWidth) * 38 + 18;
+      return estimateWrappedLines(text, 30, layoutWidth) * 35 + 12;
     case "heading2":
-      return estimateWrappedLines(text, 24, layoutWidth) * 31 + 16;
+      return estimateWrappedLines(text, 24, layoutWidth) * 28 + 10;
     case "heading3":
-      return estimateWrappedLines(text, 19, layoutWidth) * 25 + 14;
+      return estimateWrappedLines(text, 19, layoutWidth) * 23 + 8;
     case "list":
-      return estimateWrappedLines(text, 14, layoutWidth, 28) * 22 + 6;
+      return estimateWrappedLines(text, 14, layoutWidth, 28) * 19 + 2;
     case "quote":
-      return estimateWrappedLines(text, 15, layoutWidth, 28) * 24 + 18;
+      return estimateWrappedLines(text, 15, layoutWidth, 28) * 21 + 12;
     case "callout":
-      return estimateWrappedLines(text, 14, layoutWidth, 54) * 22 + 24;
+      return estimateWrappedLines(text, 14, layoutWidth, 54) * 20 + 18;
     case "code":
-      return estimateWrappedLines(rawText, 13, layoutWidth, 32) * 20 + 28;
+      return estimateWrappedLines(rawText, 13, layoutWidth, 32) * 18 + 22;
     case "table":
       return estimateTableHeight(block, layoutWidth);
     case "media":
       return estimateMediaHeight(block, layoutWidth);
     case "divider":
-      return 26;
-    case "blank":
       return 22;
+    case "blank":
+      return 18;
     default:
-      return estimateWrappedLines(text, 14, layoutWidth) * 22 + 8;
+      return estimateWrappedLines(text, 14, layoutWidth) * 19 + 5;
   }
 }
 
