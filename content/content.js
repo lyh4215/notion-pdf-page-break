@@ -10,7 +10,7 @@ const PDF_PREVIEW_ID = "notion-pdf-preview-pages";
 
 const A4_WIDTH_PX = 793.7;
 const A4_HEIGHT_PX = 1122.52;
-const DEFAULT_HORIZONTAL_MARGIN_PX = 40;
+const DEFAULT_HORIZONTAL_MARGIN_PX = 100;
 const DEFAULT_TOP_MARGIN_PX = 100;
 const DEFAULT_BOTTOM_MARGIN_PX = 147;
 const PAGE_BODY_WIDTH_PX = A4_WIDTH_PX - DEFAULT_HORIZONTAL_MARGIN_PX * 2;
@@ -214,15 +214,15 @@ function classifyBlock(block) {
     return "heading1";
   }
 
-  if (fontSize >= 28) {
+  if (fontSize >= 22) {
     return "heading1";
   }
 
-  if (fontSize >= 22) {
+  if (fontSize >= 17 && fontWeight >= 600) {
     return "heading2";
   }
 
-  if (fontSize >= 17 && fontWeight >= 600) {
+  if (fontSize >= 15 && fontWeight >= 600) {
     return "heading3";
   }
 
@@ -331,7 +331,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     case "heading2":
       return estimateWrappedLines(text, 24, layoutWidth) * 30 + 12;
     case "heading3":
-      return estimateWrappedLines(text, 19, layoutWidth) * 24 + 9;
+      return estimateWrappedLines(text, 19, layoutWidth) * 24 + 12;
     case "list":
       return estimateWrappedLines(text, 14, layoutWidth, 28) * 20 + 18;
     case "quote":
@@ -349,7 +349,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     case "blank":
       return 18;
     default:
-      return estimateWrappedLines(text, 14, layoutWidth) * 25 + 5;
+      return estimateWrappedLines(text, 14, layoutWidth) * 23.5 + 12.5;
   }
 }
 
