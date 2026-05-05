@@ -167,9 +167,9 @@
   margin-top: 4px;
 }
 
-.notion-pdf-preview-page-block[data-type="heading1"],
-.notion-pdf-preview-page-block[data-type="heading2"],
-.notion-pdf-preview-page-block[data-type="heading3"] {
+.notion-pdf-preview-page-block[data-type="h2"],
+.notion-pdf-preview-page-block[data-type="h3"],
+.notion-pdf-preview-page-block[data-type="h4"] {
   background: #eff6ff;
   border-color: #bfdbfe;
 }

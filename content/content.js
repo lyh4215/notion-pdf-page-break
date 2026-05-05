@@ -61,7 +61,7 @@ function getElementRawText(element) {
 }
 
 function getPrimaryTextElement(block) {
-  return block.querySelector("h1, h2, h3, [contenteditable='true'], [data-content-editable-leaf], span") || block;
+  return block.querySelector("h1, h2, h3, h4, [contenteditable='true'], [data-content-editable-leaf], span") || block;
 }
 
 function getBlockFontMetrics(block) {
@@ -119,7 +119,7 @@ function getContentBlocks(contentRoot) {
     return visibleBlocks;
   }
 
-  return Array.from(contentRoot.querySelectorAll("h1, h2, h3, p, li, table, pre, blockquote, figure, img, hr"))
+  return Array.from(contentRoot.querySelectorAll("h1, h2, h3, h4, p, li, table, pre, blockquote, figure, img, hr"))
     .filter((block) => getVisibleRect(block));
 }
 
@@ -207,43 +207,43 @@ function classifyBlock(block, headingFontLevels = null) {
     return "callout";
   }
 
-  const heading = block.querySelector("h1, h2, h3");
+  const heading = block.querySelector("h1, h2, h3, h4");
   const headingTagName = heading?.tagName.toLowerCase();
 
-  if (tagName === "h3" || headingTagName === "h3" || blockInfo.includes("sub_sub_header")) {
-    return "heading3";
+  if (tagName === "h4" || headingTagName === "h4" || tagName === "h3" || headingTagName === "h3" || blockInfo.includes("sub_sub_header")) {
+    return "h4";
   }
 
   if (tagName === "h2" || headingTagName === "h2" || blockInfo.includes("sub_header")) {
-    return "heading2";
+    return "h3";
   }
 
   if (tagName === "h1" || headingTagName === "h1" || blockInfo.includes("header-block")) {
-    return "heading1";
+    return "h2";
   }
 
-  if (headingFontLevels?.heading1 && Math.abs(fontSize - headingFontLevels.heading1) < 0.75) {
-    return "heading1";
+  if (headingFontLevels?.h2 && Math.abs(fontSize - headingFontLevels.h2) < 0.75) {
+    return "h2";
   }
 
-  if (headingFontLevels?.heading2 && Math.abs(fontSize - headingFontLevels.heading2) < 0.75) {
-    return "heading2";
+  if (headingFontLevels?.h3 && Math.abs(fontSize - headingFontLevels.h3) < 0.75) {
+    return "h3";
   }
 
-  if (headingFontLevels?.heading3 && Math.abs(fontSize - headingFontLevels.heading3) < 0.75) {
-    return "heading3";
+  if (headingFontLevels?.h4 && Math.abs(fontSize - headingFontLevels.h4) < 0.75) {
+    return "h4";
   }
 
   if (fontSize >= 22) {
-    return "heading1";
+    return "h2";
   }
 
   if (fontSize >= 17 && fontWeight >= 600) {
-    return "heading2";
+    return "h3";
   }
 
   if (fontSize >= 15 && fontWeight >= 600) {
-    return "heading3";
+    return "h4";
   }
 
   if (tagName === "li" || block.closest("ul, ol") || blockInfo.includes("bulleted") || blockInfo.includes("numbered") || /^(\d+\.|[*-])\s+/.test(text)) {
@@ -269,9 +269,9 @@ function getHeadingFontLevels(blocks) {
   const uniqueFontSizes = Array.from(new Set(fontSizes)).sort((a, b) => b - a);
 
   return {
-    heading1: uniqueFontSizes[0] || null,
-    heading2: uniqueFontSizes[1] || null,
-    heading3: uniqueFontSizes[2] || null
+    h2: uniqueFontSizes[0] || null,
+    h3: uniqueFontSizes[1] || null,
+    h4: uniqueFontSizes[2] || null
   };
 }
 
@@ -364,11 +364,11 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
   switch (type) {
     case "pageTitle":
       return estimateWrappedLines(text, 40, layoutWidth) * 52 + 40;
-    case "heading1":
+    case "h2":
       return estimateWrappedLines(text, 30, layoutWidth) * 44 + 34;
-    case "heading2":
+    case "h3":
       return estimateWrappedLines(text, 24, layoutWidth) * 34 + 22;
-    case "heading3":
+    case "h4":
       return estimateWrappedLines(text, 19, layoutWidth) * 28 + 18;
     case "list":
       return estimateWrappedLines(text, 14, layoutWidth, 72) * 23 + 15;
