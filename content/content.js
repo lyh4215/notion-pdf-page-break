@@ -145,6 +145,25 @@ function findPageTitleBlock(contentRoot) {
   })[0].element;
 }
 
+function isTableLikeBlock(block, tagName, blockInfo) {
+  const role = (block.getAttribute("role") || "").toLowerCase();
+
+  if (tagName === "table" || block.querySelector("table")) {
+    return true;
+  }
+
+  if (role === "table" || role === "grid" || blockInfo.includes("notion-table") || blockInfo.includes("collection_view")) {
+    return true;
+  }
+
+  const tableContainer = block.querySelector("[role='table'], [role='grid']");
+  if (tableContainer) {
+    return tableContainer.querySelectorAll("[role='row']").length >= 2;
+  }
+
+  return block.querySelectorAll(":scope > [role='row']").length >= 2;
+}
+
 function classifyBlock(block) {
   const tagName = block.tagName.toLowerCase();
   const text = getElementText(block);
@@ -162,12 +181,7 @@ function classifyBlock(block) {
     return "media";
   }
 
-  if (
-    tagName === "table" ||
-    block.querySelector("table, [role='table'], [role='grid'], [role='row'], [role='cell'], [role='columnheader']") ||
-    blockInfo.includes("table") ||
-    blockInfo.includes("grid")
-  ) {
+  if (isTableLikeBlock(block, tagName, blockInfo)) {
     return "table";
   }
 
@@ -261,7 +275,7 @@ function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0) {
 }
 
 function estimateTableHeight(block, layoutWidth) {
-  const rows = Array.from(block.querySelectorAll("tr"));
+  const rows = Array.from(block.querySelectorAll("tr, [role='row']"));
   if (rows.length) {
     return 18 + rows.reduce((height, row) => {
       const cellText = getElementText(row);
@@ -271,8 +285,9 @@ function estimateTableHeight(block, layoutWidth) {
   }
 
   const text = getElementText(block);
-  const rowCount = Math.max(2, text.split(/\n|\|/).filter(Boolean).length / 3);
-  return 18 + Math.ceil(rowCount) * 36;
+  const rowCount = Math.max(1, getElementRawText(block).split(/\n/).filter((line) => line.trim()).length);
+  const lines = estimateWrappedLines(text, 13, layoutWidth, 48);
+  return 18 + Math.max(rowCount * 31, lines * 17 + 10);
 }
 
 function estimateMediaHeight(block, layoutWidth) {
