@@ -359,35 +359,6 @@ function classifyBlock(block, headingFontLevels = null) {
     return "media";
   }
 
-  if (isListLikeBlock(block, tagName, blockInfo, text)) {
-    return "list";
-  }
-
-  if (isTableLikeBlock(block, tagName, blockInfo)) {
-    return "table";
-  }
-
-  if (isStandaloneEquationBlock(block, blockInfo)) {
-    return "equation";
-  }
-
-  if (
-    tagName === "pre" ||
-    block.querySelector("pre, code") ||
-    blockInfo.includes("code") ||
-    primaryStyle.fontFamily.toLowerCase().includes("mono")
-  ) {
-    return "code";
-  }
-
-  if (tagName === "blockquote" || block.querySelector("blockquote") || blockInfo.includes("quote")) {
-    return "quote";
-  }
-
-  if (blockInfo.includes("callout")) {
-    return "callout";
-  }
-
   const heading = block.querySelector("h1, h2, h3, h4");
   const headingTagName = heading?.tagName.toLowerCase();
 
@@ -429,6 +400,31 @@ function classifyBlock(block, headingFontLevels = null) {
 
   if (isListLikeBlock(block, tagName, blockInfo, text)) {
     return "list";
+  }
+
+  if (isTableLikeBlock(block, tagName, blockInfo)) {
+    return "table";
+  }
+
+  if (isStandaloneEquationBlock(block, blockInfo)) {
+    return "equation";
+  }
+
+  if (
+    tagName === "pre" ||
+    block.querySelector("pre, code") ||
+    blockInfo.includes("code") ||
+    primaryStyle.fontFamily.toLowerCase().includes("mono")
+  ) {
+    return "code";
+  }
+
+  if (tagName === "blockquote" || block.querySelector("blockquote") || blockInfo.includes("quote")) {
+    return "quote";
+  }
+
+  if (blockInfo.includes("callout")) {
+    return "callout";
   }
 
   if (!text) {
@@ -731,10 +727,10 @@ function estimateInlineMathAwareHeight(block, baseHeight) {
   return baseHeight + cappedExtra;
 }
 
-function estimateListItemHeight(text, layoutWidth, depth = 0) {
+function estimateListItemHeight(text, layoutWidth, depth = 0, compact = false) {
   const reservedWidth = ptToPx(21.6 + depth * 18);
   const lines = estimateWrappedLines(text || " ", ptToPx(12), layoutWidth, reservedWidth);
-  return blockHeightFromPt(lines, 18, -0.62, 7.8);
+  return blockHeightFromPt(lines, 18, -0.62, compact ? 0 : 7.8);
 }
 
 function isLogicalChildBlock(block, nestedBlock) {
@@ -774,9 +770,9 @@ function getEmbeddedTablesForList(block) {
     .filter((table, index, tables) => tables.findIndex((candidate) => candidate.contains(table)) === index);
 }
 
-function estimateListHeight(block, layoutWidth) {
+function estimateListHeight(block, layoutWidth, compact = false) {
   const ownText = getOwnVisibleTextForEstimate(block) || getVisibleTextForEstimate(block, ptToPx(12));
-  let height = estimateListItemHeight(ownText, layoutWidth);
+  let height = estimateListItemHeight(ownText, layoutWidth, 0, compact);
   const nestedLayoutWidth = Math.max(120, layoutWidth - ptToPx(21.6));
 
   for (const table of getEmbeddedTablesForList(block)) {
@@ -785,7 +781,9 @@ function estimateListHeight(block, layoutWidth) {
 
   for (const nestedBlock of getNestedContentBlocks(block)) {
     const nestedType = classifyBlock(nestedBlock);
-    height += estimateBlockHeight(nestedBlock, nestedLayoutWidth, nestedType);
+    height += nestedType === "list"
+      ? estimateListHeight(nestedBlock, nestedLayoutWidth, true)
+      : estimateBlockHeight(nestedBlock, nestedLayoutWidth, nestedType);
   }
 
   return estimateInlineMathAwareHeight(block, height);
