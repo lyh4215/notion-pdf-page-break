@@ -18,11 +18,11 @@ const A4_WIDTH_PX = A4_WIDTH_PT * PT_TO_CSS_PX;
 const A4_HEIGHT_PX = A4_HEIGHT_PT * PT_TO_CSS_PX;
 
 // Notion native PDF export content box, A4 scale 100%.
-// Calibrated from measured export: about 100px top and 147px bottom margin.
+// Approximately 1 inch margins.
 const PAGE_BODY_WIDTH_PT = 452.25;
-const PAGE_BODY_HEIGHT_PT = 657.6;
+const PAGE_BODY_HEIGHT_PT = 698.88;
 const PAGE_BODY_WIDTH_PX = PAGE_BODY_WIDTH_PT * PT_TO_CSS_PX;   // ≈ 603px
-const PAGE_BODY_HEIGHT_PX = PAGE_BODY_HEIGHT_PT * PT_TO_CSS_PX; // ≈ 876.8px
+const PAGE_BODY_HEIGHT_PX = PAGE_BODY_HEIGHT_PT * PT_TO_CSS_PX; // ≈ 931.84px
 const MIN_SCALE_PERCENT = 11;
 const MAX_SCALE_PERCENT = 199;
 let previewState = null;
@@ -75,6 +75,11 @@ function getElementRawText(element) {
 }
 
 function getVisibleTextForEstimate(element, fontSize = 14) {
+  const pdfLinkText = getPdfLinkTextForEstimate(element);
+  if (pdfLinkText) {
+    return pdfLinkText;
+  }
+
   function walk(node) {
     if (node.nodeType === Node.TEXT_NODE) {
       return node.textContent || "";
@@ -123,7 +128,7 @@ function getOwnVisibleTextForEstimate(element) {
       continue;
     }
 
-    if (parent.closest("script, style, .katex-mathml")) {
+    if (parent.closest("script, style, .katex-mathml, table, [role='table'], [role='grid']")) {
       continue;
     }
 
@@ -131,6 +136,32 @@ function getOwnVisibleTextForEstimate(element) {
   }
 
   return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+function getPdfLinkTextForEstimate(element) {
+  const links = Array.from(element.querySelectorAll("a[href]"))
+    .map((link) => link.href)
+    .filter((href) => /^https?:\/\//i.test(href));
+
+  if (links.length !== 1) {
+    return "";
+  }
+
+  const visibleText = (element.innerText || element.textContent || "").replace(/\s+/g, " ").trim();
+  const [href] = links;
+
+  if (!visibleText || visibleText === href || visibleText.startsWith("http")) {
+    return href;
+  }
+
+  const blockInfo = `${element.tagName || ""} ${element.className || ""} ${element.getAttribute?.("role") || ""} ${element.getAttribute?.("aria-label") || ""}`.toLowerCase();
+  const looksLikeLinkPreview =
+    blockInfo.includes("bookmark") ||
+    blockInfo.includes("link") ||
+    blockInfo.includes("embed") ||
+    visibleText.length <= 90;
+
+  return looksLikeLinkPreview ? href : "";
 }
 
 function getPrimaryTextElement(block) {
@@ -248,6 +279,17 @@ function isTableLikeBlock(block, tagName, blockInfo) {
   return block.querySelectorAll(":scope > [role='row']").length >= 2;
 }
 
+function isListLikeBlock(block, tagName, blockInfo, text) {
+  return (
+    tagName === "li" ||
+    block.closest("ul, ol") ||
+    blockInfo.includes("bulleted") ||
+    blockInfo.includes("numbered") ||
+    blockInfo.includes("to_do") ||
+    /^(\d+\.|[*-])\s+/.test(text)
+  );
+}
+
 function hasExplicitMediaHint(blockInfo) {
   return (
     blockInfo.includes("image") ||
@@ -294,6 +336,10 @@ function classifyBlock(block, headingFontLevels = null) {
 
   if (isMediaLikeBlock(block, tagName, blockInfo)) {
     return "media";
+  }
+
+  if (isListLikeBlock(block, tagName, blockInfo, text)) {
+    return "list";
   }
 
   if (isTableLikeBlock(block, tagName, blockInfo)) {
@@ -360,7 +406,7 @@ function classifyBlock(block, headingFontLevels = null) {
     return "h4";
   }
 
-  if (tagName === "li" || block.closest("ul, ol") || blockInfo.includes("bulleted") || blockInfo.includes("numbered") || /^(\d+\.|[*-])\s+/.test(text)) {
+  if (isListLikeBlock(block, tagName, blockInfo, text)) {
     return "list";
   }
 
@@ -688,9 +734,19 @@ function getNestedBlockDepth(block, nestedBlock) {
   return depth + 1;
 }
 
+function getEmbeddedTablesForList(block) {
+  return Array.from(block.querySelectorAll("table, [role='table'], [role='grid']"))
+    .filter((table) => getVisibleRect(table))
+    .filter((table, index, tables) => tables.findIndex((candidate) => candidate.contains(table)) === index);
+}
+
 function estimateListHeight(block, layoutWidth) {
   const ownText = getOwnVisibleTextForEstimate(block) || getVisibleTextForEstimate(block, ptToPx(12));
   let height = estimateListItemHeight(ownText, layoutWidth);
+
+  for (const table of getEmbeddedTablesForList(block)) {
+    height += estimateTableHeight(table, layoutWidth - ptToPx(21.6));
+  }
 
   for (const nestedBlock of getNestedListBlocks(block)) {
     const nestedText = getOwnVisibleTextForEstimate(nestedBlock);
