@@ -737,45 +737,55 @@ function estimateListItemHeight(text, layoutWidth, depth = 0) {
   return blockHeightFromPt(lines, 18, -0.62, 7.8);
 }
 
-function getNestedListBlocks(block) {
-  return Array.from(block.querySelectorAll("[data-block-id]"))
-    .filter((nestedBlock) => nestedBlock !== block)
-    .filter((nestedBlock) => getVisibleRect(nestedBlock));
-}
+function isLogicalChildBlock(block, nestedBlock) {
+  if (nestedBlock === block) {
+    return false;
+  }
 
-function getNestedBlockDepth(block, nestedBlock) {
-  let depth = 0;
+  if (nestedBlock.getAttribute("data-block-id") === block.getAttribute("data-block-id")) {
+    return false;
+  }
+
   let parent = nestedBlock.parentElement?.closest("[data-block-id]");
 
   while (parent && parent !== block) {
-    depth += 1;
+    if (parent.getAttribute("data-block-id") !== block.getAttribute("data-block-id")) {
+      return false;
+    }
+
     parent = parent.parentElement?.closest("[data-block-id]");
   }
 
-  return depth + 1;
+  return parent === block;
+}
+
+function getNestedContentBlocks(block) {
+  return sortBlocksByPagePosition(
+    Array.from(block.querySelectorAll("[data-block-id]"))
+      .filter((nestedBlock) => isLogicalChildBlock(block, nestedBlock))
+      .filter((nestedBlock) => getVisibleRect(nestedBlock))
+  );
 }
 
 function getEmbeddedTablesForList(block) {
   return Array.from(block.querySelectorAll("table, [role='table'], [role='grid']"))
     .filter((table) => getVisibleRect(table))
+    .filter((table) => (table.closest("[data-block-id]") || block) === block)
     .filter((table, index, tables) => tables.findIndex((candidate) => candidate.contains(table)) === index);
 }
 
 function estimateListHeight(block, layoutWidth) {
   const ownText = getOwnVisibleTextForEstimate(block) || getVisibleTextForEstimate(block, ptToPx(12));
   let height = estimateListItemHeight(ownText, layoutWidth);
+  const nestedLayoutWidth = Math.max(120, layoutWidth - ptToPx(21.6));
 
   for (const table of getEmbeddedTablesForList(block)) {
-    height += estimateTableHeight(table, layoutWidth - ptToPx(21.6));
+    height += estimateTableHeight(table, nestedLayoutWidth);
   }
 
-  for (const nestedBlock of getNestedListBlocks(block)) {
-    const nestedText = getOwnVisibleTextForEstimate(nestedBlock);
-    if (!nestedText) {
-      continue;
-    }
-
-    height += estimateListItemHeight(nestedText, layoutWidth, getNestedBlockDepth(block, nestedBlock));
+  for (const nestedBlock of getNestedContentBlocks(block)) {
+    const nestedType = classifyBlock(nestedBlock);
+    height += estimateBlockHeight(nestedBlock, nestedLayoutWidth, nestedType);
   }
 
   return estimateInlineMathAwareHeight(block, height);
