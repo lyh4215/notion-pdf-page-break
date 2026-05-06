@@ -518,7 +518,7 @@ function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0) {
 }
 
 function getTableRows(block) {
-  const rows = Array.from(block.querySelectorAll("tr, [role='row']"));
+  const rows = getTableRowElements(block);
 
   if (rows.length) {
     return rows.map((row) => {
@@ -533,6 +533,10 @@ function getTableRows(block) {
     .filter(Boolean);
 
   return rawLines.length ? rawLines.map((line) => [line]) : [[getElementText(block)]];
+}
+
+function getTableRowElements(block) {
+  return Array.from(block.querySelectorAll("tr, [role='row']"));
 }
 
 function getTableRowCount(block) {
@@ -551,10 +555,18 @@ function tableRepeatsHeader(block) {
 
 function estimateTableRowHeights(block, layoutWidth) {
   const rows = getTableRows(block);
+  const rowElements = getTableRowElements(block);
   const columnCount = Math.max(1, ...rows.map((row) => row.length));
   const cellWidth = Math.max(80, layoutWidth / columnCount - ptToPx(8));
 
-  return rows.map((row) => {
+  return rows.map((row, rowIndex) => {
+    const rowElement = rowElements[rowIndex];
+    const rowStyleHeight = rowElement ? Number.parseFloat(window.getComputedStyle(rowElement).height) || 0 : 0;
+    const looksLikeSingleLineRow = row.every((cellText) => cellText.length <= 34);
+    if (looksLikeSingleLineRow && rowStyleHeight > 0 && rowStyleHeight <= 36) {
+      return ptToPx(21.75);
+    }
+
     const lineCount = Math.max(
       1,
       ...row.map((cellText) => estimateWrappedLines(cellText, ptToPx(10.5), cellWidth))
@@ -880,7 +892,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       return estimateMediaHeight(block, layoutWidth);
 
     case "divider":
-      return ptToPx(36);
+      return ptToPx(24);
 
     case "blank":
       return ptToPx(18);
@@ -913,6 +925,8 @@ function paginateBlocks(blocks, pageHeight) {
 
   function getBottomOverflowTolerance(type) {
     switch (type) {
+      case "h4":
+        return 40;
       case "paragraph":
       case "list":
       case "quote":
@@ -932,8 +946,17 @@ function paginateBlocks(blocks, pageHeight) {
     return type === "equation" || type === "code" || type === "table" || type === "media";
   }
 
+  function isHeadingType(type) {
+    return type === "h2" || type === "h3" || type === "h4";
+  }
+
   function canUseBottomOverflowTolerance(block, overflow) {
     if (overflow <= 0 || overflow > getBottomOverflowTolerance(block.type)) {
+      return false;
+    }
+
+    const previousSegment = currentPage().at(-1);
+    if (isHeadingType(block.type) && isAvoidInsideType(previousSegment?.type)) {
       return false;
     }
 
