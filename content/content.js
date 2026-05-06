@@ -436,6 +436,16 @@ function getTableRowCount(block) {
   return getTableRows(block).length;
 }
 
+function tableRepeatsHeader(block) {
+  const firstRow = block.querySelector("tr, [role='row']");
+
+  if (!firstRow) {
+    return false;
+  }
+
+  return Boolean(firstRow.querySelector("th, [role='columnheader']"));
+}
+
 function estimateTableRowHeights(block, layoutWidth) {
   const rows = getTableRows(block);
   const columnCount = Math.max(1, ...rows.map((row) => row.length));
@@ -447,13 +457,13 @@ function estimateTableRowHeights(block, layoutWidth) {
       ...row.map((cellText) => estimateWrappedLines(cellText, ptToPx(10.5), cellWidth))
     );
 
-    return ptToPx(21.75 + 18 * (lineCount - 1));
+    return ptToPx(21.75 + 12 * (lineCount - 1));
   });
 }
 
 function estimateTableHeight(block, layoutWidth) {
   // Calibrated Notion PDF table:
-  // font 10.5pt, one-line row height 21.75pt, wrapped rows add about 18pt per line.
+  // font 10.5pt, one-line row height 21.75pt, wrapped rows are compact.
   const rowHeights = estimateTableRowHeights(block, layoutWidth);
   return rowHeights.reduce((sum, rowHeight) => sum + rowHeight, ptToPx(0.75));
 }
@@ -746,6 +756,7 @@ function paginateBlocks(blocks, pageHeight) {
 
     const borderHeight = ptToPx(0.75);
     const headerHeight = rowHeights[0];
+    const repeatsHeader = block.tableRepeatsHeader ?? tableRepeatsHeader(block.element);
     let consumedRows = 0;
     let segmentIndex = 0;
 
@@ -761,7 +772,7 @@ function paginateBlocks(blocks, pageHeight) {
       }
 
       const isContinuation = segmentIndex > 0;
-      const repeatedHeaderHeight = isContinuation ? headerHeight : 0;
+      const repeatedHeaderHeight = isContinuation && repeatsHeader ? headerHeight : 0;
       let segmentHeight = borderHeight + repeatedHeaderHeight;
       let originalRows = 0;
 
@@ -898,6 +909,7 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
 
     if (type === "table") {
       measuredBlock.tableRowHeights = estimateTableRowHeights(element, layoutWidth);
+      measuredBlock.tableRepeatsHeader = tableRepeatsHeader(element);
     }
 
     return measuredBlock;
