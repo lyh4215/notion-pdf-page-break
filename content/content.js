@@ -671,6 +671,10 @@ function isHeadingType(type) {
   return type === "h2" || type === "h3" || type === "h4";
 }
 
+function isUnsplittableBlock(type) {
+  return type === "equation";
+}
+
 function getVisibleHeightForBreak(block) {
   // Page-break 판단에서는 afterGap까지 heading에 포함시키면 너무 보수적임.
   // Notion native PDF는 heading만 페이지 하단에 남기고 다음 본문을 다음 페이지로 넘기는 경우가 있음.
@@ -734,6 +738,20 @@ function findPageBreaks(blocks, pageHeight, estimatedPages) {
 
     const previousHeight = accumulatedHeight;
     const remainingOnPage = pageEnd - previousHeight;
+
+    if (
+      isUnsplittableBlock(block.type) &&
+      remainingOnPage > 0 &&
+      remainingOnPage < block.height
+    ) {
+      breaks.push({
+        element: block.element,
+        offsetRatio: 0,
+        pageNumber
+      });
+
+      continue;
+    }
 
     // 핵심 보정:
     // pageEnd가 heading 근처에 걸리면, heading의 afterGap까지 요구하지 말고
@@ -826,6 +844,33 @@ function paginatePreviewBlocks(blocks, pageHeight) {
   let usedHeight = 0;
 
   for (const block of blocks) {
+    if (
+      isUnsplittableBlock(block.type) &&
+      usedHeight > 0 &&
+      usedHeight + block.height > pageHeight
+    ) {
+      pages.push([]);
+      usedHeight = 0;
+    }
+
+    if (isUnsplittableBlock(block.type)) {
+      const page = pages[pages.length - 1];
+      page.push({
+        ...block,
+        continued: false,
+        segmentHeight: block.height,
+        splitAfter: false
+      });
+      usedHeight += block.height;
+
+      if (usedHeight >= pageHeight) {
+        pages.push([]);
+        usedHeight = 0;
+      }
+
+      continue;
+    }
+
     let remainingHeight = block.height;
     let segmentIndex = 0;
 
@@ -859,7 +904,7 @@ function paginatePreviewBlocks(blocks, pageHeight) {
     }
   }
 
-  return pages;
+  return pages.filter((page) => page.length > 0);
 }
 
 function createPdfPreviewBlock(segment, pageScale) {
