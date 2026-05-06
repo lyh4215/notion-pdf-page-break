@@ -958,6 +958,30 @@ function paginateBlocks(blocks, pageHeight) {
     return remainingAfterBlock >= 0 && remainingAfterBlock < ptToPx(18);
   }
 
+  function shouldStartCodeOnCleanPage(block) {
+    if (block.type !== "code" || usedHeight <= 0) {
+      return false;
+    }
+
+    const availableHeight = pageHeight - usedHeight;
+    const previousSegment = currentPage().at(-1);
+
+    if (block.height <= availableHeight) {
+      return availableHeight - block.height < 16;
+    }
+
+    return previousSegment?.type === "code" && availableHeight < ptToPx(108);
+  }
+
+  function canKeepCodeNearBottom(block) {
+    if (block.type !== "code" || usedHeight <= 0) {
+      return false;
+    }
+
+    const overflow = usedHeight + block.height - pageHeight;
+    return overflow > 0 && overflow <= 16;
+  }
+
   function pushTableSegment(block, segmentHeight, consumedRows, rowCount, segmentIndex) {
     const splitAfter = consumedRows < rowCount;
     currentPage().push({
@@ -1082,6 +1106,24 @@ function paginateBlocks(blocks, pageHeight) {
       if (paginateTableBlock(block)) {
         continue;
       }
+    }
+
+    if (shouldStartCodeOnCleanPage(block)) {
+      startNewPage({
+        element: block.element,
+        offsetRatio: 0
+      });
+    }
+
+    if (canKeepCodeNearBottom(block)) {
+      currentPage().push({
+        ...block,
+        continued: false,
+        segmentHeight: block.height,
+        splitAfter: false
+      });
+      usedHeight += block.height;
+      continue;
     }
 
     if (block.type === "code" && usedHeight > 0 && usedHeight + block.height > pageHeight) {
