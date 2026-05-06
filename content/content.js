@@ -18,11 +18,11 @@ const A4_WIDTH_PX = A4_WIDTH_PT * PT_TO_CSS_PX;
 const A4_HEIGHT_PX = A4_HEIGHT_PT * PT_TO_CSS_PX;
 
 // Notion native PDF export content box, A4 scale 100%.
-// Approximately 1 inch margins.
+// Calibrated from measured export: about 100px top and 147px bottom margin.
 const PAGE_BODY_WIDTH_PT = 452.25;
-const PAGE_BODY_HEIGHT_PT = 698.88;
+const PAGE_BODY_HEIGHT_PT = 657.6;
 const PAGE_BODY_WIDTH_PX = PAGE_BODY_WIDTH_PT * PT_TO_CSS_PX;   // ≈ 603px
-const PAGE_BODY_HEIGHT_PX = PAGE_BODY_HEIGHT_PT * PT_TO_CSS_PX; // ≈ 931.84px
+const PAGE_BODY_HEIGHT_PX = PAGE_BODY_HEIGHT_PT * PT_TO_CSS_PX; // ≈ 876.8px
 const MIN_SCALE_PERCENT = 11;
 const MAX_SCALE_PERCENT = 199;
 let previewState = null;
