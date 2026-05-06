@@ -74,6 +74,18 @@ function getElementRawText(element) {
   return (element.innerText || element.textContent || "").trim();
 }
 
+function getCodeRawTextForEstimate(block) {
+  const codeElement = block.querySelector("[contenteditable='true'], [data-content-editable-leaf]") || block;
+  const rawText = (codeElement.textContent || codeElement.innerText || "").replace(/\u200b/g, "");
+  const lines = rawText.replace(/\r\n/g, "\n").split("\n");
+
+  while (lines.length && !lines[lines.length - 1].trim()) {
+    lines.pop();
+  }
+
+  return lines.join("\n").trim();
+}
+
 function getVisibleTextForEstimate(element, fontSize = 14) {
   const pdfLinkText = getPdfLinkTextForEstimate(element);
   if (pdfLinkText) {
@@ -790,7 +802,6 @@ function estimateListHeight(block, layoutWidth, compact = false) {
 }
 
 function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
-  const rawText = getElementRawText(block);
   const text = getVisibleTextForEstimate(block, ptToPx(12));
 
   switch (type) {
@@ -850,7 +861,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     case "code": {
       // Measured code block formula: 18n + 24 pt.
       // n is visual line slots, including blank lines and wrapped long code lines.
-      const rawLines = rawText.replace(/\r\n/g, "\n").split("\n");
+      const rawLines = getCodeRawTextForEstimate(block).split("\n");
 
       const lineSlots = Math.max(
         1,
@@ -1129,7 +1140,7 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
     const measuredBlock = {
       element,
       type,
-      text: getVisibleTextForEstimate(element),
+      text: type === "code" ? getCodeRawTextForEstimate(element) : getVisibleTextForEstimate(element),
       layoutWidth,
       height: estimateBlockHeight(element, layoutWidth, type)
     };
@@ -1224,7 +1235,7 @@ function formatPdfPreviewForCopy(pages) {
         segment.splitAfter ? "splits" : ""
       ].filter(Boolean);
       const suffix = flags.length ? ` | ${flags.join(" | ")}` : "";
-      return `${segment.type} | ${Math.round(segment.height)}px${suffix}\n${segment.text || "(empty block)"}`;
+      return `${segment.type} | ${Math.round(segment.segmentHeight ?? segment.height)}px${suffix}\n${segment.text || "(empty block)"}`;
     });
 
     return [`Page ${pageIndex + 1}`, ...blocks].join("\n\n");
