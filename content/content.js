@@ -461,11 +461,40 @@ function estimateTableRowHeights(block, layoutWidth) {
   });
 }
 
+function getTextOutsideTable(block) {
+  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+  const parts = [];
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const parent = node.parentElement;
+
+    if (!parent || parent.closest("table, [role='table'], [role='grid'], tr, [role='row']")) {
+      continue;
+    }
+
+    const text = node.textContent.trim();
+    if (text) {
+      parts.push(text);
+    }
+  }
+
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
 function estimateTableHeight(block, layoutWidth) {
   // Calibrated Notion PDF table:
   // font 10.5pt, one-line row height 21.75pt, wrapped rows are compact.
   const rowHeights = estimateTableRowHeights(block, layoutWidth);
-  return rowHeights.reduce((sum, rowHeight) => sum + rowHeight, ptToPx(0.75));
+  const tableHeight = rowHeights.reduce((sum, rowHeight) => sum + rowHeight, ptToPx(0.75));
+  const extraText = getTextOutsideTable(block);
+
+  if (!extraText) {
+    return tableHeight;
+  }
+
+  const extraLines = estimateWrappedLines(extraText, ptToPx(12), layoutWidth);
+  return tableHeight + blockHeightFromPt(extraLines, 18, -0.62, 6.6);
 }
 
 function estimateMediaHeight(block, layoutWidth) {
@@ -812,41 +841,7 @@ function paginateBlocks(blocks, pageHeight) {
     return true;
   }
 
-  for (const block of blocks) {
-    if (
-      block.type === "table" &&
-      (block.height > pageHeight || (usedHeight > 0 && usedHeight + block.height > pageHeight))
-    ) {
-      if (paginateTableBlock(block)) {
-        continue;
-      }
-    }
-
-    if (block.height <= pageHeight) {
-      const overflow = usedHeight + block.height - pageHeight;
-      const canKeepNearBottom =
-        usedHeight > 0 &&
-        usedHeight <= pageHeight &&
-        overflow > 0 &&
-        overflow <= getBottomOverflowTolerance(block.type);
-
-      if (usedHeight > 0 && usedHeight + block.height > pageHeight && !canKeepNearBottom) {
-        startNewPage({
-          element: block.element,
-          offsetRatio: 0
-        });
-      }
-
-      currentPage().push({
-        ...block,
-        continued: false,
-        segmentHeight: block.height,
-        splitAfter: false
-      });
-      usedHeight += block.height;
-      continue;
-    }
-
+  function paginateHeightSplitBlock(block) {
     let consumedHeight = 0;
     let remainingHeight = block.height;
     let segmentIndex = 0;
@@ -883,6 +878,49 @@ function paginateBlocks(blocks, pageHeight) {
         });
       }
     }
+  }
+
+  for (const block of blocks) {
+    if (
+      block.type === "table" &&
+      (block.height > pageHeight || (usedHeight > 0 && usedHeight + block.height > pageHeight))
+    ) {
+      if (paginateTableBlock(block)) {
+        continue;
+      }
+    }
+
+    if (block.type === "code" && usedHeight > 0 && usedHeight + block.height > pageHeight) {
+      paginateHeightSplitBlock(block);
+      continue;
+    }
+
+    if (block.height <= pageHeight) {
+      const overflow = usedHeight + block.height - pageHeight;
+      const canKeepNearBottom =
+        usedHeight > 0 &&
+        usedHeight <= pageHeight &&
+        overflow > 0 &&
+        overflow <= getBottomOverflowTolerance(block.type);
+
+      if (usedHeight > 0 && usedHeight + block.height > pageHeight && !canKeepNearBottom) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: 0
+        });
+      }
+
+      currentPage().push({
+        ...block,
+        continued: false,
+        segmentHeight: block.height,
+        splitAfter: false
+      });
+      usedHeight += block.height;
+      continue;
+    }
+
+    paginateHeightSplitBlock(block);
   }
 
   return {
