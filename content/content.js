@@ -220,6 +220,38 @@ function isTableLikeBlock(block, tagName, blockInfo) {
   return block.querySelectorAll(":scope > [role='row']").length >= 2;
 }
 
+function hasExplicitMediaHint(blockInfo) {
+  return (
+    blockInfo.includes("image") ||
+    blockInfo.includes("video") ||
+    blockInfo.includes("embed") ||
+    blockInfo.includes("audio") ||
+    blockInfo.includes("pdf") ||
+    blockInfo.includes("file")
+  );
+}
+
+function getSubstantialMediaElement(block) {
+  const candidates = Array.from(block.querySelectorAll("img, video, iframe, canvas, figure"));
+
+  return candidates.find((element) => {
+    const rect = getVisibleRect(element);
+    return rect && rect.width >= 80 && rect.height >= 60;
+  }) || null;
+}
+
+function isMediaLikeBlock(block, tagName, blockInfo) {
+  if (tagName === "img" || tagName === "figure") {
+    return true;
+  }
+
+  if (!hasExplicitMediaHint(blockInfo)) {
+    return false;
+  }
+
+  return Boolean(getSubstantialMediaElement(block));
+}
+
 function classifyBlock(block, headingFontLevels = null) {
   const tagName = block.tagName.toLowerCase();
   const text = getElementText(block);
@@ -232,7 +264,7 @@ function classifyBlock(block, headingFontLevels = null) {
     return "divider";
   }
 
-  if (tagName === "img" || tagName === "figure" || block.querySelector("img, figure")) {
+  if (isMediaLikeBlock(block, tagName, blockInfo)) {
     return "media";
   }
 
@@ -405,7 +437,7 @@ function estimateTableHeight(block, layoutWidth) {
 }
 
 function estimateMediaHeight(block, layoutWidth) {
-  const image = block.matches("img") ? block : block.querySelector("img");
+  const image = block.matches("img") ? block : getSubstantialMediaElement(block) || block.querySelector("img");
   const naturalWidth = image?.naturalWidth || 0;
   const naturalHeight = image?.naturalHeight || 0;
 
