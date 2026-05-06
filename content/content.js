@@ -634,6 +634,87 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
   }
 }
 
+function paginateBlocks(blocks, pageHeight) {
+  const pages = [[]];
+  const breaks = [];
+  let usedHeight = 0;
+
+  function currentPage() {
+    return pages[pages.length - 1];
+  }
+
+  function startNewPage(pageBreak) {
+    breaks.push({
+      ...pageBreak,
+      pageNumber: pages.length
+    });
+    pages.push([]);
+    usedHeight = 0;
+  }
+
+  for (const block of blocks) {
+    if (block.height <= pageHeight) {
+      if (usedHeight > 0 && usedHeight + block.height > pageHeight) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: 0
+        });
+      }
+
+      currentPage().push({
+        ...block,
+        continued: false,
+        segmentHeight: block.height,
+        splitAfter: false
+      });
+      usedHeight += block.height;
+      continue;
+    }
+
+    let consumedHeight = 0;
+    let remainingHeight = block.height;
+    let segmentIndex = 0;
+
+    while (remainingHeight > 0) {
+      let availableHeight = pageHeight - usedHeight;
+
+      if (availableHeight <= 0) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: Math.min(1, consumedHeight / block.height)
+        });
+        availableHeight = pageHeight;
+      }
+
+      const segmentHeight = Math.min(remainingHeight, availableHeight);
+      consumedHeight += segmentHeight;
+      remainingHeight -= segmentHeight;
+
+      currentPage().push({
+        ...block,
+        continued: segmentIndex > 0,
+        segmentHeight,
+        splitAfter: remainingHeight > 0
+      });
+
+      usedHeight += segmentHeight;
+      segmentIndex += 1;
+
+      if (remainingHeight > 0) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: Math.min(1, consumedHeight / block.height)
+        });
+      }
+    }
+  }
+
+  return {
+    breaks,
+    pages: pages.filter((page) => page.length > 0)
+  };
+}
+
 function estimateDocumentLayout(contentRoot, scalePercent) {
   const scaleFactor = scalePercent / 100;
   const layoutWidth = PAGE_BODY_WIDTH_PX / scaleFactor;
@@ -657,132 +738,17 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
       height: estimateBlockHeight(pageTitleElement, layoutWidth, "pageTitle")
     });
   }
-  const totalHeight = measuredBlocks.reduce((sum, block) => sum + block.height, 0);
+  const pageHeight = PAGE_BODY_HEIGHT_PX / scaleFactor;
+  const pagination = paginateBlocks(measuredBlocks, pageHeight);
 
   return {
     blocks: measuredBlocks,
-    estimatedPages: Math.max(1, Math.ceil(Math.max(1, totalHeight) / (PAGE_BODY_HEIGHT_PX / scaleFactor))),
+    estimatedPages: Math.max(1, pagination.pages.length),
     layoutWidth,
-    pageHeight: PAGE_BODY_HEIGHT_PX / scaleFactor
+    pageBreaks: pagination.breaks,
+    pageHeight,
+    pages: pagination.pages
   };
-}
-
-function isHeadingType(type) {
-  return type === "h2" || type === "h3" || type === "h4";
-}
-
-function isUnsplittableBlock(type) {
-  return type === "equation";
-}
-
-function getVisibleHeightForBreak(block) {
-  // Page-break 판단에서는 afterGap까지 heading에 포함시키면 너무 보수적임.
-  // Notion native PDF는 heading만 페이지 하단에 남기고 다음 본문을 다음 페이지로 넘기는 경우가 있음.
-  const lineCount = Math.max(
-    1,
-    estimateWrappedLines(
-      block.text,
-      block.type === "h2" ? ptToPx(22.5) :
-      block.type === "h3" ? ptToPx(18) :
-      block.type === "h4" ? ptToPx(15) :
-      ptToPx(12),
-      previewState?.layout?.layoutWidth || PAGE_BODY_WIDTH_PX
-    )
-  );
-
-  switch (block.type) {
-    case "h2":
-      // Notion # / HTML h2
-      // visible = 27n + 5.58 pt
-      return blockHeightFromPt(lineCount, 27, 5.58, 0);
-
-    case "h3":
-      // Notion ## / HTML h3
-      // visible = 21.75n + 4.31 pt
-      return blockHeightFromPt(lineCount, 21.75, 4.31, 0);
-
-    case "h4":
-      // Notion ### / HTML h4
-      // visible = 18n + 3.72 pt
-      return blockHeightFromPt(lineCount, 18, 3.72, 0);
-
-    default:
-      return block.height;
-  }
-}
-
-function findPageBreaks(blocks, pageHeight, estimatedPages) {
-  const breaks = [];
-  let accumulatedHeight = 0;
-  let blockIndex = 0;
-
-  // Notion native PDF는 페이지 끝 근처 heading을 약간 더 관대하게 이전 페이지에 남김.
-  // 60% PDF에서 `5. 중간 점검 지점`이 실제로 1페이지 끝에 들어가는 것에 맞춘 보정값.
-  const headingKeepTolerancePx = 64;
-
-  for (let pageNumber = 1; pageNumber < estimatedPages; pageNumber += 1) {
-    const pageEnd = pageHeight * pageNumber;
-
-    while (
-      blockIndex < blocks.length &&
-      accumulatedHeight + blocks[blockIndex].height < pageEnd
-    ) {
-      accumulatedHeight += blocks[blockIndex].height;
-      blockIndex += 1;
-    }
-
-    let block = blocks[Math.min(blockIndex, blocks.length - 1)];
-    if (!block) {
-      continue;
-    }
-
-    const previousHeight = accumulatedHeight;
-    const remainingOnPage = pageEnd - previousHeight;
-
-    if (
-      isUnsplittableBlock(block.type) &&
-      remainingOnPage > 0 &&
-      remainingOnPage < block.height
-    ) {
-      breaks.push({
-        element: block.element,
-        offsetRatio: 0,
-        pageNumber
-      });
-
-      continue;
-    }
-
-    // 핵심 보정:
-    // pageEnd가 heading 근처에 걸리면, heading의 afterGap까지 요구하지 말고
-    // heading visible text만 이전 페이지에 들어갈 수 있는지 본다.
-    if (isHeadingType(block.type)) {
-      const visibleHeadingHeight = getVisibleHeightForBreak(block);
-
-      if (remainingOnPage + headingKeepTolerancePx >= visibleHeadingHeight) {
-        breaks.push({
-          element: block.element,
-          offsetRatio: 1,
-          pageNumber
-        });
-
-        continue;
-      }
-    }
-
-    const offsetRatio =
-      block.height > 0
-        ? Math.min(1, Math.max(0, remainingOnPage / block.height))
-        : 0;
-
-    breaks.push({
-      element: block.element,
-      offsetRatio,
-      pageNumber
-    });
-  }
-
-  return breaks;
 }
 
 function createPageLine(pageBreak) {
@@ -839,74 +805,6 @@ function truncateText(text, maxLength = 260) {
   return text.length > maxLength ? `${text.slice(0, maxLength).trim()}...` : text;
 }
 
-function paginatePreviewBlocks(blocks, pageHeight) {
-  const pages = [[]];
-  let usedHeight = 0;
-
-  for (const block of blocks) {
-    if (
-      isUnsplittableBlock(block.type) &&
-      usedHeight > 0 &&
-      usedHeight + block.height > pageHeight
-    ) {
-      pages.push([]);
-      usedHeight = 0;
-    }
-
-    if (isUnsplittableBlock(block.type)) {
-      const page = pages[pages.length - 1];
-      page.push({
-        ...block,
-        continued: false,
-        segmentHeight: block.height,
-        splitAfter: false
-      });
-      usedHeight += block.height;
-
-      if (usedHeight >= pageHeight) {
-        pages.push([]);
-        usedHeight = 0;
-      }
-
-      continue;
-    }
-
-    let remainingHeight = block.height;
-    let segmentIndex = 0;
-
-    while (remainingHeight > 0) {
-      let page = pages[pages.length - 1];
-      let availableHeight = pageHeight - usedHeight;
-
-      if (availableHeight <= 0) {
-        page = [];
-        pages.push(page);
-        usedHeight = 0;
-        availableHeight = pageHeight;
-      }
-
-      const segmentHeight = Math.min(remainingHeight, availableHeight);
-      page.push({
-        ...block,
-        continued: segmentIndex > 0,
-        segmentHeight,
-        splitAfter: remainingHeight > segmentHeight
-      });
-
-      usedHeight += segmentHeight;
-      remainingHeight -= segmentHeight;
-      segmentIndex += 1;
-
-      if (remainingHeight > 0) {
-        pages.push([]);
-        usedHeight = 0;
-      }
-    }
-  }
-
-  return pages.filter((page) => page.length > 0);
-}
-
 function createPdfPreviewBlock(segment, pageScale) {
   const block = document.createElement("article");
   block.className = "notion-pdf-preview-page-block";
@@ -936,7 +834,7 @@ function openPdfPreview() {
   closePdfPreview();
 
   const { layout, scalePercent } = previewState;
-  const pages = paginatePreviewBlocks(layout.blocks, layout.pageHeight);
+  const pages = layout.pages;
   const pageScale = 720 / layout.pageHeight;
 
   const modal = document.createElement("section");
@@ -1019,7 +917,7 @@ function showPreview(scalePercentInput) {
   }
 
   const layout = estimateDocumentLayout(contentRoot, scalePercent);
-  const pageBreaks = findPageBreaks(layout.blocks, layout.pageHeight, layout.estimatedPages);
+  const pageBreaks = layout.pageBreaks;
 
   clearPreview();
 
