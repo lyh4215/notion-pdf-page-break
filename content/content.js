@@ -382,13 +382,11 @@ function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0) {
   }, 0);
 }
 
-function estimateTableHeight(block, layoutWidth) {
-  // Calibrated Notion PDF table:
-  // font 10.5pt, row height 21.75pt, border about 0.75pt.
+function getTableRowCount(block) {
   const rows = Array.from(block.querySelectorAll("tr, [role='row']"));
 
   if (rows.length) {
-    return ptToPx(21.75 * rows.length + 0.75);
+    return rows.length;
   }
 
   const rawLines = getElementRawText(block)
@@ -396,7 +394,13 @@ function estimateTableHeight(block, layoutWidth) {
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const rowCount = Math.max(1, rawLines.length);
+  return Math.max(1, rawLines.length);
+}
+
+function estimateTableHeight(block, layoutWidth) {
+  // Calibrated Notion PDF table:
+  // font 10.5pt, row height 21.75pt, border about 0.75pt.
+  const rowCount = getTableRowCount(block);
   return ptToPx(21.75 * rowCount + 0.75);
 }
 
@@ -667,7 +671,84 @@ function paginateBlocks(blocks, pageHeight) {
     }
   }
 
+  function pushTableSegment(block, segmentHeight, consumedRows, rowCount, segmentIndex) {
+    const splitAfter = consumedRows < rowCount;
+    currentPage().push({
+      ...block,
+      continued: segmentIndex > 0,
+      segmentHeight,
+      splitAfter
+    });
+    usedHeight += segmentHeight;
+  }
+
+  function paginateTableBlock(block) {
+    const rowCount = getTableRowCount(block.element);
+
+    if (rowCount <= 1) {
+      return false;
+    }
+
+    const rowHeight = ptToPx(21.75);
+    const borderHeight = ptToPx(0.75);
+    const headerRows = 1;
+    let consumedRows = 0;
+    let segmentIndex = 0;
+
+    while (consumedRows < rowCount) {
+      let availableHeight = pageHeight - usedHeight;
+
+      if (availableHeight <= 0) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: Math.min(1, consumedRows / rowCount)
+        });
+        availableHeight = pageHeight;
+      }
+
+      const isContinuation = segmentIndex > 0;
+      const repeatedHeaderRows = isContinuation ? headerRows : 0;
+      const maxVisualRows = Math.floor((availableHeight - borderHeight) / rowHeight);
+      const minVisualRows = isContinuation ? headerRows + 1 : Math.min(rowCount, headerRows + 1);
+
+      if (maxVisualRows < minVisualRows && usedHeight > 0) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: Math.min(1, consumedRows / rowCount)
+        });
+        continue;
+      }
+
+      const maxOriginalRows = Math.max(1, maxVisualRows - repeatedHeaderRows);
+      const originalRows = Math.min(rowCount - consumedRows, maxOriginalRows);
+      const visualRows = originalRows + repeatedHeaderRows;
+      const segmentHeight = ptToPx(21.75 * visualRows + 0.75);
+
+      consumedRows += originalRows;
+      pushTableSegment(block, segmentHeight, consumedRows, rowCount, segmentIndex);
+      segmentIndex += 1;
+
+      if (consumedRows < rowCount) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: Math.min(1, consumedRows / rowCount)
+        });
+      }
+    }
+
+    return true;
+  }
+
   for (const block of blocks) {
+    if (
+      block.type === "table" &&
+      (block.height > pageHeight || (usedHeight > 0 && usedHeight + block.height > pageHeight))
+    ) {
+      if (paginateTableBlock(block)) {
+        continue;
+      }
+    }
+
     if (block.height <= pageHeight) {
       const overflow = usedHeight + block.height - pageHeight;
       const canKeepNearBottom =
