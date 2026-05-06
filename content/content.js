@@ -915,6 +915,23 @@ function paginateBlocks(blocks, pageHeight) {
     }
   }
 
+  function isHeadingType(type) {
+    return type === "h2" || type === "h3" || type === "h4";
+  }
+
+  function canUseBottomOverflowTolerance(block, overflow) {
+    if (overflow <= 0 || overflow > getBottomOverflowTolerance(block.type)) {
+      return false;
+    }
+
+    const previousSegment = currentPage().at(-1);
+    if (isHeadingType(block.type) && previousSegment?.type === "equation") {
+      return false;
+    }
+
+    return true;
+  }
+
   function pushTableSegment(block, segmentHeight, consumedRows, rowCount, segmentIndex) {
     const splitAfter = consumedRows < rowCount;
     currentPage().push({
@@ -1051,8 +1068,7 @@ function paginateBlocks(blocks, pageHeight) {
       const canKeepNearBottom =
         usedHeight > 0 &&
         usedHeight <= pageHeight &&
-        overflow > 0 &&
-        overflow <= getBottomOverflowTolerance(block.type);
+        canUseBottomOverflowTolerance(block, overflow);
 
       if (usedHeight > 0 && usedHeight + block.height > pageHeight && !canKeepNearBottom) {
         startNewPage({
@@ -1178,6 +1194,50 @@ function truncateText(text, maxLength = 260) {
   return text.length > maxLength ? `${text.slice(0, maxLength).trim()}...` : text;
 }
 
+function formatPdfPreviewForCopy(pages) {
+  return pages.map((pageBlocks, pageIndex) => {
+    const blocks = pageBlocks.map((segment) => {
+      const flags = [
+        segment.continued ? "continued" : "",
+        segment.splitAfter ? "splits" : ""
+      ].filter(Boolean);
+      const suffix = flags.length ? ` | ${flags.join(" | ")}` : "";
+      return `${segment.type} | ${Math.round(segment.height)}px${suffix}\n${segment.text || "(empty block)"}`;
+    });
+
+    return [`Page ${pageIndex + 1}`, ...blocks].join("\n\n");
+  }).join("\n\n");
+}
+
+function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.inset = "0 auto auto 0";
+  textarea.style.opacity = "0";
+  document.body.append(textarea);
+  textarea.select();
+
+  try {
+    document.execCommand("copy");
+    return Promise.resolve();
+  } finally {
+    textarea.remove();
+  }
+}
+
+function setTemporaryButtonText(button, text) {
+  const originalText = button.textContent;
+  button.textContent = text;
+  window.setTimeout(() => {
+    button.textContent = originalText;
+  }, 1400);
+}
+
 function createPdfPreviewBlock(segment, pageScale) {
   const block = document.createElement("article");
   block.className = "notion-pdf-preview-page-block";
@@ -1228,7 +1288,24 @@ function openPdfPreview() {
   closeButton.textContent = "Close";
   closeButton.addEventListener("click", closePdfPreview);
 
-  header.append(title, details, closeButton);
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy";
+  copyButton.addEventListener("click", async () => {
+    try {
+      await copyTextToClipboard(formatPdfPreviewForCopy(pages));
+      setTemporaryButtonText(copyButton, "Copied");
+    } catch (error) {
+      console.error("Failed to copy PDF preview", error);
+      setTemporaryButtonText(copyButton, "Failed");
+    }
+  });
+
+  const actions = document.createElement("div");
+  actions.className = "notion-pdf-preview-pages-actions";
+  actions.append(copyButton, closeButton);
+
+  header.append(title, details, actions);
 
   const pageList = document.createElement("div");
   pageList.className = "notion-pdf-preview-page-list";

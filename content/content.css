@@ -115,9 +115,14 @@
   font-size: 12px;
 }
 
-.notion-pdf-preview-pages-header button {
+.notion-pdf-preview-pages-actions {
   grid-column: 2;
   grid-row: 1 / span 2;
+  display: flex;
+  gap: 8px;
+}
+
+.notion-pdf-preview-pages-actions button {
   min-height: 32px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
