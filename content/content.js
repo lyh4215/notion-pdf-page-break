@@ -105,6 +105,34 @@ function getVisibleTextForEstimate(element, fontSize = 14) {
   return walk(element).replace(/\s+/g, " ").trim();
 }
 
+function getOwnVisibleTextForEstimate(element) {
+  const ownerBlock = element.closest("[data-block-id]") || element;
+  const parts = [];
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const parent = node.parentElement;
+
+    if (!parent) {
+      continue;
+    }
+
+    const closestBlock = parent.closest("[data-block-id]");
+    if (closestBlock && closestBlock !== ownerBlock) {
+      continue;
+    }
+
+    if (parent.closest("script, style, .katex-mathml")) {
+      continue;
+    }
+
+    parts.push(node.textContent || "");
+  }
+
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
 function getPrimaryTextElement(block) {
   return block.querySelector("h1, h2, h3, h4, [contenteditable='true'], [data-content-editable-leaf], span") || block;
 }
@@ -636,6 +664,46 @@ function estimateInlineMathAwareHeight(block, baseHeight) {
   return baseHeight + cappedExtra;
 }
 
+function estimateListItemHeight(text, layoutWidth, depth = 0) {
+  const reservedWidth = ptToPx(21.6 + depth * 18);
+  const lines = estimateWrappedLines(text || " ", ptToPx(12), layoutWidth, reservedWidth);
+  return blockHeightFromPt(lines, 18, -0.62, 7.8);
+}
+
+function getNestedListBlocks(block) {
+  return Array.from(block.querySelectorAll("[data-block-id]"))
+    .filter((nestedBlock) => nestedBlock !== block)
+    .filter((nestedBlock) => getVisibleRect(nestedBlock));
+}
+
+function getNestedBlockDepth(block, nestedBlock) {
+  let depth = 0;
+  let parent = nestedBlock.parentElement?.closest("[data-block-id]");
+
+  while (parent && parent !== block) {
+    depth += 1;
+    parent = parent.parentElement?.closest("[data-block-id]");
+  }
+
+  return depth + 1;
+}
+
+function estimateListHeight(block, layoutWidth) {
+  const ownText = getOwnVisibleTextForEstimate(block) || getVisibleTextForEstimate(block, ptToPx(12));
+  let height = estimateListItemHeight(ownText, layoutWidth);
+
+  for (const nestedBlock of getNestedListBlocks(block)) {
+    const nestedText = getOwnVisibleTextForEstimate(nestedBlock);
+    if (!nestedText) {
+      continue;
+    }
+
+    height += estimateListItemHeight(nestedText, layoutWidth, getNestedBlockDepth(block, nestedBlock));
+  }
+
+  return estimateInlineMathAwareHeight(block, height);
+}
+
 function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
   const rawText = getElementRawText(block);
   const text = getVisibleTextForEstimate(block, ptToPx(12));
@@ -676,9 +744,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     }
 
     case "list": {
-      const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth, ptToPx(21.6));
-      const baseHeight = blockHeightFromPt(lines, 18, -0.62, 7.8);
-      return estimateInlineMathAwareHeight(block, baseHeight);
+      return estimateListHeight(block, layoutWidth);
     }
 
     case "quote": {
