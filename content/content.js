@@ -74,6 +74,37 @@ function getElementRawText(element) {
   return (element.innerText || element.textContent || "").trim();
 }
 
+function getVisibleTextForEstimate(element, fontSize = 14) {
+  function walk(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent || "";
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return "";
+    }
+
+    if (node.matches("script, style, .katex-mathml")) {
+      return "";
+    }
+
+    const style = window.getComputedStyle(node);
+    if (style.display === "none" || style.visibility === "hidden") {
+      return "";
+    }
+
+    if (node.matches(".katex")) {
+      const rect = node.getBoundingClientRect();
+      const tokenCount = Math.max(1, Math.ceil((rect.width || fontSize) / (fontSize * 0.5)));
+      return ` ${"m".repeat(tokenCount)} `;
+    }
+
+    return Array.from(node.childNodes).map(walk).join("");
+  }
+
+  return walk(element).replace(/\s+/g, " ").trim();
+}
+
 function getPrimaryTextElement(block) {
   return block.querySelector("h1, h2, h3, h4, [contenteditable='true'], [data-content-editable-leaf], span") || block;
 }
@@ -395,7 +426,7 @@ function isStandaloneEquationBlock(block, blockInfo) {
   return (
     blockInfo.includes("equation") ||
     Boolean(block.querySelector(".katex-display")) ||
-    Boolean(block.querySelector("[class*='notion-equation']"))
+    block.matches("[class*='notion-equation']")
   );
 }
 
@@ -510,7 +541,7 @@ function estimateInlineMathAwareHeight(block, baseHeight) {
 
 function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
   const rawText = getElementRawText(block);
-  const text = rawText.trim();
+  const text = getVisibleTextForEstimate(block, ptToPx(12));
 
   switch (type) {
     case "pageTitle": {
@@ -614,7 +645,7 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
     return {
       element,
       type,
-      text: getElementText(element),
+      text: getVisibleTextForEstimate(element),
       height: estimateBlockHeight(element, layoutWidth, type)
     };
   });
@@ -622,7 +653,7 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
     measuredBlocks.unshift({
       element: pageTitleElement,
       type: "pageTitle",
-      text: getElementText(pageTitleElement),
+      text: getVisibleTextForEstimate(pageTitleElement),
       height: estimateBlockHeight(pageTitleElement, layoutWidth, "pageTitle")
     });
   }
