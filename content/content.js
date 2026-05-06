@@ -213,18 +213,39 @@ function isNestedBlock(block, allBlocks) {
   return parentBlock ? allBlocks.includes(parentBlock) : false;
 }
 
+function getSeparatorBlocks(contentRoot, existingBlocks = []) {
+  return Array.from(contentRoot.querySelectorAll("[role='separator']"))
+    .map((separator) => separator.parentElement || separator)
+    .filter((separatorBlock, index, separatorBlocks) => separatorBlocks.indexOf(separatorBlock) === index)
+    .filter((separatorBlock) => getVisibleRect(separatorBlock))
+    .filter((separatorBlock) => !existingBlocks.some((block) => block.contains(separatorBlock)));
+}
+
+function sortBlocksByPagePosition(blocks) {
+  return blocks.slice().sort((a, b) => {
+    const rectA = a.getBoundingClientRect();
+    const rectB = b.getBoundingClientRect();
+    return rectA.top - rectB.top || rectA.left - rectB.left;
+  });
+}
+
 function getContentBlocks(contentRoot) {
   const notionBlocks = Array.from(contentRoot.querySelectorAll("[data-block-id]"));
   const visibleBlocks = notionBlocks
     .filter((block) => getVisibleRect(block))
     .filter((block) => !isNestedBlock(block, notionBlocks));
+  const separatorBlocks = getSeparatorBlocks(contentRoot, visibleBlocks);
 
-  if (visibleBlocks.length) {
-    return visibleBlocks;
+  if (visibleBlocks.length || separatorBlocks.length) {
+    return sortBlocksByPagePosition([...visibleBlocks, ...separatorBlocks]);
   }
 
-  return Array.from(contentRoot.querySelectorAll("h1, h2, h3, h4, p, li, table, pre, blockquote, figure, img, hr"))
+  const fallbackBlocks = Array.from(contentRoot.querySelectorAll("h1, h2, h3, h4, p, li, table, pre, blockquote, figure, img, hr, [role='separator']"))
+    .map((block) => block.getAttribute("role") === "separator" ? block.parentElement || block : block)
+    .filter((block, index, blocks) => blocks.indexOf(block) === index)
     .filter((block) => getVisibleRect(block));
+
+  return sortBlocksByPagePosition(fallbackBlocks);
 }
 
 function findPageTitleBlock(contentRoot) {
@@ -330,7 +351,7 @@ function classifyBlock(block, headingFontLevels = null) {
   const primaryTextElement = getPrimaryTextElement(block);
   const primaryStyle = window.getComputedStyle(primaryTextElement);
 
-  if (tagName === "hr" || block.querySelector("hr") || blockInfo.includes("separator")) {
+  if (tagName === "hr" || block.querySelector("hr, [role='separator']") || blockInfo.includes("separator")) {
     return "divider";
   }
 
