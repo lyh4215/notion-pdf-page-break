@@ -657,7 +657,7 @@ function paginateBlocks(blocks, pageHeight) {
       case "h2":
       case "h3":
       case "h4":
-        return 24;
+        return 40;
       case "paragraph":
       case "list":
       case "quote":
