@@ -652,9 +652,31 @@ function paginateBlocks(blocks, pageHeight) {
     usedHeight = 0;
   }
 
+  function getBottomOverflowTolerance(type) {
+    switch (type) {
+      case "h2":
+      case "h3":
+      case "h4":
+        return 24;
+      case "paragraph":
+      case "list":
+      case "quote":
+        return 60;
+      default:
+        return 0;
+    }
+  }
+
   for (const block of blocks) {
     if (block.height <= pageHeight) {
-      if (usedHeight > 0 && usedHeight + block.height > pageHeight) {
+      const overflow = usedHeight + block.height - pageHeight;
+      const canKeepNearBottom =
+        usedHeight > 0 &&
+        usedHeight <= pageHeight &&
+        overflow > 0 &&
+        overflow <= getBottomOverflowTolerance(block.type);
+
+      if (usedHeight > 0 && usedHeight + block.height > pageHeight && !canKeepNearBottom) {
         startNewPage({
           element: block.element,
           offsetRatio: 0
