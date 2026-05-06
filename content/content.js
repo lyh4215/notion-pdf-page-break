@@ -902,21 +902,23 @@ function paginateBlocks(blocks, pageHeight) {
 
   function getBottomOverflowTolerance(type) {
     switch (type) {
-      case "h2":
-      case "h3":
-      case "h4":
-        return 40;
       case "paragraph":
       case "list":
       case "quote":
         return 60;
+      case "equation":
+        return 40;
       default:
         return 0;
     }
   }
 
-  function isHeadingType(type) {
-    return type === "h2" || type === "h3" || type === "h4";
+  function isTextFlowType(type) {
+    return type === "paragraph" || type === "list" || type === "quote" || type === "callout";
+  }
+
+  function isAvoidInsideType(type) {
+    return type === "equation" || type === "code" || type === "table" || type === "media";
   }
 
   function canUseBottomOverflowTolerance(block, overflow) {
@@ -924,12 +926,25 @@ function paginateBlocks(blocks, pageHeight) {
       return false;
     }
 
-    const previousSegment = currentPage().at(-1);
-    if (isHeadingType(block.type) && previousSegment?.type === "equation") {
+    return true;
+  }
+
+  function shouldAvoidTinyTailAfterAtomicBlock(block) {
+    if (!isTextFlowType(block.type)) {
       return false;
     }
 
-    return true;
+    if (block.height > ptToPx(24)) {
+      return false;
+    }
+
+    const previousSegment = currentPage().at(-1);
+    if (!previousSegment || !isAvoidInsideType(previousSegment.type)) {
+      return false;
+    }
+
+    const remainingAfterBlock = pageHeight - usedHeight - block.height;
+    return remainingAfterBlock >= 0 && remainingAfterBlock < ptToPx(18);
   }
 
   function pushTableSegment(block, segmentHeight, consumedRows, rowCount, segmentIndex) {
@@ -1069,8 +1084,15 @@ function paginateBlocks(blocks, pageHeight) {
         usedHeight > 0 &&
         usedHeight <= pageHeight &&
         canUseBottomOverflowTolerance(block, overflow);
+      const shouldStartCleanPage =
+        usedHeight > 0 &&
+        !canKeepNearBottom &&
+        shouldAvoidTinyTailAfterAtomicBlock(block);
 
-      if (usedHeight > 0 && usedHeight + block.height > pageHeight && !canKeepNearBottom) {
+      if (
+        usedHeight > 0 &&
+        ((usedHeight + block.height > pageHeight && !canKeepNearBottom) || shouldStartCleanPage)
+      ) {
         startNewPage({
           element: block.element,
           offsetRatio: 0
