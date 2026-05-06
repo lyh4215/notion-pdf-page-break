@@ -414,11 +414,14 @@ function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0) {
   }, 0);
 }
 
-function getTableRowCount(block) {
+function getTableRows(block) {
   const rows = Array.from(block.querySelectorAll("tr, [role='row']"));
 
   if (rows.length) {
-    return rows.length;
+    return rows.map((row) => {
+      const cells = Array.from(row.querySelectorAll("th, td, [role='columnheader'], [role='cell'], [role='gridcell']"));
+      return cells.length ? cells.map(getElementText) : [getElementText(row)];
+    });
   }
 
   const rawLines = getElementRawText(block)
@@ -426,14 +429,33 @@ function getTableRowCount(block) {
     .map((line) => line.trim())
     .filter(Boolean);
 
-  return Math.max(1, rawLines.length);
+  return rawLines.length ? rawLines.map((line) => [line]) : [[getElementText(block)]];
+}
+
+function getTableRowCount(block) {
+  return getTableRows(block).length;
+}
+
+function estimateTableRowHeights(block, layoutWidth) {
+  const rows = getTableRows(block);
+  const columnCount = Math.max(1, ...rows.map((row) => row.length));
+  const cellWidth = Math.max(80, layoutWidth / columnCount - ptToPx(8));
+
+  return rows.map((row) => {
+    const lineCount = Math.max(
+      1,
+      ...row.map((cellText) => estimateWrappedLines(cellText, ptToPx(10.5), cellWidth))
+    );
+
+    return ptToPx(21.75 + 18 * (lineCount - 1));
+  });
 }
 
 function estimateTableHeight(block, layoutWidth) {
   // Calibrated Notion PDF table:
-  // font 10.5pt, row height 21.75pt, border about 0.75pt.
-  const rowCount = getTableRowCount(block);
-  return ptToPx(21.75 * rowCount + 0.75);
+  // font 10.5pt, one-line row height 21.75pt, wrapped rows add about 18pt per line.
+  const rowHeights = estimateTableRowHeights(block, layoutWidth);
+  return rowHeights.reduce((sum, rowHeight) => sum + rowHeight, ptToPx(0.75));
 }
 
 function estimateMediaHeight(block, layoutWidth) {
@@ -715,15 +737,15 @@ function paginateBlocks(blocks, pageHeight) {
   }
 
   function paginateTableBlock(block) {
-    const rowCount = getTableRowCount(block.element);
+    const rowHeights = block.tableRowHeights || estimateTableRowHeights(block.element, block.layoutWidth || PAGE_BODY_WIDTH_PX);
+    const rowCount = rowHeights.length;
 
     if (rowCount <= 1) {
       return false;
     }
 
-    const rowHeight = ptToPx(21.75);
     const borderHeight = ptToPx(0.75);
-    const headerRows = 1;
+    const headerHeight = rowHeights[0];
     let consumedRows = 0;
     let segmentIndex = 0;
 
@@ -739,11 +761,19 @@ function paginateBlocks(blocks, pageHeight) {
       }
 
       const isContinuation = segmentIndex > 0;
-      const repeatedHeaderRows = isContinuation ? headerRows : 0;
-      const maxVisualRows = Math.floor((availableHeight - borderHeight) / rowHeight);
-      const minVisualRows = isContinuation ? headerRows + 1 : Math.min(rowCount, headerRows + 1);
+      const repeatedHeaderHeight = isContinuation ? headerHeight : 0;
+      let segmentHeight = borderHeight + repeatedHeaderHeight;
+      let originalRows = 0;
 
-      if (maxVisualRows < minVisualRows && usedHeight > 0) {
+      while (
+        consumedRows + originalRows < rowCount &&
+        segmentHeight + rowHeights[consumedRows + originalRows] <= availableHeight
+      ) {
+        segmentHeight += rowHeights[consumedRows + originalRows];
+        originalRows += 1;
+      }
+
+      if (originalRows === 0 && usedHeight > 0) {
         startNewPage({
           element: block.element,
           offsetRatio: Math.min(1, consumedRows / rowCount)
@@ -751,10 +781,10 @@ function paginateBlocks(blocks, pageHeight) {
         continue;
       }
 
-      const maxOriginalRows = Math.max(1, maxVisualRows - repeatedHeaderRows);
-      const originalRows = Math.min(rowCount - consumedRows, maxOriginalRows);
-      const visualRows = originalRows + repeatedHeaderRows;
-      const segmentHeight = ptToPx(21.75 * visualRows + 0.75);
+      if (originalRows === 0) {
+        segmentHeight += rowHeights[consumedRows];
+        originalRows = 1;
+      }
 
       consumedRows += originalRows;
       pushTableSegment(block, segmentHeight, consumedRows, rowCount, segmentIndex);
@@ -858,12 +888,19 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
   const headingFontLevels = getHeadingFontLevels(blocks);
   const measuredBlocks = blocks.map((element) => {
     const type = classifyBlock(element, headingFontLevels);
-    return {
+    const measuredBlock = {
       element,
       type,
       text: getVisibleTextForEstimate(element),
+      layoutWidth,
       height: estimateBlockHeight(element, layoutWidth, type)
     };
+
+    if (type === "table") {
+      measuredBlock.tableRowHeights = estimateTableRowHeights(element, layoutWidth);
+    }
+
+    return measuredBlock;
   });
   if (pageTitleElement) {
     measuredBlocks.unshift({
