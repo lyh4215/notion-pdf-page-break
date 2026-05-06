@@ -330,7 +330,7 @@ function classifyBlock(block, headingFontLevels = null) {
   const primaryTextElement = getPrimaryTextElement(block);
   const primaryStyle = window.getComputedStyle(primaryTextElement);
 
-  if (tagName === "hr" || block.querySelector("hr")) {
+  if (tagName === "hr" || block.querySelector("hr") || blockInfo.includes("separator")) {
     return "divider";
   }
 
@@ -840,7 +840,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       return estimateMediaHeight(block, layoutWidth);
 
     case "divider":
-      return ptToPx(18);
+      return ptToPx(36);
 
     case "blank":
       return ptToPx(18);
