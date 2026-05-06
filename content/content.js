@@ -7,6 +7,7 @@ window.__notionPdfPreviewInstalled = true;
 const OVERLAY_ID = "notion-pdf-preview-overlay";
 const PANEL_ID = "notion-pdf-preview-panel";
 const PDF_PREVIEW_ID = "notion-pdf-preview-pages";
+const MEASURE_ROOT_ID = "notion-pdf-preview-measure-root";
 
 // Calibrated from Notion native PDF export: A4, scale 100%.
 // PDF units: 1pt = 4/3 CSS px.
@@ -46,6 +47,7 @@ function clearPreview() {
   document.getElementById(OVERLAY_ID)?.remove();
   document.getElementById(PANEL_ID)?.remove();
   document.getElementById(PDF_PREVIEW_ID)?.remove();
+  document.getElementById(MEASURE_ROOT_ID)?.remove();
   document.removeEventListener("scroll", schedulePreviewUpdate, true);
   window.removeEventListener("resize", schedulePreviewUpdate);
   previewState = null;
@@ -905,6 +907,152 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
   }
 }
 
+function getInheritedStyleSnapshot(element) {
+  const style = window.getComputedStyle(element);
+
+  return {
+    color: style.color,
+    fontFamily: style.fontFamily,
+    fontSize: style.fontSize,
+    fontWeight: style.fontWeight,
+    letterSpacing: style.letterSpacing,
+    lineHeight: style.lineHeight
+  };
+}
+
+function applyInheritedStyleSnapshot(element, styleSnapshot) {
+  if (!styleSnapshot) {
+    return;
+  }
+
+  Object.assign(element.style, styleSnapshot);
+}
+
+function createMeasurementRoot(contentRoot, layoutWidth) {
+  document.getElementById(MEASURE_ROOT_ID)?.remove();
+
+  const root = document.createElement("div");
+
+  root.id = MEASURE_ROOT_ID;
+  root.className = "notion-pdf-preview-measure-root";
+  root.style.width = `${layoutWidth}px`;
+  applyInheritedStyleSnapshot(root, getInheritedStyleSnapshot(contentRoot));
+
+  document.body.append(root);
+  return root;
+}
+
+function prepareCloneForMeasurement(clone) {
+  clone.removeAttribute("id");
+  clone.removeAttribute("contenteditable");
+  clone.style.width = "100%";
+  clone.style.maxWidth = "100%";
+  clone.style.minWidth = "0";
+  clone.style.marginLeft = "0";
+  clone.style.marginRight = "0";
+  clone.style.alignSelf = "stretch";
+  clone.style.transform = "none";
+
+  clone.querySelectorAll("[id]").forEach((element) => element.removeAttribute("id"));
+  clone.querySelectorAll("[contenteditable]").forEach((element) => {
+    element.setAttribute("contenteditable", "false");
+  });
+
+  clone.querySelectorAll("img, video, canvas, iframe").forEach((element) => {
+    element.removeAttribute("loading");
+  });
+
+  return clone;
+}
+
+function getMarginBottom(element) {
+  return Number.parseFloat(window.getComputedStyle(element).marginBottom) || 0;
+}
+
+function getMeasuredStackHeight(clone, nextClone) {
+  const rect = clone.getBoundingClientRect();
+
+  if (!rect || rect.height <= 0) {
+    return 0;
+  }
+
+  if (nextClone) {
+    const nextRect = nextClone.getBoundingClientRect();
+    const stackedHeight = nextRect.top - rect.top;
+
+    if (Number.isFinite(stackedHeight) && stackedHeight > 0) {
+      return stackedHeight;
+    }
+  }
+
+  return rect.height + getMarginBottom(clone);
+}
+
+function getRenderedTableRowHeights(clone) {
+  const rows = getTableRowElements(clone);
+
+  if (!rows.length) {
+    return [];
+  }
+
+  return rows.map((row, index) => {
+    const rect = row.getBoundingClientRect();
+    const nextRow = rows[index + 1];
+
+    if (nextRow) {
+      const nextRect = nextRow.getBoundingClientRect();
+      const stackedHeight = nextRect.top - rect.top;
+
+      if (Number.isFinite(stackedHeight) && stackedHeight > 0) {
+        return stackedHeight;
+      }
+    }
+
+    return rect.height;
+  }).filter((height) => Number.isFinite(height) && height > 0);
+}
+
+function applyRenderedMeasurements(contentRoot, measuredBlocks, layoutWidth) {
+  if (!measuredBlocks.length) {
+    return;
+  }
+
+  const root = createMeasurementRoot(contentRoot, layoutWidth);
+  const clones = [];
+
+  try {
+    for (const block of measuredBlocks) {
+      const clone = prepareCloneForMeasurement(block.element.cloneNode(true));
+      root.append(clone);
+      clones.push(clone);
+    }
+
+    // Force a single layout pass after every clone has been stacked at PDF body width.
+    root.getBoundingClientRect();
+
+    measuredBlocks.forEach((block, index) => {
+      const clone = clones[index];
+      const renderedHeight = getMeasuredStackHeight(clone, clones[index + 1]);
+
+      if (Number.isFinite(renderedHeight) && renderedHeight > 0) {
+        block.height = renderedHeight;
+        block.measurement = "rendered";
+      }
+
+      if (block.type === "table") {
+        const renderedRowHeights = getRenderedTableRowHeights(clone);
+
+        if (renderedRowHeights.length) {
+          block.tableRowHeights = renderedRowHeights;
+          block.tableRepeatsHeader = tableRepeatsHeader(clone);
+        }
+      }
+    });
+  } finally {
+    root.remove();
+  }
+}
+
 function paginateBlocks(blocks, pageHeight) {
   const pages = [[]];
   const breaks = [];
@@ -1004,10 +1152,11 @@ function paginateBlocks(blocks, pageHeight) {
     return overflow > 0 && overflow <= 16;
   }
 
-  function pushTableSegment(block, segmentHeight, consumedRows, rowCount, segmentIndex) {
+  function pushTableSegment(block, segmentHeight, consumedRows, rowCount, segmentIndex, clipOffset = 0) {
     const splitAfter = consumedRows < rowCount;
     currentPage().push({
       ...block,
+      clipOffset,
       continued: segmentIndex > 0,
       segmentHeight,
       splitAfter
@@ -1044,6 +1193,7 @@ function paginateBlocks(blocks, pageHeight) {
       const repeatedHeaderHeight = isContinuation && repeatsHeader ? headerHeight : 0;
       let segmentHeight = borderHeight + repeatedHeaderHeight;
       let originalRows = 0;
+      const segmentStartRow = consumedRows;
 
       while (
         consumedRows + originalRows < rowCount &&
@@ -1067,7 +1217,8 @@ function paginateBlocks(blocks, pageHeight) {
       }
 
       consumedRows += originalRows;
-      pushTableSegment(block, segmentHeight, consumedRows, rowCount, segmentIndex);
+      const clipOffset = rowHeights.slice(0, segmentStartRow).reduce((sum, height) => sum + height, borderHeight);
+      pushTableSegment(block, segmentHeight, consumedRows, rowCount, segmentIndex, clipOffset);
       segmentIndex += 1;
 
       if (consumedRows < rowCount) {
@@ -1098,11 +1249,13 @@ function paginateBlocks(blocks, pageHeight) {
       }
 
       const segmentHeight = Math.min(remainingHeight, availableHeight);
+      const clipOffset = consumedHeight;
       consumedHeight += segmentHeight;
       remainingHeight -= segmentHeight;
 
       currentPage().push({
         ...block,
+        clipOffset,
         continued: segmentIndex > 0,
         segmentHeight,
         splitAfter: remainingHeight > 0
@@ -1196,6 +1349,7 @@ function paginateBlocks(blocks, pageHeight) {
 function estimateDocumentLayout(contentRoot, scalePercent) {
   const scaleFactor = scalePercent / 100;
   const layoutWidth = PAGE_BODY_WIDTH_PX / scaleFactor;
+  const sourceStyle = getInheritedStyleSnapshot(contentRoot);
   const pageTitleElement = findPageTitleBlock(contentRoot);
   const blocks = getContentBlocks(contentRoot).filter((element) => element !== pageTitleElement);
   const headingFontLevels = getHeadingFontLevels(blocks);
@@ -1221,9 +1375,11 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
       element: pageTitleElement,
       type: "pageTitle",
       text: getVisibleTextForEstimate(pageTitleElement),
+      layoutWidth,
       height: estimateBlockHeight(pageTitleElement, layoutWidth, "pageTitle")
     });
   }
+  applyRenderedMeasurements(contentRoot, measuredBlocks, layoutWidth);
   const pageHeight = PAGE_BODY_HEIGHT_PX / scaleFactor;
   const pagination = paginateBlocks(measuredBlocks, pageHeight);
 
@@ -1233,7 +1389,8 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
     layoutWidth,
     pageBreaks: pagination.breaks,
     pageHeight,
-    pages: pagination.pages
+    pages: pagination.pages,
+    sourceStyle
   };
 }
 
@@ -1352,6 +1509,32 @@ function createPdfPreviewBlock(segment, pageScale) {
   return block;
 }
 
+function createRenderedPdfPreviewSegment(segment) {
+  const segmentElement = document.createElement("div");
+  const segmentHeight = Math.max(1, segment.segmentHeight ?? segment.height);
+  const debugLabel = `${segment.type} | ${Math.round(segmentHeight)}px${segment.continued ? " | continued" : ""}${segment.splitAfter ? " | splits" : ""}`;
+
+  segmentElement.className = "notion-pdf-preview-rendered-segment";
+  segmentElement.dataset.type = segment.type;
+  segmentElement.dataset.debugLabel = debugLabel;
+  segmentElement.style.height = `${segmentHeight}px`;
+
+  if (segment.continued || segment.splitAfter) {
+    segmentElement.classList.add("notion-pdf-preview-rendered-segment-clipped");
+  }
+
+  const clone = prepareCloneForMeasurement(segment.element.cloneNode(true));
+  clone.classList.add("notion-pdf-preview-rendered-clone");
+
+  const clipOffset = Number(segment.clipOffset) || 0;
+  if (clipOffset > 0) {
+    clone.style.transform = `translateY(-${clipOffset}px)`;
+  }
+
+  segmentElement.append(clone);
+  return segmentElement;
+}
+
 function closePdfPreview() {
   document.getElementById(PDF_PREVIEW_ID)?.remove();
 }
@@ -1365,7 +1548,7 @@ function openPdfPreview() {
 
   const { layout, scalePercent } = previewState;
   const pages = layout.pages;
-  const pageScale = 720 / layout.pageHeight;
+  const pageScale = Math.min(1, 660 / layout.layoutWidth);
 
   const modal = document.createElement("section");
   modal.id = PDF_PREVIEW_ID;
@@ -1378,7 +1561,7 @@ function openPdfPreview() {
   title.textContent = `Predicted PDF preview (${pages.length} pages)`;
 
   const details = document.createElement("span");
-  details.textContent = `A4 | ${scalePercent}% scale | virtual body ${Math.round(layout.layoutWidth)} x ${Math.round(layout.pageHeight)}px`;
+  details.textContent = `A4 | ${scalePercent}% scale | rendered DOM body ${Math.round(layout.layoutWidth)} x ${Math.round(layout.pageHeight)}px`;
 
   const closeButton = document.createElement("button");
   closeButton.type = "button";
@@ -1410,7 +1593,11 @@ function openPdfPreview() {
   pages.forEach((pageBlocks, pageIndex) => {
     const page = document.createElement("section");
     page.className = "notion-pdf-preview-page";
+    page.style.setProperty("--notion-pdf-preview-page-width", `${layout.layoutWidth * pageScale}px`);
     page.style.setProperty("--notion-pdf-preview-page-height", `${layout.pageHeight * pageScale}px`);
+    page.style.setProperty("--notion-pdf-preview-body-width", `${layout.layoutWidth}px`);
+    page.style.setProperty("--notion-pdf-preview-body-height", `${layout.pageHeight}px`);
+    page.style.setProperty("--notion-pdf-preview-render-scale", String(pageScale));
 
     const pageLabel = document.createElement("div");
     pageLabel.className = "notion-pdf-preview-page-label";
@@ -1419,10 +1606,15 @@ function openPdfPreview() {
     const body = document.createElement("div");
     body.className = "notion-pdf-preview-page-body";
 
+    const renderedStack = document.createElement("div");
+    renderedStack.className = "notion-pdf-preview-rendered-stack";
+    applyInheritedStyleSnapshot(renderedStack, layout.sourceStyle);
+
     for (const segment of pageBlocks) {
-      body.append(createPdfPreviewBlock(segment, pageScale));
+      renderedStack.append(createRenderedPdfPreviewSegment(segment));
     }
 
+    body.append(renderedStack);
     page.append(pageLabel, body);
     pageList.append(page);
   });
@@ -1440,7 +1632,7 @@ function createPanel({ estimatedPages, scalePercent }) {
   title.textContent = `Estimated pages: ${estimatedPages}`;
 
   const details = document.createElement("span");
-  details.textContent = `A4 portrait | ${scalePercent}% scale | block-based estimate`;
+  details.textContent = `A4 portrait | ${scalePercent}% scale | rendered layout estimate`;
 
   const previewButton = document.createElement("button");
   previewButton.type = "button";
