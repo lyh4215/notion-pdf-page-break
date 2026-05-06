@@ -13,7 +13,7 @@
 
 - `[EQUATION: SHORT]`: `E = mc^2`
 - `[EQUATION: MEDIUM]`: `P(A \mid B)=\frac{P(A \cap B)}{P(B)}`
-- `[EQUATION: TALL]`: `\begin{aligned} L(\theta)&=\prod_{i=1}^{n}p(x_i\mid\theta)\\ \log L(\theta)&=\sum_{i=1}^{n}\log p(x_i\mid\theta)\\ \hat{\theta}&=\arg\max_\theta \sum_{i=1}^{n}\log p(x_i\mid\theta) \end{aligned}`
+- `[EQUATION: TALL]`: `\begin{array}{l} L(\theta)=\prod_{i=1}^{n}p(x_i\mid\theta) \\ \log L(\theta)=\sum_{i=1}^{n}\log p(x_i\mid\theta) \\ \hat{\theta}=\arg\max_{\theta}\sum_{i=1}^{n}\log p(x_i\mid\theta) \end{array}`
 
 ## 0. 기준 블록
 
