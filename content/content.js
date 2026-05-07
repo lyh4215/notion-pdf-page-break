@@ -1464,6 +1464,130 @@ function setTemporaryButtonText(button, text) {
   }, 1400);
 }
 
+function isCopyTextNodeVisible(node, root) {
+  const parent = node.parentElement;
+
+  if (!parent || !root.contains(parent)) {
+    return false;
+  }
+
+  if (parent.closest("script, style, .katex-mathml")) {
+    return false;
+  }
+
+  const style = window.getComputedStyle(parent);
+  return style.display !== "none" && style.visibility !== "hidden";
+}
+
+function appendRenderedCharacterLine(lines, line) {
+  const text = line.replace(/[ \t]+$/g, "");
+
+  if (text || !lines.length || lines[lines.length - 1] !== "") {
+    lines.push(text);
+  }
+}
+
+function getRenderedTextLinesForCopy(root, clipElement, preserveWhitespace = false) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const clipRect = clipElement.getBoundingClientRect();
+  const range = document.createRange();
+  const lines = [];
+  let currentLine = "";
+  let currentTop = null;
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+
+    if (!isCopyTextNodeVisible(node, root)) {
+      continue;
+    }
+
+    const text = (node.textContent || "").replace(/\u200b/g, "");
+
+    for (let offset = 0; offset < text.length; offset += 1) {
+      const character = text[offset];
+
+      if (character === "\n") {
+        appendRenderedCharacterLine(lines, currentLine);
+        currentLine = "";
+        currentTop = null;
+        continue;
+      }
+
+      range.setStart(node, offset);
+      range.setEnd(node, offset + 1);
+      const rect = Array.from(range.getClientRects()).find((candidate) => candidate.width > 0 || candidate.height > 0);
+
+      if (!rect || rect.bottom < clipRect.top - 1 || rect.top > clipRect.bottom + 1) {
+        continue;
+      }
+
+      if (currentTop !== null && Math.abs(rect.top - currentTop) > 2) {
+        appendRenderedCharacterLine(lines, currentLine);
+        currentLine = "";
+      }
+
+      currentTop = rect.top;
+      currentLine += preserveWhitespace ? character : (/\s/.test(character) ? " " : character);
+    }
+  }
+
+  range.detach();
+
+  if (currentLine) {
+    appendRenderedCharacterLine(lines, currentLine);
+  }
+
+  return preserveWhitespace ? lines : lines.map((line) => line.replace(/[ \t]+/g, " ").trim());
+}
+
+function getRenderedTableTextForCopy(segmentElement) {
+  const rows = Array.from(segmentElement.querySelectorAll(".notion-pdf-preview-synthetic-table tr"));
+  return rows.map((row) => {
+    return Array.from(row.querySelectorAll("td, th"))
+      .map((cell) => cell.textContent.replace(/\s+/g, " ").trim())
+      .join(" | ");
+  }).filter(Boolean).join("\n");
+}
+
+function getRenderedSegmentTextForCopy(segmentElement) {
+  const type = segmentElement.dataset.type;
+  const fallbackText = segmentElement.dataset.copyText || "(empty block)";
+
+  if (type === "table") {
+    return getRenderedTableTextForCopy(segmentElement) || fallbackText;
+  }
+
+  if (type === "equation" || type === "media" || type === "divider") {
+    return fallbackText;
+  }
+
+  const clone = segmentElement.querySelector(".notion-pdf-preview-rendered-clone");
+  if (!clone) {
+    return fallbackText;
+  }
+
+  const lines = getRenderedTextLinesForCopy(clone, segmentElement, type === "code");
+  return lines.filter((line) => line || type === "code").join("\n") || fallbackText;
+}
+
+function formatRenderedPdfPreviewForCopy(modal) {
+  const pages = Array.from(modal.querySelectorAll(".notion-pdf-preview-page"));
+
+  if (!pages.length) {
+    return previewState ? formatPdfPreviewForCopy(previewState.layout.pages) : "";
+  }
+
+  return pages.map((page, pageIndex) => {
+    const blocks = Array.from(page.querySelectorAll(".notion-pdf-preview-rendered-segment")).map((segmentElement) => {
+      const header = segmentElement.dataset.debugLabel || "block";
+      return `${header}\n${getRenderedSegmentTextForCopy(segmentElement)}`;
+    });
+
+    return [`Page ${pageIndex + 1}`, ...blocks].join("\n\n");
+  }).join("\n\n");
+}
+
 function createPdfPreviewBlock(segment, pageScale) {
   const block = document.createElement("article");
   block.className = "notion-pdf-preview-page-block";
@@ -1508,6 +1632,7 @@ function createRenderedPdfPreviewSegment(segment) {
   segmentElement.className = "notion-pdf-preview-rendered-segment";
   segmentElement.dataset.type = segment.type;
   segmentElement.dataset.debugLabel = debugLabel;
+  segmentElement.dataset.copyText = segment.text || "(empty block)";
   segmentElement.style.height = `${segmentHeight}px`;
 
   if (segment.continued || segment.splitAfter) {
@@ -1566,7 +1691,7 @@ function openPdfPreview() {
   copyButton.textContent = "Copy";
   copyButton.addEventListener("click", async () => {
     try {
-      await copyTextToClipboard(formatPdfPreviewForCopy(pages));
+      await copyTextToClipboard(formatRenderedPdfPreviewForCopy(modal));
       setTemporaryButtonText(copyButton, "Copied");
     } catch (error) {
       console.error("Failed to copy PDF preview", error);
