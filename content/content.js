@@ -468,7 +468,7 @@ function getHeadingFontLevels(blocks) {
 
 function getCharacterWidth(character, fontSize) {
   if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(character)) {
-    return fontSize * 0.9;
+    return fontSize * 0.93;
   }
 
   if (/\s/.test(character)) {
@@ -512,7 +512,7 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0)
     let currentWidth = 0;
     let currentLine = "";
 
-    function appendCharacters(value) {
+    function appendBreakableCharacters(value) {
       for (const character of value) {
         const characterWidth = getCharacterWidth(character, fontSize);
         if (currentLine && currentWidth + characterWidth > availableWidth) {
@@ -526,15 +526,8 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0)
       }
     }
 
-    for (const token of line.match(/\S+\s*/g) || []) {
-      const tokenValue = currentLine ? token : token.trimStart();
-      const tokenWidth = getTextWidth(tokenValue, fontSize);
-      const canBreakInsideToken = /[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(tokenValue);
-
-      if (canBreakInsideToken || tokenWidth > availableWidth) {
-        appendCharacters(tokenValue);
-        continue;
-      }
+    function appendUnbreakableToken(value) {
+      const tokenWidth = getTextWidth(value, fontSize);
 
       if (currentLine && currentWidth + tokenWidth > availableWidth) {
         lines.push(currentLine.trimEnd());
@@ -542,9 +535,33 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0)
         currentWidth = 0;
       }
 
-      const appendedToken = currentLine ? token : token.trimStart();
-      currentLine += appendedToken;
-      currentWidth += getTextWidth(appendedToken, fontSize);
+      if (tokenWidth > availableWidth) {
+        appendBreakableCharacters(value);
+        return;
+      }
+
+      currentLine += value;
+      currentWidth += tokenWidth;
+    }
+
+    function appendMixedToken(value) {
+      for (const part of value.match(/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]|[^\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]+/g) || []) {
+        if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(part)) {
+          appendBreakableCharacters(part);
+        } else {
+          appendUnbreakableToken(part);
+        }
+      }
+    }
+
+    for (const token of line.match(/\S+\s*/g) || []) {
+      const tokenValue = currentLine ? token : token.trimStart();
+
+      if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(tokenValue)) {
+        appendMixedToken(tokenValue);
+      } else {
+        appendUnbreakableToken(tokenValue);
+      }
     }
 
     lines.push(currentLine.trimEnd());
@@ -1084,7 +1101,7 @@ function paginateBlocks(blocks, pageHeight) {
   function getBottomOverflowTolerance(type) {
     switch (type) {
       case "h4":
-        return 40;
+        return 0;
       case "paragraph":
       case "quote":
         return 60;
