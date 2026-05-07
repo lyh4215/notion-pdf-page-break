@@ -468,7 +468,7 @@ function getHeadingFontLevels(blocks) {
 
 function getCharacterWidth(character, fontSize) {
   if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(character)) {
-    return fontSize * 0.95;
+    return fontSize * 0.9;
   }
 
   if (/\s/.test(character)) {
@@ -512,9 +512,29 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0)
     let currentWidth = 0;
     let currentLine = "";
 
+    function appendCharacters(value) {
+      for (const character of value) {
+        const characterWidth = getCharacterWidth(character, fontSize);
+        if (currentLine && currentWidth + characterWidth > availableWidth) {
+          lines.push(currentLine.trimEnd());
+          currentLine = "";
+          currentWidth = 0;
+        }
+
+        currentLine += character;
+        currentWidth += characterWidth;
+      }
+    }
+
     for (const token of line.match(/\S+\s*/g) || []) {
-      const tokenWidth = getTextWidth(token, fontSize);
-      const trimmedToken = token.trimStart();
+      const tokenValue = currentLine ? token : token.trimStart();
+      const tokenWidth = getTextWidth(tokenValue, fontSize);
+      const canBreakInsideToken = /[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(tokenValue);
+
+      if (canBreakInsideToken || tokenWidth > availableWidth) {
+        appendCharacters(tokenValue);
+        continue;
+      }
 
       if (currentLine && currentWidth + tokenWidth > availableWidth) {
         lines.push(currentLine.trimEnd());
@@ -522,23 +542,7 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0)
         currentWidth = 0;
       }
 
-      if (tokenWidth > availableWidth) {
-        for (const character of trimmedToken) {
-          const characterWidth = getCharacterWidth(character, fontSize);
-          if (currentLine && currentWidth + characterWidth > availableWidth) {
-            lines.push(currentLine.trimEnd());
-            currentLine = "";
-            currentWidth = 0;
-          }
-
-          currentLine += character;
-          currentWidth += characterWidth;
-        }
-
-        continue;
-      }
-
-      const appendedToken = currentLine ? token : trimmedToken;
+      const appendedToken = currentLine ? token : token.trimStart();
       currentLine += appendedToken;
       currentWidth += getTextWidth(appendedToken, fontSize);
     }
