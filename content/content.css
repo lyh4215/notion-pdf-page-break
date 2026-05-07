@@ -212,6 +212,72 @@
   box-sizing: border-box;
 }
 
+.notion-pdf-preview-synthetic-text {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  overflow-wrap: normal;
+  word-break: normal;
+  color: #37352f;
+}
+
+.notion-pdf-preview-synthetic-text[data-type="pageTitle"] {
+  padding: 0 0 27px;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 58px;
+}
+
+.notion-pdf-preview-synthetic-text[data-type="h2"] {
+  padding: 7px 0 18px;
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 36px;
+}
+
+.notion-pdf-preview-synthetic-text[data-type="h3"] {
+  padding: 17px 0 6px;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 28px;
+}
+
+.notion-pdf-preview-synthetic-text[data-type="h4"] {
+  padding: 12px 0 4px;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.notion-pdf-preview-synthetic-text[data-type="paragraph"],
+.notion-pdf-preview-synthetic-text[data-type="quote"],
+.notion-pdf-preview-synthetic-text[data-type="callout"] {
+  padding: 4px 0;
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.notion-pdf-preview-synthetic-text[data-type="list"] {
+  padding: 5px 0 5px 29px;
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.notion-pdf-preview-synthetic-text[data-type="list"]::before {
+  content: "•";
+  position: absolute;
+  margin-left: -18px;
+}
+
+.notion-pdf-preview-synthetic-text[data-type="code"] {
+  padding: 16px 30px;
+  border-radius: 8px;
+  background: #f7f6f3;
+  font: 14px/24px SFMono-Regular, Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace;
+}
+
 .notion-pdf-preview-measure-root .notion-selectable,
 .notion-pdf-preview-rendered-stack .notion-selectable {
   width: 100% !important;

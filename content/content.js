@@ -519,6 +519,42 @@ function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0) {
   }, 0);
 }
 
+function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0) {
+  if (!text) {
+    return ["(empty block)"];
+  }
+
+  const availableWidth = Math.max(120, layoutWidth - reservedWidth);
+  const lines = [];
+
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim().replace(/\s+/g, " ");
+    if (!line) {
+      lines.push("");
+      continue;
+    }
+
+    let currentWidth = 0;
+    let currentLine = "";
+
+    for (const character of line) {
+      const characterWidth = getCharacterWidth(character, fontSize);
+      if (currentLine && currentWidth + characterWidth > availableWidth) {
+        lines.push(currentLine.trimEnd());
+        currentLine = character;
+        currentWidth = characterWidth;
+      } else {
+        currentLine += character;
+        currentWidth += characterWidth;
+      }
+    }
+
+    lines.push(currentLine.trimEnd());
+  }
+
+  return lines;
+}
+
 function getTableRows(block) {
   const rows = getTableRowElements(block);
 
@@ -967,7 +1003,7 @@ function prepareCloneForMeasurement(clone, type = "paragraph") {
 }
 
 function shouldUseRenderedHeight(type) {
-  return type === "equation" || type === "media" || type === "divider";
+  return type === "media" || type === "divider";
 }
 
 function getMarginBottom(element) {
@@ -1428,11 +1464,65 @@ function formatPdfPreviewForCopy(pages) {
         segment.splitAfter ? "splits" : ""
       ].filter(Boolean);
       const suffix = flags.length ? ` | ${flags.join(" | ")}` : "";
-      return `${segment.type} | ${Math.round(segment.segmentHeight ?? segment.height)}px${suffix}\n${segment.text || "(empty block)"}`;
+      return `${segment.type} | ${Math.round(segment.segmentHeight ?? segment.height)}px${suffix}\n${formatSegmentTextForPreview(segment)}`;
     });
 
     return [`Page ${pageIndex + 1}`, ...blocks].join("\n\n");
   }).join("\n\n");
+}
+
+function getSegmentWrapSettings(segment) {
+  const layoutWidth = segment.layoutWidth || PAGE_BODY_WIDTH_PX;
+
+  switch (segment.type) {
+    case "pageTitle":
+      return { fontSize: ptToPx(30), layoutWidth, reservedWidth: 0 };
+    case "h2":
+      return { fontSize: ptToPx(22.5), layoutWidth, reservedWidth: 0 };
+    case "h3":
+      return { fontSize: ptToPx(18), layoutWidth, reservedWidth: 0 };
+    case "h4":
+      return { fontSize: ptToPx(15), layoutWidth, reservedWidth: 0 };
+    case "list":
+      return { fontSize: ptToPx(12), layoutWidth, reservedWidth: ptToPx(21.6) };
+    case "quote":
+      return { fontSize: ptToPx(12), layoutWidth, reservedWidth: ptToPx(14.25) };
+    case "callout":
+      return { fontSize: ptToPx(12), layoutWidth, reservedWidth: ptToPx(40) };
+    case "paragraph":
+    default:
+      return { fontSize: ptToPx(12), layoutWidth, reservedWidth: 0 };
+  }
+}
+
+function isSyntheticTextSegment(type) {
+  return (
+    type === "pageTitle" ||
+    type === "h2" ||
+    type === "h3" ||
+    type === "h4" ||
+    type === "paragraph" ||
+    type === "list" ||
+    type === "quote" ||
+    type === "callout"
+  );
+}
+
+function formatSegmentTextForPreview(segment) {
+  if (segment.type === "table") {
+    return getTableRows(segment.element).map((row) => row.join(" | ")).join("\n") || "(empty block)";
+  }
+
+  if (segment.type === "code") {
+    return segment.text || "(empty block)";
+  }
+
+  if (!isSyntheticTextSegment(segment.type)) {
+    return segment.text || "(empty block)";
+  }
+
+  const { fontSize, layoutWidth, reservedWidth } = getSegmentWrapSettings(segment);
+  return wrapTextLinesForPreview(segment.text || "", fontSize, layoutWidth, reservedWidth).join("\n");
 }
 
 function copyTextToClipboard(text) {
@@ -1462,130 +1552,6 @@ function setTemporaryButtonText(button, text) {
   window.setTimeout(() => {
     button.textContent = originalText;
   }, 1400);
-}
-
-function isCopyTextNodeVisible(node, root) {
-  const parent = node.parentElement;
-
-  if (!parent || !root.contains(parent)) {
-    return false;
-  }
-
-  if (parent.closest("script, style, .katex-mathml")) {
-    return false;
-  }
-
-  const style = window.getComputedStyle(parent);
-  return style.display !== "none" && style.visibility !== "hidden";
-}
-
-function appendRenderedCharacterLine(lines, line) {
-  const text = line.replace(/[ \t]+$/g, "");
-
-  if (text || !lines.length || lines[lines.length - 1] !== "") {
-    lines.push(text);
-  }
-}
-
-function getRenderedTextLinesForCopy(root, clipElement, preserveWhitespace = false) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const clipRect = clipElement.getBoundingClientRect();
-  const range = document.createRange();
-  const lines = [];
-  let currentLine = "";
-  let currentTop = null;
-
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-
-    if (!isCopyTextNodeVisible(node, root)) {
-      continue;
-    }
-
-    const text = (node.textContent || "").replace(/\u200b/g, "");
-
-    for (let offset = 0; offset < text.length; offset += 1) {
-      const character = text[offset];
-
-      if (character === "\n") {
-        appendRenderedCharacterLine(lines, currentLine);
-        currentLine = "";
-        currentTop = null;
-        continue;
-      }
-
-      range.setStart(node, offset);
-      range.setEnd(node, offset + 1);
-      const rect = Array.from(range.getClientRects()).find((candidate) => candidate.width > 0 || candidate.height > 0);
-
-      if (!rect || rect.bottom < clipRect.top - 1 || rect.top > clipRect.bottom + 1) {
-        continue;
-      }
-
-      if (currentTop !== null && Math.abs(rect.top - currentTop) > 2) {
-        appendRenderedCharacterLine(lines, currentLine);
-        currentLine = "";
-      }
-
-      currentTop = rect.top;
-      currentLine += preserveWhitespace ? character : (/\s/.test(character) ? " " : character);
-    }
-  }
-
-  range.detach();
-
-  if (currentLine) {
-    appendRenderedCharacterLine(lines, currentLine);
-  }
-
-  return preserveWhitespace ? lines : lines.map((line) => line.replace(/[ \t]+/g, " ").trim());
-}
-
-function getRenderedTableTextForCopy(segmentElement) {
-  const rows = Array.from(segmentElement.querySelectorAll(".notion-pdf-preview-synthetic-table tr"));
-  return rows.map((row) => {
-    return Array.from(row.querySelectorAll("td, th"))
-      .map((cell) => cell.textContent.replace(/\s+/g, " ").trim())
-      .join(" | ");
-  }).filter(Boolean).join("\n");
-}
-
-function getRenderedSegmentTextForCopy(segmentElement) {
-  const type = segmentElement.dataset.type;
-  const fallbackText = segmentElement.dataset.copyText || "(empty block)";
-
-  if (type === "table") {
-    return getRenderedTableTextForCopy(segmentElement) || fallbackText;
-  }
-
-  if (type === "equation" || type === "media" || type === "divider") {
-    return fallbackText;
-  }
-
-  const clone = segmentElement.querySelector(".notion-pdf-preview-rendered-clone");
-  if (!clone) {
-    return fallbackText;
-  }
-
-  const lines = getRenderedTextLinesForCopy(clone, segmentElement, type === "code");
-  return lines.filter((line) => line || type === "code").join("\n") || fallbackText;
-}
-
-function formatRenderedPdfPreviewForCopy(modal) {
-  const pages = Array.from(modal.querySelectorAll(".notion-pdf-preview-page"));
-
-  if (!pages.length) {
-    return previewState ? formatPdfPreviewForCopy(previewState.layout.pages) : "";
-  }
-
-  return pages.map((page, pageIndex) => {
-    const blocks = Array.from(page.querySelectorAll(".notion-pdf-preview-rendered-segment")).map((segmentElement) => {
-      const header = segmentElement.dataset.debugLabel || "block";
-      return `${header}\n${getRenderedSegmentTextForCopy(segmentElement)}`;
-    });
-
-    return [`Page ${pageIndex + 1}`, ...blocks].join("\n\n");
-  }).join("\n\n");
 }
 
 function createPdfPreviewBlock(segment, pageScale) {
@@ -1624,6 +1590,14 @@ function createRenderedTablePreview(segment) {
   return table;
 }
 
+function createSyntheticTextPreview(segment) {
+  const text = document.createElement("div");
+  text.className = "notion-pdf-preview-synthetic-text";
+  text.dataset.type = segment.type;
+  text.textContent = formatSegmentTextForPreview(segment);
+  return text;
+}
+
 function createRenderedPdfPreviewSegment(segment) {
   const segmentElement = document.createElement("div");
   const segmentHeight = Math.max(1, segment.segmentHeight ?? segment.height);
@@ -1641,7 +1615,9 @@ function createRenderedPdfPreviewSegment(segment) {
 
   const clone = segment.type === "table"
     ? createRenderedTablePreview(segment)
-    : prepareCloneForMeasurement(segment.element.cloneNode(true), segment.type);
+    : isSyntheticTextSegment(segment.type) || segment.type === "code"
+      ? createSyntheticTextPreview(segment)
+      : prepareCloneForMeasurement(segment.element.cloneNode(true), segment.type);
   clone.classList.add("notion-pdf-preview-rendered-clone");
 
   const clipOffset = Number(segment.clipOffset) || 0;
@@ -1691,7 +1667,7 @@ function openPdfPreview() {
   copyButton.textContent = "Copy";
   copyButton.addEventListener("click", async () => {
     try {
-      await copyTextToClipboard(formatRenderedPdfPreviewForCopy(modal));
+      await copyTextToClipboard(formatPdfPreviewForCopy(pages));
       setTemporaryButtonText(copyButton, "Copied");
     } catch (error) {
       console.error("Failed to copy PDF preview", error);
