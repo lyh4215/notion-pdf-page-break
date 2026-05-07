@@ -942,7 +942,8 @@ function createMeasurementRoot(contentRoot, layoutWidth) {
   return root;
 }
 
-function prepareCloneForMeasurement(clone) {
+function prepareCloneForMeasurement(clone, type = "paragraph") {
+  clone.dataset.pdfPreviewType = type;
   clone.removeAttribute("id");
   clone.removeAttribute("contenteditable");
   clone.style.width = "100%";
@@ -963,6 +964,10 @@ function prepareCloneForMeasurement(clone) {
   });
 
   return clone;
+}
+
+function shouldUseRenderedHeight(type) {
+  return type === "equation" || type === "media" || type === "divider";
 }
 
 function getMarginBottom(element) {
@@ -988,30 +993,6 @@ function getMeasuredStackHeight(clone, nextClone) {
   return rect.height + getMarginBottom(clone);
 }
 
-function getRenderedTableRowHeights(clone) {
-  const rows = getTableRowElements(clone);
-
-  if (!rows.length) {
-    return [];
-  }
-
-  return rows.map((row, index) => {
-    const rect = row.getBoundingClientRect();
-    const nextRow = rows[index + 1];
-
-    if (nextRow) {
-      const nextRect = nextRow.getBoundingClientRect();
-      const stackedHeight = nextRect.top - rect.top;
-
-      if (Number.isFinite(stackedHeight) && stackedHeight > 0) {
-        return stackedHeight;
-      }
-    }
-
-    return rect.height;
-  }).filter((height) => Number.isFinite(height) && height > 0);
-}
-
 function applyRenderedMeasurements(contentRoot, measuredBlocks, layoutWidth) {
   if (!measuredBlocks.length) {
     return;
@@ -1022,7 +1003,7 @@ function applyRenderedMeasurements(contentRoot, measuredBlocks, layoutWidth) {
 
   try {
     for (const block of measuredBlocks) {
-      const clone = prepareCloneForMeasurement(block.element.cloneNode(true));
+      const clone = prepareCloneForMeasurement(block.element.cloneNode(true), block.type);
       root.append(clone);
       clones.push(clone);
     }
@@ -1034,18 +1015,9 @@ function applyRenderedMeasurements(contentRoot, measuredBlocks, layoutWidth) {
       const clone = clones[index];
       const renderedHeight = getMeasuredStackHeight(clone, clones[index + 1]);
 
-      if (Number.isFinite(renderedHeight) && renderedHeight > 0) {
+      if (shouldUseRenderedHeight(block.type) && Number.isFinite(renderedHeight) && renderedHeight > 0) {
         block.height = renderedHeight;
         block.measurement = "rendered";
-      }
-
-      if (block.type === "table") {
-        const renderedRowHeights = getRenderedTableRowHeights(clone);
-
-        if (renderedRowHeights.length) {
-          block.tableRowHeights = renderedRowHeights;
-          block.tableRepeatsHeader = tableRepeatsHeader(clone);
-        }
       }
     });
   } finally {
@@ -1509,6 +1481,25 @@ function createPdfPreviewBlock(segment, pageScale) {
   return block;
 }
 
+function createRenderedTablePreview(segment) {
+  const table = document.createElement("table");
+  table.className = "notion-pdf-preview-synthetic-table";
+
+  for (const row of getTableRows(segment.element)) {
+    const tr = document.createElement("tr");
+
+    for (const cellText of row) {
+      const cell = document.createElement("td");
+      cell.textContent = cellText;
+      tr.append(cell);
+    }
+
+    table.append(tr);
+  }
+
+  return table;
+}
+
 function createRenderedPdfPreviewSegment(segment) {
   const segmentElement = document.createElement("div");
   const segmentHeight = Math.max(1, segment.segmentHeight ?? segment.height);
@@ -1523,7 +1514,9 @@ function createRenderedPdfPreviewSegment(segment) {
     segmentElement.classList.add("notion-pdf-preview-rendered-segment-clipped");
   }
 
-  const clone = prepareCloneForMeasurement(segment.element.cloneNode(true));
+  const clone = segment.type === "table"
+    ? createRenderedTablePreview(segment)
+    : prepareCloneForMeasurement(segment.element.cloneNode(true), segment.type);
   clone.classList.add("notion-pdf-preview-rendered-clone");
 
   const clipOffset = Number(segment.clipOffset) || 0;
