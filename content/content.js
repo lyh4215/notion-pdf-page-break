@@ -491,32 +491,7 @@ function getCharacterWidth(character, fontSize) {
 }
 
 function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0) {
-  if (!text) {
-    return 1;
-  }
-
-  const availableWidth = Math.max(120, layoutWidth - reservedWidth);
-  return text.split("\n").reduce((lineCount, rawLine) => {
-    const line = rawLine.trim();
-    if (!line) {
-      return lineCount + 1;
-    }
-
-    let currentWidth = 0;
-    let wrappedLines = 1;
-
-    for (const character of line.replace(/\s+/g, " ")) {
-      const characterWidth = getCharacterWidth(character, fontSize);
-      if (currentWidth > 0 && currentWidth + characterWidth > availableWidth) {
-        wrappedLines += 1;
-        currentWidth = characterWidth;
-      } else {
-        currentWidth += characterWidth;
-      }
-    }
-
-    return lineCount + wrappedLines;
-  }, 0);
+  return wrapTextLinesForPreview(text || " ", fontSize, layoutWidth, reservedWidth).length;
 }
 
 function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0) {
@@ -537,22 +512,45 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0)
     let currentWidth = 0;
     let currentLine = "";
 
-    for (const character of line) {
-      const characterWidth = getCharacterWidth(character, fontSize);
-      if (currentLine && currentWidth + characterWidth > availableWidth) {
+    for (const token of line.match(/\S+\s*/g) || []) {
+      const tokenWidth = getTextWidth(token, fontSize);
+      const trimmedToken = token.trimStart();
+
+      if (currentLine && currentWidth + tokenWidth > availableWidth) {
         lines.push(currentLine.trimEnd());
-        currentLine = character;
-        currentWidth = characterWidth;
-      } else {
-        currentLine += character;
-        currentWidth += characterWidth;
+        currentLine = "";
+        currentWidth = 0;
       }
+
+      if (tokenWidth > availableWidth) {
+        for (const character of trimmedToken) {
+          const characterWidth = getCharacterWidth(character, fontSize);
+          if (currentLine && currentWidth + characterWidth > availableWidth) {
+            lines.push(currentLine.trimEnd());
+            currentLine = "";
+            currentWidth = 0;
+          }
+
+          currentLine += character;
+          currentWidth += characterWidth;
+        }
+
+        continue;
+      }
+
+      const appendedToken = currentLine ? token : trimmedToken;
+      currentLine += appendedToken;
+      currentWidth += getTextWidth(appendedToken, fontSize);
     }
 
     lines.push(currentLine.trimEnd());
   }
 
   return lines;
+}
+
+function getTextWidth(text, fontSize) {
+  return Array.from(text).reduce((sum, character) => sum + getCharacterWidth(character, fontSize), 0);
 }
 
 function getTableRows(block) {
@@ -1087,7 +1085,7 @@ function paginateBlocks(blocks, pageHeight) {
       case "quote":
         return 60;
       case "equation":
-        return 40;
+        return 72;
       default:
         return 0;
     }
@@ -1594,7 +1592,15 @@ function createSyntheticTextPreview(segment) {
   const text = document.createElement("div");
   text.className = "notion-pdf-preview-synthetic-text";
   text.dataset.type = segment.type;
-  text.textContent = formatSegmentTextForPreview(segment);
+  const lines = formatSegmentTextForPreview(segment).split("\n");
+
+  for (const line of lines) {
+    const lineElement = document.createElement("div");
+    lineElement.className = "notion-pdf-preview-synthetic-line";
+    lineElement.textContent = line || " ";
+    text.append(lineElement);
+  }
+
   return text;
 }
 

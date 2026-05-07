@@ -217,10 +217,14 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  white-space: pre-wrap;
+  white-space: normal;
   overflow-wrap: normal;
   word-break: normal;
   color: #37352f;
+}
+
+.notion-pdf-preview-synthetic-line {
+  white-space: nowrap;
 }
 
 .notion-pdf-preview-synthetic-text[data-type="pageTitle"] {
