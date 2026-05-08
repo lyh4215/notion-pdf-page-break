@@ -242,7 +242,7 @@
 }
 
 .notion-pdf-preview-synthetic-text[data-type="h3"] {
-  padding: 24px 0 0;
+  padding: 25px 0 3px;
   font-size: 24px;
   font-weight: 600;
   line-height: 28px;
