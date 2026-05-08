@@ -33,6 +33,7 @@ const BODY_TEXT_FONT_SIZE_PT = 12;
 const INLINE_CODE_FONT_SIZE_PT = 8.75;
 const INLINE_CODE_ONLY_LINE_HEIGHT_PT = 12.5;
 const CODE_BLOCK_FONT_SIZE_PT = 13;
+const CODE_BLOCK_LINE_HEIGHT_PT = 18;
 const CODE_BLOCK_PADDING_TOP_PT = 12;
 const CODE_BLOCK_PADDING_RIGHT_PT = 12;
 const CODE_BLOCK_PADDING_BOTTOM_PT = 14;
@@ -721,6 +722,14 @@ function getTextWidth(text, fontSize, fontKind = "body") {
   return Array.from(text).reduce((sum, character) => sum + getCharacterWidth(character, fontSize, fontKind), 0);
 }
 
+function getCodePreviewLines(text, layoutWidth) {
+  const horizontalPadding = ptToPx(CODE_BLOCK_PADDING_LEFT_PT + CODE_BLOCK_PADDING_RIGHT_PT);
+  const fontSize = ptToPx(CODE_BLOCK_FONT_SIZE_PT);
+  const rawLines = (text || "").split("\n");
+  const lines = rawLines.flatMap((line) => wrapTextLinesForPreview(line || " ", fontSize, layoutWidth, horizontalPadding, [], "code"));
+  return lines.length ? lines : [" "];
+}
+
 function getTableRows(block) {
   const rows = getTableRowElements(block);
 
@@ -1090,17 +1099,8 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     case "code": {
       // Measured code block formula: 18n + 26 pt.
       // n is visual line slots, including blank lines and wrapped long code lines.
-      const rawLines = getCodeRawTextForEstimate(block).split("\n");
-      const horizontalPadding = ptToPx(CODE_BLOCK_PADDING_LEFT_PT + CODE_BLOCK_PADDING_RIGHT_PT);
-
-      const lineSlots = Math.max(
-        1,
-        rawLines.reduce((sum, line) => {
-          return sum + estimateWrappedLines(line || " ", ptToPx(CODE_BLOCK_FONT_SIZE_PT), layoutWidth, horizontalPadding, "code");
-        }, 0)
-      );
-
-      return blockHeightFromPt(lineSlots, 18, CODE_BLOCK_PADDING_TOP_PT + CODE_BLOCK_PADDING_BOTTOM_PT, CODE_BLOCK_MARGIN_BOTTOM_PT);
+      const lineSlots = Math.max(1, getCodePreviewLines(getCodeRawTextForEstimate(block), layoutWidth).length);
+      return blockHeightFromPt(lineSlots, CODE_BLOCK_LINE_HEIGHT_PT, CODE_BLOCK_PADDING_TOP_PT + CODE_BLOCK_PADDING_BOTTOM_PT, CODE_BLOCK_MARGIN_BOTTOM_PT);
     }
 
     case "table":
@@ -1470,6 +1470,82 @@ function paginateBlocks(blocks, pageHeight) {
     return true;
   }
 
+  function pushCodeSegment(block, lines, lineStart, lineEnd, segmentHeight, segmentIndex, totalLines, codePaddingTop, codePaddingBottom) {
+    const splitAfter = lineEnd < totalLines;
+    currentPage().push({
+      ...block,
+      text: lines.slice(lineStart, lineEnd).join("\n"),
+      continued: segmentIndex > 0,
+      codePaddingTop,
+      codePaddingBottom,
+      segmentHeight,
+      splitAfter
+    });
+    usedHeight += segmentHeight;
+  }
+
+  function paginateCodeBlock(block) {
+    const lines = getCodePreviewLines(block.text || getCodeRawTextForEstimate(block.element), block.layoutWidth || PAGE_BODY_WIDTH_PX);
+    const totalLines = Math.max(1, lines.length);
+    const lineHeight = ptToPx(CODE_BLOCK_LINE_HEIGHT_PT);
+    const firstTopPadding = ptToPx(CODE_BLOCK_PADDING_TOP_PT);
+    const finalBottomSpace = ptToPx(CODE_BLOCK_PADDING_BOTTOM_PT + CODE_BLOCK_MARGIN_BOTTOM_PT);
+    let lineIndex = 0;
+    let segmentIndex = 0;
+
+    while (lineIndex < totalLines) {
+      let availableHeight = pageHeight - usedHeight;
+      const codePaddingTop = segmentIndex === 0 ? firstTopPadding : 0;
+
+      if (usedHeight > 0 && availableHeight < codePaddingTop + lineHeight) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: Math.min(1, lineIndex / totalLines)
+        });
+        availableHeight = pageHeight;
+      }
+
+      const remainingLines = totalLines - lineIndex;
+      const finalSegmentHeight = codePaddingTop + remainingLines * lineHeight + finalBottomSpace;
+
+      if (finalSegmentHeight <= availableHeight) {
+        pushCodeSegment(block, lines, lineIndex, totalLines, finalSegmentHeight, segmentIndex, totalLines, codePaddingTop, ptToPx(CODE_BLOCK_PADDING_BOTTOM_PT));
+        lineIndex = totalLines;
+        break;
+      }
+
+      const availableLineHeight = Math.max(0, availableHeight - codePaddingTop);
+      let fittingLines = Math.floor(availableLineHeight / lineHeight);
+
+      if (fittingLines <= 0) {
+        if (usedHeight > 0) {
+          startNewPage({
+            element: block.element,
+            offsetRatio: Math.min(1, lineIndex / totalLines)
+          });
+          continue;
+        }
+
+        fittingLines = 1;
+      }
+
+      const lineEnd = Math.min(totalLines, lineIndex + fittingLines);
+      const segmentHeight = codePaddingTop + (lineEnd - lineIndex) * lineHeight;
+      pushCodeSegment(block, lines, lineIndex, lineEnd, segmentHeight, segmentIndex, totalLines, codePaddingTop, 0);
+      lineIndex = lineEnd;
+      segmentIndex += 1;
+
+      if (lineIndex < totalLines) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: Math.min(1, lineIndex / totalLines)
+        });
+      }
+    }
+
+    return true;
+  }
+
   for (const block of blocks) {
     if (
       block.type === "table" &&
@@ -1481,7 +1557,7 @@ function paginateBlocks(blocks, pageHeight) {
     }
 
     if (block.type === "code" && usedHeight > 0 && usedHeight + block.height > pageHeight) {
-      paginateHeightSplitBlock(block);
+      paginateCodeBlock(block);
       continue;
     }
 
@@ -1513,7 +1589,7 @@ function paginateBlocks(blocks, pageHeight) {
     }
 
     if (block.type === "code") {
-      paginateHeightSplitBlock(block);
+      paginateCodeBlock(block);
       continue;
     }
 
@@ -1705,11 +1781,7 @@ function formatSegmentTextForPreview(segment) {
 
   if (segment.type === "code") {
     const layoutWidth = segment.layoutWidth || PAGE_BODY_WIDTH_PX;
-    const horizontalPadding = ptToPx(CODE_BLOCK_PADDING_LEFT_PT + CODE_BLOCK_PADDING_RIGHT_PT);
-    const fontSize = ptToPx(CODE_BLOCK_FONT_SIZE_PT);
-    const rawLines = (segment.text || "").split("\n");
-    const lines = rawLines.flatMap((line) => wrapTextLinesForPreview(line || " ", fontSize, layoutWidth, horizontalPadding, [], "code"));
-    return lines.join("\n") || "(empty block)";
+    return getCodePreviewLines(segment.text || "", layoutWidth).join("\n") || "(empty block)";
   }
 
   if (!isSyntheticTextSegment(segment.type)) {
@@ -1891,9 +1963,9 @@ function createSyntheticTextPreview(segment) {
   text.style.setProperty("--notion-pdf-preview-inline-code-only-line-height", `${ptToPx(INLINE_CODE_ONLY_LINE_HEIGHT_PT)}px`);
   text.style.setProperty("--notion-pdf-preview-inline-code-side-padding", `${INLINE_CODE_HORIZONTAL_PADDING_EM / 2}em`);
   text.style.setProperty("--notion-pdf-preview-code-font-size", `${CODE_BLOCK_FONT_SIZE_PX}px`);
-  text.style.setProperty("--notion-pdf-preview-code-padding-top", `${ptToPx(CODE_BLOCK_PADDING_TOP_PT)}px`);
+  text.style.setProperty("--notion-pdf-preview-code-padding-top", `${Number.isFinite(segment.codePaddingTop) ? segment.codePaddingTop : ptToPx(CODE_BLOCK_PADDING_TOP_PT)}px`);
   text.style.setProperty("--notion-pdf-preview-code-padding-right", `${ptToPx(CODE_BLOCK_PADDING_RIGHT_PT)}px`);
-  text.style.setProperty("--notion-pdf-preview-code-padding-bottom", `${ptToPx(CODE_BLOCK_PADDING_BOTTOM_PT)}px`);
+  text.style.setProperty("--notion-pdf-preview-code-padding-bottom", `${Number.isFinite(segment.codePaddingBottom) ? segment.codePaddingBottom : ptToPx(CODE_BLOCK_PADDING_BOTTOM_PT)}px`);
   text.style.setProperty("--notion-pdf-preview-code-padding-left", `${ptToPx(CODE_BLOCK_PADDING_LEFT_PT)}px`);
   const lines = formatSegmentTextForPreview(segment).split("\n");
 
