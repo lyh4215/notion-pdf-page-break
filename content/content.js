@@ -33,6 +33,10 @@ const BODY_TEXT_FONT_SIZE_PT = 12;
 const INLINE_CODE_FONT_SIZE_PT = 8.75;
 const INLINE_CODE_ONLY_LINE_HEIGHT_PT = 12.5;
 const CODE_BLOCK_FONT_SIZE_PT = 12;
+const CODE_BLOCK_PADDING_TOP_PT = 12;
+const CODE_BLOCK_PADDING_RIGHT_PT = 12;
+const CODE_BLOCK_PADDING_BOTTOM_PT = 14;
+const CODE_BLOCK_PADDING_LEFT_PT = 12;
 const TABLE_TEXT_FONT_SIZE_PT = 10.5;
 const BODY_TEXT_FONT_SIZE_PX = BODY_TEXT_FONT_SIZE_PT * PT_TO_CSS_PX;
 const CODE_BLOCK_FONT_SIZE_PX = CODE_BLOCK_FONT_SIZE_PT * PT_TO_CSS_PX;
@@ -633,7 +637,9 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
   const lines = [];
 
   for (const rawLine of text.split("\n")) {
-    const line = rawLine.trim().replace(/\s+/g, " ");
+    const line = fontKind === "code"
+      ? rawLine.replace(/\t/g, "    ")
+      : rawLine.trim().replace(/\s+/g, " ");
     if (!line) {
       lines.push("");
       continue;
@@ -685,6 +691,12 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
           appendUnbreakableToken(part);
         }
       }
+    }
+
+    if (fontKind === "code") {
+      appendBreakableCharacters(line, fontSize, "code");
+      lines.push(currentLine.trimEnd());
+      continue;
     }
 
     for (const token of line.match(/\S+\s*/g) || []) {
@@ -1073,18 +1085,19 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     }
 
     case "code": {
-      // Measured code block formula: 18n + 24 pt.
+      // Measured code block formula: 18n + 26 pt.
       // n is visual line slots, including blank lines and wrapped long code lines.
       const rawLines = getCodeRawTextForEstimate(block).split("\n");
+      const horizontalPadding = ptToPx(CODE_BLOCK_PADDING_LEFT_PT + CODE_BLOCK_PADDING_RIGHT_PT);
 
       const lineSlots = Math.max(
         1,
         rawLines.reduce((sum, line) => {
-          return sum + estimateWrappedLines(line || " ", ptToPx(CODE_BLOCK_FONT_SIZE_PT), layoutWidth, ptToPx(24));
+          return sum + estimateWrappedLines(line || " ", ptToPx(CODE_BLOCK_FONT_SIZE_PT), layoutWidth, horizontalPadding, "code");
         }, 0)
       );
 
-      return blockHeightFromPt(lineSlots, 18, 0, 24);
+      return blockHeightFromPt(lineSlots, 18, CODE_BLOCK_PADDING_TOP_PT + CODE_BLOCK_PADDING_BOTTOM_PT, 0);
     }
 
     case "table":
@@ -1685,7 +1698,12 @@ function formatSegmentTextForPreview(segment) {
   }
 
   if (segment.type === "code") {
-    return segment.text || "(empty block)";
+    const layoutWidth = segment.layoutWidth || PAGE_BODY_WIDTH_PX;
+    const horizontalPadding = ptToPx(CODE_BLOCK_PADDING_LEFT_PT + CODE_BLOCK_PADDING_RIGHT_PT);
+    const fontSize = ptToPx(CODE_BLOCK_FONT_SIZE_PT);
+    const rawLines = (segment.text || "").split("\n");
+    const lines = rawLines.flatMap((line) => wrapTextLinesForPreview(line || " ", fontSize, layoutWidth, horizontalPadding, [], "code"));
+    return lines.join("\n") || "(empty block)";
   }
 
   if (!isSyntheticTextSegment(segment.type)) {
@@ -1784,6 +1802,11 @@ function appendStyledTextRun(parent, value) {
 }
 
 function appendSyntheticLineContent(lineElement, line, segment) {
+  if (segment.type === "code") {
+    lineElement.textContent = line || " ";
+    return;
+  }
+
   const fragments = isSyntheticTextSegment(segment.type)
     ? getInlineCodeFragmentsForPreview(segment.element, segment.type === "list")
     : [];
@@ -1856,6 +1879,10 @@ function createSyntheticTextPreview(segment) {
   text.style.setProperty("--notion-pdf-preview-inline-code-only-line-height", `${ptToPx(INLINE_CODE_ONLY_LINE_HEIGHT_PT)}px`);
   text.style.setProperty("--notion-pdf-preview-inline-code-side-padding", `${INLINE_CODE_HORIZONTAL_PADDING_EM / 2}em`);
   text.style.setProperty("--notion-pdf-preview-code-font-size", `${CODE_BLOCK_FONT_SIZE_PX}px`);
+  text.style.setProperty("--notion-pdf-preview-code-padding-top", `${ptToPx(CODE_BLOCK_PADDING_TOP_PT)}px`);
+  text.style.setProperty("--notion-pdf-preview-code-padding-right", `${ptToPx(CODE_BLOCK_PADDING_RIGHT_PT)}px`);
+  text.style.setProperty("--notion-pdf-preview-code-padding-bottom", `${ptToPx(CODE_BLOCK_PADDING_BOTTOM_PT)}px`);
+  text.style.setProperty("--notion-pdf-preview-code-padding-left", `${ptToPx(CODE_BLOCK_PADDING_LEFT_PT)}px`);
   const lines = formatSegmentTextForPreview(segment).split("\n");
 
   for (const line of lines) {
