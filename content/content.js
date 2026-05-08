@@ -42,13 +42,20 @@ const CODE_BLOCK_PADDING_LEFT_PT = 12;
 const CODE_BLOCK_MARGIN_BOTTOM_PT = 5.5;
 const TABLE_TEXT_FONT_SIZE_PT = 10.5;
 const TABLE_TOP_GAP_PT = 5.5;
-const EQUATION_SHORT_GLYPH_HEIGHT_PT = 19.13;
-const EQUATION_SHORT_MARGIN_BOTTOM_PT = 15.9;
-const EQUATION_TALL_GLYPH_HEIGHT_PT = 58.63;
-const EQUATION_TALL_MARGIN_BOTTOM_PT = 12.5;
+const EQUATION_INTER_GAP_PT = 13;
 const EQUATION_TALL_PAGE_TOP_HEIGHT_PT = 68.6;
-const EQUATION_SHORT_BOX_HEIGHT_PT = 49.5;
-const EQUATION_TALL_BOX_HEIGHT_PT = 85.6;
+const EQUATION_METRIC_PRESETS = {
+  short: { glyphHeightPt: 19.13, topGapPt: 13.6, bottomGapPt: 15 },
+  fraction: { glyphHeightPt: 36.56, topGapPt: 14, bottomGapPt: 12.5 },
+  sigma: { glyphHeightPt: 45.81, topGapPt: 14, bottomGapPt: 12.8 },
+  integral: { glyphHeightPt: 41.94, topGapPt: 13, bottomGapPt: 12 },
+  matrix2: { glyphHeightPt: 35.91, topGapPt: 15, bottomGapPt: 15 },
+  matrix3: { glyphHeightPt: 51.56, topGapPt: 15, bottomGapPt: 15.9 },
+  cases2: { glyphHeightPt: 43.56, topGapPt: 16.1, bottomGapPt: 14.4 },
+  cases3: { glyphHeightPt: 78.06, topGapPt: 0, bottomGapPt: 10.7, pageTopHeightPt: 88.8 },
+  aligned3: { glyphHeightPt: 63.38, topGapPt: 13.6, bottomGapPt: 20.4 },
+  alignedLarge: { glyphHeightPt: 139.56, topGapPt: 14.3, bottomGapPt: 16.1, pageTopHeightPt: 155.7 }
+};
 const BODY_TEXT_FONT_SIZE_PX = BODY_TEXT_FONT_SIZE_PT * PT_TO_CSS_PX;
 const CODE_BLOCK_FONT_SIZE_PX = CODE_BLOCK_FONT_SIZE_PT * PT_TO_CSS_PX;
 const BODY_CJK_ADVANCE_RATIO = 0.92;
@@ -1003,26 +1010,65 @@ function getEquationMetrics(block) {
   const mathRects = getVisualMathRects(block);
   const mathUnionRect = getUnionRectFromRects(mathRects);
   const domHeightPt = mathUnionRect ? mathUnionRect.height / PT_TO_CSS_PX : 0;
-  const rawText = getElementRawText(block);
-  const isTall = domHeightPt >= 36 || /\\begin|\\\\|matrix|cases|aligned|array/i.test(rawText);
-
-  if (isTall) {
-    return {
-      isTall,
-      glyphHeightPt: EQUATION_TALL_GLYPH_HEIGHT_PT,
-      marginBottomPt: EQUATION_TALL_MARGIN_BOTTOM_PT,
-      samePageHeightPt: EQUATION_TALL_BOX_HEIGHT_PT,
-      pageTopHeightPt: EQUATION_TALL_PAGE_TOP_HEIGHT_PT
-    };
-  }
+  const presetName = classifyEquationPreset(block, domHeightPt);
+  const preset = EQUATION_METRIC_PRESETS[presetName] || EQUATION_METRIC_PRESETS.short;
+  const glyphHeightPt = domHeightPt > 0
+    ? clamp(domHeightPt, preset.glyphHeightPt * 0.85, preset.glyphHeightPt * 1.15)
+    : preset.glyphHeightPt;
+  const samePageHeightPt = preset.topGapPt + glyphHeightPt + preset.bottomGapPt;
 
   return {
-    isTall,
-    glyphHeightPt: EQUATION_SHORT_GLYPH_HEIGHT_PT,
-    marginBottomPt: EQUATION_SHORT_MARGIN_BOTTOM_PT,
-    samePageHeightPt: EQUATION_SHORT_BOX_HEIGHT_PT,
-    pageTopHeightPt: EQUATION_SHORT_GLYPH_HEIGHT_PT + EQUATION_SHORT_MARGIN_BOTTOM_PT
+    preset: presetName,
+    glyphHeightPt,
+    topGapPt: preset.topGapPt,
+    bottomGapPt: preset.bottomGapPt,
+    samePageHeightPt,
+    pageTopHeightPt: preset.pageTopHeightPt || glyphHeightPt + preset.bottomGapPt
   };
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getEquationSourceText(block) {
+  return Array.from(block.querySelectorAll(".katex"))
+    .map(getKatexSourceText)
+    .filter(Boolean)
+    .join(" ");
+}
+
+function classifyEquationPreset(block, domHeightPt = 0) {
+  const source = getEquationSourceText(block);
+  const rowBreakCount = (source.match(/\\\\/g) || []).length;
+
+  if (/aligned|align|gather|multline/i.test(source)) {
+    return /prod|sum|\\sum|\\prod|frac|\\frac/i.test(source) || domHeightPt > 100
+      ? "alignedLarge"
+      : "aligned3";
+  }
+
+  if (/cases/i.test(source)) {
+    return rowBreakCount >= 2 || domHeightPt > 60 ? "cases3" : "cases2";
+  }
+
+  if (/matrix|pmatrix|bmatrix|vmatrix|array/i.test(source)) {
+    return rowBreakCount >= 2 || domHeightPt > 44 ? "matrix3" : "matrix2";
+  }
+
+  if (/\\int|∫/.test(source)) {
+    return "integral";
+  }
+
+  if (/\\sum|\\prod|∑|∏/.test(source)) {
+    return "sigma";
+  }
+
+  if (/\\frac|\\dfrac|\\tfrac|\/.+\//.test(source) || domHeightPt >= 30) {
+    return "fraction";
+  }
+
+  return "short";
 }
 
 function estimateInlineMathAwareHeight(block, baseHeight) {
@@ -1624,8 +1670,13 @@ function paginateBlocks(blocks, pageHeight) {
   function pushEquationBlock(block) {
     const metrics = getEquationMetrics(block.element);
     const samePageHeight = ptToPx(metrics.samePageHeightPt);
+    const previousSegment = currentPage().at(-1);
+    const followsEquation = previousSegment?.type === "equation";
+    const blockHeight = followsEquation
+      ? ptToPx(Math.max(EQUATION_INTER_GAP_PT, metrics.glyphHeightPt + metrics.bottomGapPt))
+      : samePageHeight;
 
-    if (usedHeight > 0 && usedHeight + samePageHeight > pageHeight) {
+    if (usedHeight > 0 && usedHeight + blockHeight > pageHeight) {
       startNewPage({
         element: block.element,
         offsetRatio: 0
@@ -1633,11 +1684,16 @@ function paginateBlocks(blocks, pageHeight) {
     }
 
     const startsAtPageTop = usedHeight === 0;
-    const segmentHeight = startsAtPageTop ? ptToPx(metrics.pageTopHeightPt) : samePageHeight;
+    const segmentHeight = startsAtPageTop
+      ? ptToPx(metrics.pageTopHeightPt)
+      : followsEquation
+        ? blockHeight
+        : samePageHeight;
 
     currentPage().push({
       ...block,
       continued: false,
+      equationPreset: metrics.preset,
       segmentHeight,
       splitAfter: false
     });
