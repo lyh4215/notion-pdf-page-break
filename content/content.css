@@ -259,13 +259,13 @@
 .notion-pdf-preview-synthetic-text[data-type="quote"],
 .notion-pdf-preview-synthetic-text[data-type="callout"] {
   padding: 4px 0;
-  font-size: 15px;
+  font-size: var(--notion-pdf-preview-body-font-size, 15px);
   line-height: 24px;
 }
 
 .notion-pdf-preview-synthetic-text[data-type="list"] {
   padding: 5px 0 5px 29px;
-  font-size: 15px;
+  font-size: var(--notion-pdf-preview-body-font-size, 15px);
   line-height: 24px;
 }
 
@@ -281,17 +281,17 @@
 
 .notion-pdf-preview-script-cjk {
   display: inline-block;
-  transform: scaleX(0.96);
+  transform: scaleX(var(--notion-pdf-preview-cjk-scale, 0.96));
   transform-origin: left center;
 }
 
 .notion-pdf-preview-script-latin {
-  font-size: 1.08em;
+  font-size: calc(var(--notion-pdf-preview-latin-scale, 1.08) * 1em);
 }
 
 .notion-pdf-preview-inline-code {
   display: inline;
-  padding: 0.1em 0.35em;
+  padding: 0.1em var(--notion-pdf-preview-inline-code-side-padding, 0.35em);
   border-radius: 4px;
   background: rgba(135, 131, 120, 0.15);
   color: #eb5757;

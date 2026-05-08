@@ -24,7 +24,9 @@ const PAGE_BODY_WIDTH_PT = 452.25;
 const PAGE_BODY_HEIGHT_PT = 698.88;
 const PAGE_BODY_WIDTH_PX = PAGE_BODY_WIDTH_PT * PT_TO_CSS_PX;   // ≈ 603px
 const PAGE_BODY_HEIGHT_PX = PAGE_BODY_HEIGHT_PT * PT_TO_CSS_PX; // ≈ 931.84px
-const BODY_TEXT_WRAP_FONT_SIZE_PX = 16;
+const BODY_TEXT_FONT_SIZE_PX = 15;
+const CJK_VISUAL_SCALE = 0.96;
+const LATIN_VISUAL_SCALE = 1.08;
 const INLINE_CODE_SCALE = 0.93;
 const INLINE_CODE_HORIZONTAL_PADDING_EM = 0.7;
 const MIN_SCALE_PERCENT = 11;
@@ -532,7 +534,7 @@ function getHeadingFontLevels(blocks) {
 
 function getCharacterWidth(character, fontSize) {
   if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(character)) {
-    return fontSize * 0.9;
+    return fontSize * 0.93 * CJK_VISUAL_SCALE;
   }
 
   if (/\s/.test(character)) {
@@ -544,14 +546,14 @@ function getCharacterWidth(character, fontSize) {
   }
 
   if (/[A-Z]/.test(character)) {
-    return fontSize * 0.66;
+    return fontSize * 0.61 * LATIN_VISUAL_SCALE;
   }
 
   if (/[0-9]/.test(character)) {
-    return fontSize * 0.58;
+    return fontSize * 0.54 * LATIN_VISUAL_SCALE;
   }
 
-  return fontSize * 0.54;
+  return fontSize * 0.5 * LATIN_VISUAL_SCALE;
 }
 
 function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0) {
@@ -908,7 +910,7 @@ function sumHeights(heights, start = 0, end = heights.length) {
 
 function estimateTextFlowHeight(block, text, layoutWidth, reservedWidth, afterGapPt, ownOnly = false) {
   const inlineCodeFragments = getInlineCodeFragmentsForPreview(block, ownOnly);
-  const lines = wrapTextLinesForPreview(text || " ", BODY_TEXT_WRAP_FONT_SIZE_PX, layoutWidth, reservedWidth, inlineCodeFragments);
+  const lines = wrapTextLinesForPreview(text || " ", BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth, inlineCodeFragments);
   const lineHeightSum = sumHeights(getTextFlowLineHeights(block, lines, ownOnly));
   return lineHeightSum + ptToPx(-0.62 + afterGapPt);
 }
@@ -1704,14 +1706,14 @@ function getSegmentWrapSettings(segment) {
     case "h4":
       return { fontSize: ptToPx(15), layoutWidth, reservedWidth: 0 };
     case "list":
-      return { fontSize: BODY_TEXT_WRAP_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(21.6) };
+      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(21.6) };
     case "quote":
-      return { fontSize: BODY_TEXT_WRAP_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(14.25) };
+      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(14.25) };
     case "callout":
-      return { fontSize: BODY_TEXT_WRAP_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(40) };
+      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(40) };
     case "paragraph":
     default:
-      return { fontSize: BODY_TEXT_WRAP_FONT_SIZE_PX, layoutWidth, reservedWidth: 0 };
+      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: 0 };
   }
 }
 
@@ -1890,7 +1892,11 @@ function createSyntheticTextPreview(segment) {
   const text = document.createElement("div");
   text.className = "notion-pdf-preview-synthetic-text";
   text.dataset.type = segment.type;
+  text.style.setProperty("--notion-pdf-preview-body-font-size", `${BODY_TEXT_FONT_SIZE_PX}px`);
+  text.style.setProperty("--notion-pdf-preview-cjk-scale", CJK_VISUAL_SCALE);
+  text.style.setProperty("--notion-pdf-preview-latin-scale", LATIN_VISUAL_SCALE);
   text.style.setProperty("--notion-pdf-preview-inline-code-scale", INLINE_CODE_SCALE);
+  text.style.setProperty("--notion-pdf-preview-inline-code-side-padding", `${INLINE_CODE_HORIZONTAL_PADDING_EM / 2}em`);
   const lines = formatSegmentTextForPreview(segment).split("\n");
 
   for (const line of lines) {
