@@ -531,7 +531,7 @@ function getHeadingFontLevels(blocks) {
 
 function getCharacterWidth(character, fontSize) {
   if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(character)) {
-    return fontSize * 0.93;
+    return fontSize * 0.9;
   }
 
   if (/\s/.test(character)) {
@@ -543,14 +543,14 @@ function getCharacterWidth(character, fontSize) {
   }
 
   if (/[A-Z]/.test(character)) {
-    return fontSize * 0.62;
+    return fontSize * 0.66;
   }
 
   if (/[0-9]/.test(character)) {
-    return fontSize * 0.55;
+    return fontSize * 0.58;
   }
 
-  return fontSize * 0.5;
+  return fontSize * 0.54;
 }
 
 function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0) {
