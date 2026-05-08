@@ -24,7 +24,8 @@ const PAGE_BODY_WIDTH_PT = 452.25;
 const PAGE_BODY_HEIGHT_PT = 698.88;
 const PAGE_BODY_WIDTH_PX = PAGE_BODY_WIDTH_PT * PT_TO_CSS_PX;   // ≈ 603px
 const PAGE_BODY_HEIGHT_PX = PAGE_BODY_HEIGHT_PT * PT_TO_CSS_PX; // ≈ 931.84px
-const BODY_TEXT_FONT_SIZE_PX = 15;
+const BODY_TEXT_WRAP_FONT_SIZE_PX = 16;
+const INLINE_CODE_FONT_SCALE = 0.78;
 const MIN_SCALE_PERCENT = 11;
 const MAX_SCALE_PERCENT = 199;
 let previewState = null;
@@ -556,7 +557,24 @@ function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0) {
   return wrapTextLinesForPreview(text || " ", fontSize, layoutWidth, reservedWidth).length;
 }
 
-function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0) {
+function getComparableInlineCodeText(text) {
+  return normalizeTextForInlineCodeStats(text).replace(/[.,:;]+$/, "");
+}
+
+function isInlineCodeToken(token, inlineCodeFragments = []) {
+  const comparableToken = getComparableInlineCodeText(token);
+
+  if (!comparableToken) {
+    return false;
+  }
+
+  return inlineCodeFragments.some((fragment) => {
+    const comparableFragment = getComparableInlineCodeText(fragment);
+    return comparableFragment && (comparableFragment.includes(comparableToken) || comparableToken.includes(comparableFragment));
+  });
+}
+
+function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0, inlineCodeFragments = []) {
   if (!text) {
     return ["(empty block)"];
   }
@@ -574,9 +592,9 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0)
     let currentWidth = 0;
     let currentLine = "";
 
-    function appendBreakableCharacters(value) {
+    function appendBreakableCharacters(value, characterFontSize = fontSize) {
       for (const character of value) {
-        const characterWidth = getCharacterWidth(character, fontSize);
+        const characterWidth = getCharacterWidth(character, characterFontSize);
         if (currentLine && currentWidth + characterWidth > availableWidth) {
           lines.push(currentLine.trimEnd());
           currentLine = "";
@@ -589,7 +607,8 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0)
     }
 
     function appendUnbreakableToken(value) {
-      const tokenWidth = getTextWidth(value, fontSize);
+      const tokenFontSize = isInlineCodeToken(value, inlineCodeFragments) ? fontSize * INLINE_CODE_FONT_SCALE : fontSize;
+      const tokenWidth = getTextWidth(value, tokenFontSize);
 
       if (currentLine && currentWidth + tokenWidth > availableWidth) {
         lines.push(currentLine.trimEnd());
@@ -598,7 +617,7 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0)
       }
 
       if (tokenWidth > availableWidth) {
-        appendBreakableCharacters(value);
+        appendBreakableCharacters(value, tokenFontSize);
         return;
       }
 
@@ -607,9 +626,11 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0)
     }
 
     function appendMixedToken(value) {
+      const tokenFontSize = isInlineCodeToken(value, inlineCodeFragments) ? fontSize * INLINE_CODE_FONT_SCALE : fontSize;
+
       for (const part of value.match(/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]|[^\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]+/g) || []) {
         if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(part)) {
-          appendBreakableCharacters(part);
+          appendBreakableCharacters(part, tokenFontSize);
         } else {
           appendUnbreakableToken(part);
         }
@@ -879,7 +900,8 @@ function sumHeights(heights, start = 0, end = heights.length) {
 }
 
 function estimateTextFlowHeight(block, text, layoutWidth, reservedWidth, afterGapPt, ownOnly = false) {
-  const lines = wrapTextLinesForPreview(text || " ", BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth);
+  const inlineCodeFragments = getInlineCodeFragmentsForPreview(block, ownOnly);
+  const lines = wrapTextLinesForPreview(text || " ", BODY_TEXT_WRAP_FONT_SIZE_PX, layoutWidth, reservedWidth, inlineCodeFragments);
   const lineHeightSum = sumHeights(getTextFlowLineHeights(block, lines, ownOnly));
   return lineHeightSum + ptToPx(-0.62 + afterGapPt);
 }
@@ -1675,14 +1697,14 @@ function getSegmentWrapSettings(segment) {
     case "h4":
       return { fontSize: ptToPx(15), layoutWidth, reservedWidth: 0 };
     case "list":
-      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(21.6) };
+      return { fontSize: BODY_TEXT_WRAP_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(21.6) };
     case "quote":
-      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(14.25) };
+      return { fontSize: BODY_TEXT_WRAP_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(14.25) };
     case "callout":
-      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(40) };
+      return { fontSize: BODY_TEXT_WRAP_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(40) };
     case "paragraph":
     default:
-      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: 0 };
+      return { fontSize: BODY_TEXT_WRAP_FONT_SIZE_PX, layoutWidth, reservedWidth: 0 };
   }
 }
 
@@ -1713,7 +1735,8 @@ function formatSegmentTextForPreview(segment) {
   }
 
   const { fontSize, layoutWidth, reservedWidth } = getSegmentWrapSettings(segment);
-  return wrapTextLinesForPreview(segment.text || "", fontSize, layoutWidth, reservedWidth).join("\n");
+  const inlineCodeFragments = getInlineCodeFragmentsForPreview(segment.element, segment.type === "list");
+  return wrapTextLinesForPreview(segment.text || "", fontSize, layoutWidth, reservedWidth, inlineCodeFragments).join("\n");
 }
 
 function copyTextToClipboard(text) {
