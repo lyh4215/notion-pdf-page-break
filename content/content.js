@@ -19,11 +19,12 @@ const A4_WIDTH_PX = A4_WIDTH_PT * PT_TO_CSS_PX;
 const A4_HEIGHT_PX = A4_HEIGHT_PT * PT_TO_CSS_PX;
 
 // Notion native PDF export content box, A4 scale 100%.
-// Approximately 1 inch margins.
-const PAGE_BODY_WIDTH_PT = 452.25;
-const PAGE_BODY_HEIGHT_PT = 698.88;
-const PAGE_BODY_WIDTH_PX = PAGE_BODY_WIDTH_PT * PT_TO_CSS_PX;   // ≈ 603px
-const PAGE_BODY_HEIGHT_PX = PAGE_BODY_HEIGHT_PT * PT_TO_CSS_PX; // ≈ 931.84px
+// Body content uses ~1 inch margins; browser footer/header live outside this box.
+const PAGE_BODY_MARGIN_PT = 72;
+const PAGE_BODY_WIDTH_PT = A4_WIDTH_PT - PAGE_BODY_MARGIN_PT * 2;
+const PAGE_BODY_HEIGHT_PT = A4_HEIGHT_PT - PAGE_BODY_MARGIN_PT * 2;
+const PAGE_BODY_WIDTH_PX = PAGE_BODY_WIDTH_PT * PT_TO_CSS_PX;
+const PAGE_BODY_HEIGHT_PX = PAGE_BODY_HEIGHT_PT * PT_TO_CSS_PX;
 const PAGE_TITLE_FONT_SIZE_PT = 30;
 const H2_FONT_SIZE_PT = 22.5;
 const H3_FONT_SIZE_PT = 18;
@@ -591,6 +592,10 @@ function getInlineCodeTokenWidth(token, fontSize) {
   return getTextWidth(token, codeFontSize) + codeFontSize * INLINE_CODE_HORIZONTAL_PADDING_EM;
 }
 
+function shouldKeepTokenUnbroken(token) {
+  return /[A-Za-z0-9_\\{}[\]^=|+\-*/]/.test(token);
+}
+
 function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0, inlineCodeFragments = []) {
   if (!text) {
     return ["(empty block)"];
@@ -635,6 +640,12 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
       }
 
       if (tokenWidth > availableWidth) {
+        if (shouldKeepTokenUnbroken(value)) {
+          currentLine += value;
+          currentWidth += tokenWidth;
+          return;
+        }
+
         appendBreakableCharacters(value, tokenFontSize);
         return;
       }
