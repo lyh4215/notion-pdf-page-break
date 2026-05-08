@@ -39,11 +39,11 @@ const CJK_VISUAL_SCALE = 0.96;
 const LATIN_VISUAL_SCALE = 1.08;
 const INLINE_CODE_SCALE = INLINE_CODE_FONT_SIZE_PT / BODY_TEXT_FONT_SIZE_PT;
 const INLINE_CODE_HORIZONTAL_PADDING_EM = 0.7;
-const LINE_WRAP_SAFETY_PX = 6;
 const MIN_SCALE_PERCENT = 11;
 const MAX_SCALE_PERCENT = 199;
 let previewState = null;
 let previewUpdateQueued = false;
+let textMeasureContext = null;
 function ptToPx(pt) {
   return pt * PT_TO_CSS_PX;
 }
@@ -543,28 +543,39 @@ function getHeadingFontLevels(blocks) {
   };
 }
 
-function getCharacterWidth(character, fontSize) {
+function getTextMeasureContext() {
+  if (!textMeasureContext) {
+    const canvas = document.createElement("canvas");
+    textMeasureContext = canvas.getContext("2d");
+  }
+
+  return textMeasureContext;
+}
+
+function measureRawTextWidth(text, fontSize, fontKind = "body") {
+  const context = getTextMeasureContext();
+  if (!context) {
+    return Array.from(text).length * fontSize * 0.5;
+  }
+
+  const family = fontKind === "code"
+    ? "\"DejaVu Sans Mono\", SFMono-Regular, Menlo, Consolas, \"PT Mono\", \"Liberation Mono\", Courier, monospace"
+    : "Inter, \"Noto Sans CJK KR\", \"Noto Sans KR\", \"Apple SD Gothic Neo\", \"Malgun Gothic\", Arial, sans-serif";
+  context.font = `${fontSize}px ${family}`;
+
+  return context.measureText(text).width;
+}
+
+function getCharacterWidth(character, fontSize, fontKind = "body") {
+  if (fontKind === "code") {
+    return measureRawTextWidth(character, fontSize, fontKind);
+  }
+
   if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(character)) {
-    return fontSize * 0.93 * CJK_VISUAL_SCALE;
+    return measureRawTextWidth(character, fontSize, fontKind) * CJK_VISUAL_SCALE;
   }
 
-  if (/\s/.test(character)) {
-    return fontSize * 0.28;
-  }
-
-  if (/[.,:;'"`!|()[\]{}]/.test(character)) {
-    return fontSize * 0.32;
-  }
-
-  if (/[A-Z]/.test(character)) {
-    return fontSize * 0.61 * LATIN_VISUAL_SCALE;
-  }
-
-  if (/[0-9]/.test(character)) {
-    return fontSize * 0.54 * LATIN_VISUAL_SCALE;
-  }
-
-  return fontSize * 0.5 * LATIN_VISUAL_SCALE;
+  return measureRawTextWidth(character, fontSize, fontKind) * LATIN_VISUAL_SCALE;
 }
 
 function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0) {
@@ -590,7 +601,7 @@ function isInlineCodeToken(token, inlineCodeFragments = []) {
 
 function getInlineCodeTokenWidth(token, fontSize) {
   const codeFontSize = fontSize * INLINE_CODE_SCALE;
-  return getTextWidth(token, codeFontSize) + codeFontSize * INLINE_CODE_HORIZONTAL_PADDING_EM;
+  return getTextWidth(token, codeFontSize, "code") + codeFontSize * INLINE_CODE_HORIZONTAL_PADDING_EM;
 }
 
 function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0, inlineCodeFragments = []) {
@@ -598,7 +609,7 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
     return ["(empty block)"];
   }
 
-  const availableWidth = Math.max(120, layoutWidth - reservedWidth - LINE_WRAP_SAFETY_PX);
+  const availableWidth = Math.max(120, layoutWidth - reservedWidth);
   const lines = [];
 
   for (const rawLine of text.split("\n")) {
@@ -611,10 +622,11 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
     let currentWidth = 0;
     let currentLine = "";
 
-    function appendBreakableCharacters(value, characterFontSize = fontSize) {
+    function appendBreakableCharacters(value, characterFontSize = fontSize, fontKind = "body") {
       for (const character of value) {
-        const characterWidth = getCharacterWidth(character, characterFontSize);
-        if (currentLine && currentWidth + characterWidth > availableWidth) {
+        const characterWidth = getCharacterWidth(character, characterFontSize, fontKind);
+        const remainingWidth = availableWidth - currentWidth;
+        if (currentLine && characterWidth > remainingWidth) {
           lines.push(currentLine.trimEnd());
           currentLine = "";
           currentWidth = 0;
@@ -628,9 +640,10 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
     function appendUnbreakableToken(value) {
       const isCodeToken = isInlineCodeToken(value, inlineCodeFragments);
       const tokenFontSize = isCodeToken ? fontSize * INLINE_CODE_SCALE : fontSize;
-      const tokenWidth = isCodeToken ? getInlineCodeTokenWidth(value, fontSize) : getTextWidth(value, tokenFontSize);
+      const tokenWidth = isCodeToken ? getInlineCodeTokenWidth(value, fontSize) : getTextWidth(value, tokenFontSize, "body");
+      const remainingWidth = availableWidth - currentWidth;
 
-      if (currentLine && currentWidth + tokenWidth > availableWidth) {
+      if (currentLine && tokenWidth > remainingWidth) {
         lines.push(currentLine.trimEnd());
         currentLine = "";
         currentWidth = 0;
@@ -641,11 +654,13 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
     }
 
     function appendMixedToken(value) {
-      const tokenFontSize = isInlineCodeToken(value, inlineCodeFragments) ? fontSize * INLINE_CODE_SCALE : fontSize;
+      const isCodeToken = isInlineCodeToken(value, inlineCodeFragments);
+      const tokenFontSize = isCodeToken ? fontSize * INLINE_CODE_SCALE : fontSize;
+      const fontKind = isCodeToken ? "code" : "body";
 
       for (const part of value.match(/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]|[^\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]+/g) || []) {
         if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(part)) {
-          appendBreakableCharacters(part, tokenFontSize);
+          appendBreakableCharacters(part, tokenFontSize, fontKind);
         } else {
           appendUnbreakableToken(part);
         }
@@ -668,8 +683,8 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
   return lines;
 }
 
-function getTextWidth(text, fontSize) {
-  return Array.from(text).reduce((sum, character) => sum + getCharacterWidth(character, fontSize), 0);
+function getTextWidth(text, fontSize, fontKind = "body") {
+  return Array.from(text).reduce((sum, character) => sum + getCharacterWidth(character, fontSize, fontKind), 0);
 }
 
 function getTableRows(block) {
