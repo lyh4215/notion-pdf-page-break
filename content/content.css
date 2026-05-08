@@ -282,7 +282,7 @@
 
 .notion-pdf-preview-script-cjk {
   display: inline-block;
-  transform: scaleX(var(--notion-pdf-preview-cjk-scale, 0.96));
+  transform: scaleX(var(--notion-pdf-preview-cjk-scale, 0.92));
   transform-origin: left center;
   font-family: "NotoSansCJKkr-Regular", "Noto Sans CJK KR", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
@@ -295,7 +295,7 @@
 }
 
 .notion-pdf-preview-script-latin {
-  font-size: calc(var(--notion-pdf-preview-latin-scale, 1.08) * 1em);
+  font-size: calc(var(--notion-pdf-preview-latin-scale, 1) * 1em);
 }
 
 .notion-pdf-preview-inline-code {

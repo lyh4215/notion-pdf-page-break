@@ -35,8 +35,9 @@ const CODE_BLOCK_FONT_SIZE_PT = 12;
 const TABLE_TEXT_FONT_SIZE_PT = 10.5;
 const BODY_TEXT_FONT_SIZE_PX = BODY_TEXT_FONT_SIZE_PT * PT_TO_CSS_PX;
 const CODE_BLOCK_FONT_SIZE_PX = CODE_BLOCK_FONT_SIZE_PT * PT_TO_CSS_PX;
-const CJK_VISUAL_SCALE = 0.96;
-const LATIN_VISUAL_SCALE = 1.08;
+const BODY_CJK_ADVANCE_RATIO = 0.92;
+const HEADING_CJK_ADVANCE_RATIO = 0.91;
+const LATIN_ADVANCE_RATIO = 1;
 const INLINE_CODE_SCALE = INLINE_CODE_FONT_SIZE_PT / BODY_TEXT_FONT_SIZE_PT;
 const INLINE_CODE_HORIZONTAL_PADDING_EM = 0.7;
 const BODY_FONT_STACK = "Inter, \"NotoSansCJKkr-Regular\", \"Noto Sans CJK KR\", \"Noto Sans KR\", \"Apple SD Gothic Neo\", \"Malgun Gothic\", Arial, sans-serif";
@@ -578,10 +579,22 @@ function getCharacterWidth(character, fontSize, fontKind = "body") {
   }
 
   if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(character)) {
-    return measureRawTextWidth(character, fontSize, fontKind) * CJK_VISUAL_SCALE;
+    return measureRawTextWidth(character, fontSize, fontKind) * getCjkAdvanceRatio(fontKind);
   }
 
-  return measureRawTextWidth(character, fontSize, fontKind) * LATIN_VISUAL_SCALE;
+  return measureRawTextWidth(character, fontSize, fontKind) * LATIN_ADVANCE_RATIO;
+}
+
+function getCjkAdvanceRatio(fontKind) {
+  return fontKind === "heading" || fontKind === "title"
+    ? HEADING_CJK_ADVANCE_RATIO
+    : BODY_CJK_ADVANCE_RATIO;
+}
+
+function getSegmentCjkAdvanceRatio(segmentType) {
+  return segmentType === "pageTitle" || segmentType === "h2" || segmentType === "h3" || segmentType === "h4"
+    ? HEADING_CJK_ADVANCE_RATIO
+    : BODY_CJK_ADVANCE_RATIO;
 }
 
 function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0, fontKind = "body") {
@@ -1928,8 +1941,8 @@ function createSyntheticTextPreview(segment) {
   text.className = "notion-pdf-preview-synthetic-text";
   text.dataset.type = segment.type;
   text.style.setProperty("--notion-pdf-preview-body-font-size", `${BODY_TEXT_FONT_SIZE_PX}px`);
-  text.style.setProperty("--notion-pdf-preview-cjk-scale", CJK_VISUAL_SCALE);
-  text.style.setProperty("--notion-pdf-preview-latin-scale", LATIN_VISUAL_SCALE);
+  text.style.setProperty("--notion-pdf-preview-cjk-scale", getSegmentCjkAdvanceRatio(segment.type));
+  text.style.setProperty("--notion-pdf-preview-latin-scale", LATIN_ADVANCE_RATIO);
   text.style.setProperty("--notion-pdf-preview-inline-code-scale", INLINE_CODE_SCALE);
   text.style.setProperty("--notion-pdf-preview-inline-code-side-padding", `${INLINE_CODE_HORIZONTAL_PADDING_EM / 2}em`);
   text.style.setProperty("--notion-pdf-preview-code-font-size", `${CODE_BLOCK_FONT_SIZE_PX}px`);
