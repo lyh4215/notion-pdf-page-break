@@ -42,12 +42,13 @@ const CODE_BLOCK_PADDING_LEFT_PT = 12;
 const CODE_BLOCK_MARGIN_BOTTOM_PT = 5.5;
 const TABLE_TEXT_FONT_SIZE_PT = 10.5;
 const TABLE_TOP_GAP_PT = 5.5;
-const EQUATION_TOP_GAP_PT = 14.5;
 const EQUATION_SHORT_GLYPH_HEIGHT_PT = 19.13;
 const EQUATION_SHORT_MARGIN_BOTTOM_PT = 15.9;
 const EQUATION_TALL_GLYPH_HEIGHT_PT = 58.63;
 const EQUATION_TALL_MARGIN_BOTTOM_PT = 12.5;
 const EQUATION_TALL_PAGE_TOP_HEIGHT_PT = 68.6;
+const EQUATION_SHORT_BOX_HEIGHT_PT = 49.5;
+const EQUATION_TALL_BOX_HEIGHT_PT = 85.6;
 const BODY_TEXT_FONT_SIZE_PX = BODY_TEXT_FONT_SIZE_PT * PT_TO_CSS_PX;
 const CODE_BLOCK_FONT_SIZE_PX = CODE_BLOCK_FONT_SIZE_PT * PT_TO_CSS_PX;
 const BODY_CJK_ADVANCE_RATIO = 0.92;
@@ -1009,9 +1010,8 @@ function getEquationMetrics(block) {
     return {
       isTall,
       glyphHeightPt: EQUATION_TALL_GLYPH_HEIGHT_PT,
-      samePageTopGapPt: EQUATION_TOP_GAP_PT,
       marginBottomPt: EQUATION_TALL_MARGIN_BOTTOM_PT,
-      samePageHeightPt: EQUATION_TOP_GAP_PT + EQUATION_TALL_GLYPH_HEIGHT_PT + EQUATION_TALL_MARGIN_BOTTOM_PT,
+      samePageHeightPt: EQUATION_TALL_BOX_HEIGHT_PT,
       pageTopHeightPt: EQUATION_TALL_PAGE_TOP_HEIGHT_PT
     };
   }
@@ -1019,9 +1019,8 @@ function getEquationMetrics(block) {
   return {
     isTall,
     glyphHeightPt: EQUATION_SHORT_GLYPH_HEIGHT_PT,
-    samePageTopGapPt: EQUATION_TOP_GAP_PT,
     marginBottomPt: EQUATION_SHORT_MARGIN_BOTTOM_PT,
-    samePageHeightPt: EQUATION_TOP_GAP_PT + EQUATION_SHORT_GLYPH_HEIGHT_PT + EQUATION_SHORT_MARGIN_BOTTOM_PT,
+    samePageHeightPt: EQUATION_SHORT_BOX_HEIGHT_PT,
     pageTopHeightPt: EQUATION_SHORT_GLYPH_HEIGHT_PT + EQUATION_SHORT_MARGIN_BOTTOM_PT
   };
 }
@@ -1635,12 +1634,10 @@ function paginateBlocks(blocks, pageHeight) {
 
     const startsAtPageTop = usedHeight === 0;
     const segmentHeight = startsAtPageTop ? ptToPx(metrics.pageTopHeightPt) : samePageHeight;
-    const equationTopGap = startsAtPageTop ? 0 : ptToPx(metrics.samePageTopGapPt);
 
     currentPage().push({
       ...block,
       continued: false,
-      equationTopGap,
       segmentHeight,
       splitAfter: false
     });
@@ -2107,19 +2104,16 @@ function createRenderedPdfPreviewSegment(segment) {
     segmentElement.classList.add("notion-pdf-preview-rendered-segment-clipped");
   }
 
+  if (segment.type === "equation") {
+    segmentElement.classList.add("notion-pdf-preview-rendered-segment-equation");
+  }
+
   const clone = segment.type === "table"
     ? createRenderedTablePreview(segment)
     : isSyntheticTextSegment(segment.type) || segment.type === "code"
       ? createSyntheticTextPreview(segment)
       : prepareCloneForMeasurement(segment.element.cloneNode(true), segment.type);
   clone.classList.add("notion-pdf-preview-rendered-clone");
-
-  if (segment.type === "equation") {
-    const equationTopGap = Number.isFinite(segment.equationTopGap)
-      ? segment.equationTopGap
-      : ptToPx(EQUATION_TOP_GAP_PT);
-    clone.style.marginTop = `${equationTopGap}px`;
-  }
 
   const clipOffset = Number(segment.clipOffset) || 0;
   if (clipOffset > 0) {
