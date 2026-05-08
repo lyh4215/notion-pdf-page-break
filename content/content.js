@@ -24,7 +24,7 @@ const PAGE_BODY_WIDTH_PT = 452.25;
 const PAGE_BODY_HEIGHT_PT = 698.88;
 const PAGE_BODY_WIDTH_PX = PAGE_BODY_WIDTH_PT * PT_TO_CSS_PX;   // ≈ 603px
 const PAGE_BODY_HEIGHT_PX = PAGE_BODY_HEIGHT_PT * PT_TO_CSS_PX; // ≈ 931.84px
-const BODY_TEXT_FONT_SIZE_PX = 15.5;
+const BODY_TEXT_FONT_SIZE_PX = 15;
 const MIN_SCALE_PERCENT = 11;
 const MAX_SCALE_PERCENT = 199;
 let previewState = null;
@@ -871,7 +871,7 @@ function estimateInlineMathAwareHeight(block, baseHeight) {
 }
 
 function getTextFlowLineHeights(element, lines, ownOnly = false) {
-  return lines.map((line) => ptToPx(isInlineCodeOnlyVisualLine(element, line, ownOnly) ? 16 : 18));
+  return lines.map((line) => ptToPx(isInlineCodeOnlyVisualLine(element, line, ownOnly) ? 14 : 18));
 }
 
 function sumHeights(heights, start = 0, end = heights.length) {
@@ -960,9 +960,9 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // Important:
       // In Notion DOM, markdown # is rendered as h2.
       // Measured markdown # formula:
-      // visible = 27n + 5.58 pt, after gap = 6.5 pt.
+      // visible = 27n + 5.58 pt, after gap = 3 pt.
       const lines = estimateWrappedLines(text, ptToPx(22.5), layoutWidth);
-      return blockHeightFromPt(lines, 27, 5.58, 6.5);
+      return blockHeightFromPt(lines, 27, 5.58, 3);
     }
 
     case "h3": {
@@ -1785,6 +1785,13 @@ function appendSyntheticLineContent(lineElement, line, segment) {
   const fragments = isSyntheticTextSegment(segment.type)
     ? getInlineCodeFragmentsForPreview(segment.element, segment.type === "list")
     : [];
+  const isInlineCodeOnlyLine = isSyntheticTextSegment(segment.type)
+    ? isInlineCodeOnlyVisualLine(segment.element, line, segment.type === "list")
+    : false;
+
+  if (isInlineCodeOnlyLine) {
+    lineElement.classList.add("notion-pdf-preview-synthetic-line-inline-code-only");
+  }
 
   if (!fragments.length) {
     lineElement.textContent = line || " ";

@@ -235,7 +235,7 @@
 }
 
 .notion-pdf-preview-synthetic-text[data-type="h2"] {
-  padding: 7px 0 8px;
+  padding: 7px 0 4px;
   font-size: 30px;
   font-weight: 600;
   line-height: 36px;
@@ -259,13 +259,13 @@
 .notion-pdf-preview-synthetic-text[data-type="quote"],
 .notion-pdf-preview-synthetic-text[data-type="callout"] {
   padding: 4px 0;
-  font-size: 15.5px;
+  font-size: 15px;
   line-height: 24px;
 }
 
 .notion-pdf-preview-synthetic-text[data-type="list"] {
   padding: 5px 0 5px 29px;
-  font-size: 15.5px;
+  font-size: 15px;
   line-height: 24px;
 }
 
@@ -273,6 +273,10 @@
   content: "•";
   position: absolute;
   margin-left: -18px;
+}
+
+.notion-pdf-preview-synthetic-line-inline-code-only {
+  line-height: 19px;
 }
 
 .notion-pdf-preview-inline-code {
