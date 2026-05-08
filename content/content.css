@@ -259,13 +259,13 @@
 .notion-pdf-preview-synthetic-text[data-type="paragraph"],
 .notion-pdf-preview-synthetic-text[data-type="quote"],
 .notion-pdf-preview-synthetic-text[data-type="callout"] {
-  padding: 4px 0;
+  padding: 0;
   font-size: var(--notion-pdf-preview-body-font-size, 15px);
   line-height: 24px;
 }
 
 .notion-pdf-preview-synthetic-text[data-type="list"] {
-  padding: 5px 0 5px 29px;
+  padding: 0 0 0 29px;
   font-size: var(--notion-pdf-preview-body-font-size, 15px);
   line-height: 24px;
 }
