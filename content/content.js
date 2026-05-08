@@ -38,6 +38,7 @@ const CODE_BLOCK_PADDING_RIGHT_PT = 12;
 const CODE_BLOCK_PADDING_BOTTOM_PT = 14;
 const CODE_BLOCK_PADDING_LEFT_PT = 12;
 const TABLE_TEXT_FONT_SIZE_PT = 10.5;
+const TABLE_TOP_GAP_PT = 11.5;
 const BODY_TEXT_FONT_SIZE_PX = BODY_TEXT_FONT_SIZE_PT * PT_TO_CSS_PX;
 const CODE_BLOCK_FONT_SIZE_PX = CODE_BLOCK_FONT_SIZE_PT * PT_TO_CSS_PX;
 const BODY_CJK_ADVANCE_RATIO = 0.92;
@@ -801,17 +802,18 @@ function getTextOutsideTable(block) {
 
 function estimateTableHeight(block, layoutWidth) {
   // Calibrated Notion PDF table:
-  // font 10.5pt, one-line row height 21.75pt, wrapped rows are compact.
+  // top gap 11.5pt, font 10.5pt, one-line row height 21.75pt.
   const rowHeights = estimateTableRowHeights(block, layoutWidth);
   const tableHeight = rowHeights.reduce((sum, rowHeight) => sum + rowHeight, ptToPx(0.75));
   const extraText = getTextOutsideTable(block);
+  const topGap = ptToPx(TABLE_TOP_GAP_PT);
 
   if (!extraText) {
-    return tableHeight;
+    return topGap + tableHeight;
   }
 
   const extraLines = estimateWrappedLines(extraText, ptToPx(12), layoutWidth);
-  return tableHeight + blockHeightFromPt(extraLines, 18, -0.62, 6.6);
+  return topGap + tableHeight + blockHeightFromPt(extraLines, 18, -0.62, 6.6);
 }
 
 function estimateMediaHeight(block, layoutWidth) {
@@ -1265,10 +1267,12 @@ function paginateBlocks(blocks, pageHeight) {
 
   function pushTableSegment(block, segmentHeight, consumedRows, rowCount, segmentIndex, clipOffset = 0) {
     const splitAfter = consumedRows < rowCount;
+    const tableTopGap = segmentIndex === 0 ? ptToPx(TABLE_TOP_GAP_PT) : 0;
     currentPage().push({
       ...block,
       clipOffset,
       continued: segmentIndex > 0,
+      tableTopGap,
       segmentHeight,
       splitAfter
     });
@@ -1302,7 +1306,8 @@ function paginateBlocks(blocks, pageHeight) {
 
       const isContinuation = segmentIndex > 0;
       const repeatedHeaderHeight = isContinuation && repeatsHeader ? headerHeight : 0;
-      let segmentHeight = borderHeight + repeatedHeaderHeight;
+      const tableTopGap = segmentIndex === 0 ? ptToPx(TABLE_TOP_GAP_PT) : 0;
+      let segmentHeight = tableTopGap + borderHeight + repeatedHeaderHeight;
       let originalRows = 0;
       const segmentStartRow = consumedRows;
 
@@ -1764,6 +1769,12 @@ function createPdfPreviewBlock(segment, pageScale) {
 function createRenderedTablePreview(segment) {
   const table = document.createElement("table");
   table.className = "notion-pdf-preview-synthetic-table";
+  const tableTopGap = Number.isFinite(segment.tableTopGap)
+    ? segment.tableTopGap
+    : segment.continued
+      ? 0
+      : ptToPx(TABLE_TOP_GAP_PT);
+  table.style.marginTop = `${tableTopGap}px`;
 
   for (const row of getTableRows(segment.element)) {
     const tr = document.createElement("tr");
