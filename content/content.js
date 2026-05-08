@@ -148,9 +148,7 @@ function getVisibleTextForEstimate(element, fontSize = 14) {
     }
 
     if (node.matches(".katex")) {
-      const rect = node.getBoundingClientRect();
-      const tokenCount = Math.max(1, Math.ceil((rect.width || fontSize) / (fontSize * 0.5)));
-      return ` ${"m".repeat(tokenCount)} `;
+      return ` ${getInlineMathDisplayText(node) || "math"} `;
     }
 
     return Array.from(node.childNodes).map(walk).join("");
@@ -159,19 +157,46 @@ function getVisibleTextForEstimate(element, fontSize = 14) {
   return walk(element).replace(/\s+/g, " ").trim();
 }
 
-function getInlineMathPlaceholderFragments(element, ownOnly = false, fontSize = BODY_TEXT_FONT_SIZE_PX) {
+function getKatexSourceText(katexElement) {
+  const annotation = katexElement.querySelector("annotation[encoding='application/x-tex'], annotation");
+  return (annotation?.textContent || katexElement.textContent || "").replace(/\u200b/g, "").trim();
+}
+
+function getInlineMathDisplayText(katexElement) {
+  return getKatexSourceText(katexElement).replace(/\s+/g, "");
+}
+
+function getInlineMathFragmentsForPreview(element, ownOnly = false) {
   const ownerBlock = element.closest("[data-block-id]") || element;
   const fragments = Array.from(element.querySelectorAll(".katex"))
     .filter((candidate) => !candidate.closest(".katex-display, .katex-mathml"))
     .filter((candidate) => !ownOnly || (candidate.closest("[data-block-id]") || ownerBlock) === ownerBlock)
     .map((candidate) => {
       const rect = candidate.getBoundingClientRect();
-      const tokenCount = Math.max(1, Math.ceil((rect.width || fontSize) / (fontSize * 0.5)));
-      return "m".repeat(tokenCount);
+      const text = getInlineMathDisplayText(candidate);
+      return text
+        ? {
+            text,
+            comparable: normalizeTextForInlineCodeStats(text),
+            width: Math.max(0, rect.width || 0)
+          }
+        : null;
     })
     .filter(Boolean);
 
-  return Array.from(new Set(fragments)).sort((a, b) => b.length - a.length);
+  return Array.from(new Map(fragments.map((fragment) => [fragment.comparable, fragment])).values())
+    .sort((a, b) => b.text.length - a.text.length);
+}
+
+function findInlineMathFragment(token, inlineMathFragments = []) {
+  const comparableToken = normalizeTextForInlineCodeStats(token).replace(/[.,:;]+$/, "");
+  if (!comparableToken) {
+    return null;
+  }
+
+  return inlineMathFragments.find((fragment) => {
+    return fragment.comparable && (comparableToken.includes(fragment.comparable) || fragment.comparable.includes(comparableToken));
+  }) || null;
 }
 
 function isInlineMathVisualLine(element, line, ownOnly = false) {
@@ -180,7 +205,7 @@ function isInlineMathVisualLine(element, line, ownOnly = false) {
     return false;
   }
 
-  return getInlineMathPlaceholderFragments(element, ownOnly).some((fragment) => normalizedLine.includes(fragment));
+  return getInlineMathFragmentsForPreview(element, ownOnly).some((fragment) => normalizedLine.includes(fragment.comparable));
 }
 
 function normalizeTextForInlineCodeStats(text) {
@@ -662,7 +687,7 @@ function getInlineCodeTokenWidth(token, fontSize) {
   return getTextWidth(token, codeFontSize, "code") + codeFontSize * INLINE_CODE_HORIZONTAL_PADDING_EM;
 }
 
-function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0, inlineCodeFragments = [], fontKind = "body") {
+function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0, inlineCodeFragments = [], fontKind = "body", inlineMathFragments = []) {
   if (!text) {
     return ["(empty block)"];
   }
@@ -698,9 +723,12 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
     }
 
     function appendUnbreakableToken(value) {
+      const mathFragment = findInlineMathFragment(value, inlineMathFragments);
       const isCodeToken = isInlineCodeToken(value, inlineCodeFragments);
       const tokenFontSize = isCodeToken ? fontSize * INLINE_CODE_SCALE : fontSize;
-      const tokenWidth = isCodeToken ? getInlineCodeTokenWidth(value, fontSize) : getTextWidth(value, tokenFontSize, fontKind);
+      const tokenWidth = mathFragment
+        ? getInlineMathTokenWidth(value, mathFragment, tokenFontSize, fontKind)
+        : isCodeToken ? getInlineCodeTokenWidth(value, fontSize) : getTextWidth(value, tokenFontSize, fontKind);
       const remainingWidth = availableWidth - currentWidth;
 
       if (currentLine && tokenWidth > remainingWidth) {
@@ -751,6 +779,12 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
 
 function getTextWidth(text, fontSize, fontKind = "body") {
   return Array.from(text).reduce((sum, character) => sum + getCharacterWidth(character, fontSize, fontKind), 0);
+}
+
+function getInlineMathTokenWidth(token, mathFragment, fontSize, fontKind) {
+  const comparableToken = normalizeTextForInlineCodeStats(token);
+  const extraText = comparableToken.replace(mathFragment.comparable, "");
+  return mathFragment.width + getTextWidth(extraText, fontSize, fontKind);
 }
 
 function getCodePreviewLines(text, layoutWidth) {
@@ -1016,7 +1050,8 @@ function sumHeights(heights, start = 0, end = heights.length) {
 
 function estimateTextFlowHeight(block, text, layoutWidth, reservedWidth, afterGapPt, ownOnly = false) {
   const inlineCodeFragments = getInlineCodeFragmentsForPreview(block, ownOnly);
-  const lines = wrapTextLinesForPreview(text || " ", BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth, inlineCodeFragments);
+  const inlineMathFragments = getInlineMathFragmentsForPreview(block, ownOnly);
+  const lines = wrapTextLinesForPreview(text || " ", BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth, inlineCodeFragments, "body", inlineMathFragments);
   const lineHeightSum = sumHeights(getTextFlowLineHeights(block, lines, ownOnly));
   return lineHeightSum + ptToPx(-0.62 + afterGapPt);
 }
@@ -1861,7 +1896,8 @@ function formatSegmentTextForPreview(segment) {
 
   const { fontSize, layoutWidth, reservedWidth, fontKind } = getSegmentWrapSettings(segment);
   const inlineCodeFragments = getInlineCodeFragmentsForPreview(segment.element, segment.type === "list");
-  return wrapTextLinesForPreview(segment.text || "", fontSize, layoutWidth, reservedWidth, inlineCodeFragments, fontKind).join("\n");
+  const inlineMathFragments = getInlineMathFragmentsForPreview(segment.element, segment.type === "list");
+  return wrapTextLinesForPreview(segment.text || "", fontSize, layoutWidth, reservedWidth, inlineCodeFragments, fontKind, inlineMathFragments).join("\n");
 }
 
 function copyTextToClipboard(text) {
