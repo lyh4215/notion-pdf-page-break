@@ -1103,6 +1103,7 @@ function paginateBlocks(blocks, pageHeight) {
       case "h4":
         return 0;
       case "paragraph":
+      case "list":
       case "quote":
         return 60;
       case "equation":
@@ -1114,6 +1115,10 @@ function paginateBlocks(blocks, pageHeight) {
 
   function isTextFlowType(type) {
     return type === "paragraph" || type === "list" || type === "quote" || type === "callout";
+  }
+
+  function isLineSplittableTextFlow(block) {
+    return isTextFlowType(block.type) && block.height > ptToPx(42);
   }
 
   function isAvoidInsideType(type) {
@@ -1300,6 +1305,82 @@ function paginateBlocks(blocks, pageHeight) {
     }
   }
 
+  function getTextFlowLineMetrics(block) {
+    const lines = formatSegmentTextForPreview(block).split("\n");
+    const lineHeight = ptToPx(18);
+    const trailingGap = Math.max(0, block.height - lineHeight * Math.max(1, lines.length));
+    return { lines, lineHeight, trailingGap };
+  }
+
+  function pushTextFlowSegment(block, lines, lineStart, lineEnd, segmentHeight, segmentIndex, totalLines) {
+    const splitAfter = lineEnd < totalLines;
+    currentPage().push({
+      ...block,
+      text: lines.slice(lineStart, lineEnd).join("\n"),
+      continued: segmentIndex > 0,
+      segmentHeight,
+      splitAfter
+    });
+    usedHeight += segmentHeight;
+  }
+
+  function paginateTextFlowBlock(block) {
+    const { lines, lineHeight, trailingGap } = getTextFlowLineMetrics(block);
+    const totalLines = Math.max(1, lines.length);
+    let lineIndex = 0;
+    let segmentIndex = 0;
+
+    if (totalLines <= 1) {
+      return false;
+    }
+
+    while (lineIndex < totalLines) {
+      let availableHeight = pageHeight - usedHeight;
+
+      if (availableHeight < lineHeight && usedHeight > 0) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: Math.min(1, lineIndex / totalLines)
+        });
+        availableHeight = pageHeight;
+      }
+
+      const remainingLines = totalLines - lineIndex;
+      const finalHeight = remainingLines * lineHeight + trailingGap;
+
+      if (finalHeight <= availableHeight || usedHeight === 0) {
+        pushTextFlowSegment(block, lines, lineIndex, totalLines, finalHeight, segmentIndex, totalLines);
+        lineIndex = totalLines;
+        break;
+      }
+
+      const linesThatFit = Math.floor(availableHeight / lineHeight);
+
+      if (linesThatFit <= 0) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: Math.min(1, lineIndex / totalLines)
+        });
+        continue;
+      }
+
+      const lineEnd = Math.min(totalLines, lineIndex + linesThatFit);
+      const segmentHeight = (lineEnd - lineIndex) * lineHeight;
+      pushTextFlowSegment(block, lines, lineIndex, lineEnd, segmentHeight, segmentIndex, totalLines);
+      lineIndex = lineEnd;
+      segmentIndex += 1;
+
+      if (lineIndex < totalLines) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: Math.min(1, lineIndex / totalLines)
+        });
+      }
+    }
+
+    return true;
+  }
+
   for (const block of blocks) {
     if (
       block.type === "table" &&
@@ -1330,6 +1411,16 @@ function paginateBlocks(blocks, pageHeight) {
 
     if (block.type === "code" && usedHeight > 0 && usedHeight + block.height > pageHeight) {
       paginateHeightSplitBlock(block);
+      continue;
+    }
+
+    if (
+      isLineSplittableTextFlow(block) &&
+      usedHeight > 0 &&
+      usedHeight + block.height > pageHeight &&
+      !canUseBottomOverflowTolerance(block, usedHeight + block.height - pageHeight)
+    ) {
+      paginateTextFlowBlock(block);
       continue;
     }
 
@@ -1405,6 +1496,9 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
       layoutWidth,
       height: estimateBlockHeight(pageTitleElement, layoutWidth, "pageTitle")
     });
+  }
+  while (measuredBlocks.at(-1)?.type === "blank") {
+    measuredBlocks.pop();
   }
   applyRenderedMeasurements(contentRoot, measuredBlocks, layoutWidth);
   const pageHeight = PAGE_BODY_HEIGHT_PX / scaleFactor;
