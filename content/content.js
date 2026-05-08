@@ -24,6 +24,7 @@ const PAGE_BODY_WIDTH_PT = 452.25;
 const PAGE_BODY_HEIGHT_PT = 698.88;
 const PAGE_BODY_WIDTH_PX = PAGE_BODY_WIDTH_PT * PT_TO_CSS_PX;   // ≈ 603px
 const PAGE_BODY_HEIGHT_PX = PAGE_BODY_HEIGHT_PT * PT_TO_CSS_PX; // ≈ 931.84px
+const BODY_TEXT_FONT_SIZE_PX = 15.5;
 const MIN_SCALE_PERCENT = 11;
 const MAX_SCALE_PERCENT = 199;
 let previewState = null;
@@ -154,6 +155,25 @@ function getInlineCodeTextForEstimate(element, ownOnly = false) {
     .filter((candidate) => !ownOnly || (candidate.closest("[data-block-id]") || ownerBlock) === ownerBlock);
 
   return inlineElements.map(getElementText).join(" ").trim();
+}
+
+function getInlineCodeFragmentsForPreview(element, ownOnly = false) {
+  const ownerBlock = element.closest("[data-block-id]") || element;
+  const fragments = Array.from(element.querySelectorAll(".notion-inline-code-container, code, span"))
+    .filter((candidate) => isInlineCodeElement(candidate))
+    .filter((candidate, index, candidates) => !candidates.some((other, otherIndex) => otherIndex !== index && other.contains(candidate)))
+    .filter((candidate) => !ownOnly || (candidate.closest("[data-block-id]") || ownerBlock) === ownerBlock)
+    .map(getElementText)
+    .filter(Boolean);
+  const expandedFragments = fragments.flatMap((fragment) => {
+    if (fragment.length <= 40) {
+      return [fragment];
+    }
+
+    return [fragment, ...fragment.split(/\s+/).filter((token) => token.length >= 3)];
+  });
+
+  return Array.from(new Set(expandedFragments)).sort((a, b) => b.length - a.length);
 }
 
 function isInlineCodeOnlyVisualLine(element, line, ownOnly = false) {
@@ -859,7 +879,7 @@ function sumHeights(heights, start = 0, end = heights.length) {
 }
 
 function estimateTextFlowHeight(block, text, layoutWidth, reservedWidth, afterGapPt, ownOnly = false) {
-  const lines = wrapTextLinesForPreview(text || " ", ptToPx(12), layoutWidth, reservedWidth);
+  const lines = wrapTextLinesForPreview(text || " ", BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth);
   const lineHeightSum = sumHeights(getTextFlowLineHeights(block, lines, ownOnly));
   return lineHeightSum + ptToPx(-0.62 + afterGapPt);
 }
@@ -940,9 +960,9 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // Important:
       // In Notion DOM, markdown # is rendered as h2.
       // Measured markdown # formula:
-      // visible = 27n + 5.58 pt, after gap = 9.5 pt.
+      // visible = 27n + 5.58 pt, after gap = 6.5 pt.
       const lines = estimateWrappedLines(text, ptToPx(22.5), layoutWidth);
-      return blockHeightFromPt(lines, 27, 5.58, 9.5);
+      return blockHeightFromPt(lines, 27, 5.58, 6.5);
     }
 
     case "h3": {
@@ -1002,7 +1022,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       return estimateMediaHeight(block, layoutWidth);
 
     case "divider":
-      return ptToPx(24);
+      return ptToPx(14);
 
     case "blank":
       return ptToPx(18);
@@ -1074,7 +1094,7 @@ function prepareCloneForMeasurement(clone, type = "paragraph") {
 }
 
 function shouldUseRenderedHeight(type) {
-  return type === "media" || type === "divider";
+  return type === "media";
 }
 
 function getMarginBottom(element) {
@@ -1655,14 +1675,14 @@ function getSegmentWrapSettings(segment) {
     case "h4":
       return { fontSize: ptToPx(15), layoutWidth, reservedWidth: 0 };
     case "list":
-      return { fontSize: ptToPx(12), layoutWidth, reservedWidth: ptToPx(21.6) };
+      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(21.6) };
     case "quote":
-      return { fontSize: ptToPx(12), layoutWidth, reservedWidth: ptToPx(14.25) };
+      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(14.25) };
     case "callout":
-      return { fontSize: ptToPx(12), layoutWidth, reservedWidth: ptToPx(40) };
+      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(40) };
     case "paragraph":
     default:
-      return { fontSize: ptToPx(12), layoutWidth, reservedWidth: 0 };
+      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: 0 };
   }
 }
 
@@ -1761,6 +1781,53 @@ function createRenderedTablePreview(segment) {
   return table;
 }
 
+function appendSyntheticLineContent(lineElement, line, segment) {
+  const fragments = isSyntheticTextSegment(segment.type)
+    ? getInlineCodeFragmentsForPreview(segment.element, segment.type === "list")
+    : [];
+
+  if (!fragments.length) {
+    lineElement.textContent = line || " ";
+    return;
+  }
+
+  let cursor = 0;
+  let matched = false;
+
+  while (cursor < line.length) {
+    let nextIndex = -1;
+    let nextFragment = "";
+
+    for (const fragment of fragments) {
+      const index = line.indexOf(fragment, cursor);
+      if (index >= 0 && (nextIndex === -1 || index < nextIndex || (index === nextIndex && fragment.length > nextFragment.length))) {
+        nextIndex = index;
+        nextFragment = fragment;
+      }
+    }
+
+    if (nextIndex === -1) {
+      lineElement.append(document.createTextNode(line.slice(cursor)));
+      break;
+    }
+
+    if (nextIndex > cursor) {
+      lineElement.append(document.createTextNode(line.slice(cursor, nextIndex)));
+    }
+
+    const code = document.createElement("span");
+    code.className = "notion-pdf-preview-inline-code";
+    code.textContent = nextFragment;
+    lineElement.append(code);
+    matched = true;
+    cursor = nextIndex + nextFragment.length;
+  }
+
+  if (!line && !matched) {
+    lineElement.textContent = " ";
+  }
+}
+
 function createSyntheticTextPreview(segment) {
   const text = document.createElement("div");
   text.className = "notion-pdf-preview-synthetic-text";
@@ -1770,7 +1837,7 @@ function createSyntheticTextPreview(segment) {
   for (const line of lines) {
     const lineElement = document.createElement("div");
     lineElement.className = "notion-pdf-preview-synthetic-line";
-    lineElement.textContent = line || " ";
+    appendSyntheticLineContent(lineElement, line, segment);
     text.append(lineElement);
   }
 
