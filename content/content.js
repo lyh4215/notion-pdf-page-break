@@ -31,6 +31,7 @@ const H3_FONT_SIZE_PT = 18;
 const H4_FONT_SIZE_PT = 15;
 const BODY_TEXT_FONT_SIZE_PT = 12;
 const INLINE_CODE_FONT_SIZE_PT = 8.75;
+const INLINE_CODE_ONLY_LINE_HEIGHT_PT = 12.4;
 const CODE_BLOCK_FONT_SIZE_PT = 12;
 const TABLE_TEXT_FONT_SIZE_PT = 10.5;
 const BODY_TEXT_FONT_SIZE_PX = BODY_TEXT_FONT_SIZE_PT * PT_TO_CSS_PX;
@@ -941,7 +942,7 @@ function estimateInlineMathAwareHeight(block, baseHeight) {
 }
 
 function getTextFlowLineHeights(element, lines, ownOnly = false) {
-  return lines.map((line) => ptToPx(isInlineCodeOnlyVisualLine(element, line, ownOnly) ? 12 : 18));
+  return lines.map((line) => ptToPx(isInlineCodeOnlyVisualLine(element, line, ownOnly) ? INLINE_CODE_ONLY_LINE_HEIGHT_PT : 18));
 }
 
 function sumHeights(heights, start = 0, end = heights.length) {
@@ -1852,6 +1853,7 @@ function createSyntheticTextPreview(segment) {
   text.style.setProperty("--notion-pdf-preview-cjk-scale", getSegmentCjkAdvanceRatio(segment.type));
   text.style.setProperty("--notion-pdf-preview-latin-scale", LATIN_ADVANCE_RATIO);
   text.style.setProperty("--notion-pdf-preview-inline-code-scale", INLINE_CODE_SCALE);
+  text.style.setProperty("--notion-pdf-preview-inline-code-only-line-height", `${ptToPx(INLINE_CODE_ONLY_LINE_HEIGHT_PT)}px`);
   text.style.setProperty("--notion-pdf-preview-inline-code-side-padding", `${INLINE_CODE_HORIZONTAL_PADDING_EM / 2}em`);
   text.style.setProperty("--notion-pdf-preview-code-font-size", `${CODE_BLOCK_FONT_SIZE_PX}px`);
   const lines = formatSegmentTextForPreview(segment).split("\n");

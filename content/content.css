@@ -277,7 +277,7 @@
 }
 
 .notion-pdf-preview-synthetic-line-inline-code-only {
-  line-height: 16px;
+  line-height: var(--notion-pdf-preview-inline-code-only-line-height, 16.5px);
 }
 
 .notion-pdf-preview-script-cjk {
