@@ -871,7 +871,7 @@ function estimateInlineMathAwareHeight(block, baseHeight) {
 }
 
 function getTextFlowLineHeights(element, lines, ownOnly = false) {
-  return lines.map((line) => ptToPx(isInlineCodeOnlyVisualLine(element, line, ownOnly) ? 14 : 18));
+  return lines.map((line) => ptToPx(isInlineCodeOnlyVisualLine(element, line, ownOnly) ? 12 : 18));
 }
 
 function sumHeights(heights, start = 0, end = heights.length) {

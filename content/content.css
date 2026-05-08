@@ -276,20 +276,20 @@
 }
 
 .notion-pdf-preview-synthetic-line-inline-code-only {
-  line-height: 19px;
+  line-height: 16px;
 }
 
 .notion-pdf-preview-inline-code {
   display: inline;
-  padding: 0.2em 0.4em;
+  padding: 0.1em 0.35em;
   border-radius: 4px;
   background: rgba(135, 131, 120, 0.15);
   color: #eb5757;
   font-family: SFMono-Regular, Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace;
-  font-size: 85%;
+  font-size: 78%;
   line-height: normal;
   position: relative;
-  bottom: 0.065em;
+  bottom: 0.04em;
 }
 
 .notion-pdf-preview-synthetic-text[data-type="code"] {
