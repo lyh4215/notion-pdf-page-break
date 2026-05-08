@@ -39,6 +39,7 @@ const CJK_VISUAL_SCALE = 0.96;
 const LATIN_VISUAL_SCALE = 1.08;
 const INLINE_CODE_SCALE = INLINE_CODE_FONT_SIZE_PT / BODY_TEXT_FONT_SIZE_PT;
 const INLINE_CODE_HORIZONTAL_PADDING_EM = 0.7;
+const LINE_WRAP_SAFETY_PX = 6;
 const MIN_SCALE_PERCENT = 11;
 const MAX_SCALE_PERCENT = 199;
 let previewState = null;
@@ -597,7 +598,7 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
     return ["(empty block)"];
   }
 
-  const availableWidth = Math.max(120, layoutWidth - reservedWidth);
+  const availableWidth = Math.max(120, layoutWidth - reservedWidth - LINE_WRAP_SAFETY_PX);
   const lines = [];
 
   for (const rawLine of text.split("\n")) {
@@ -633,11 +634,6 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
         lines.push(currentLine.trimEnd());
         currentLine = "";
         currentWidth = 0;
-      }
-
-      if (tokenWidth > availableWidth) {
-        appendBreakableCharacters(value, tokenFontSize);
-        return;
       }
 
       currentLine += value;
