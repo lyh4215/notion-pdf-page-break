@@ -242,7 +242,7 @@
 }
 
 .notion-pdf-preview-synthetic-text[data-type="h3"] {
-  padding: 21px 0 7px;
+  padding: 15px 0 8px;
   font-size: 24px;
   font-weight: 600;
   line-height: 28px;
@@ -306,7 +306,7 @@
   padding: 16px 30px;
   border-radius: 8px;
   background: #f7f6f3;
-  font: 14px/24px SFMono-Regular, Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace;
+  font: var(--notion-pdf-preview-code-font-size, 16px)/24px SFMono-Regular, Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace;
 }
 
 .notion-pdf-preview-measure-root .notion-selectable,

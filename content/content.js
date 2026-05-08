@@ -24,10 +24,19 @@ const PAGE_BODY_WIDTH_PT = 452.25;
 const PAGE_BODY_HEIGHT_PT = 698.88;
 const PAGE_BODY_WIDTH_PX = PAGE_BODY_WIDTH_PT * PT_TO_CSS_PX;   // ≈ 603px
 const PAGE_BODY_HEIGHT_PX = PAGE_BODY_HEIGHT_PT * PT_TO_CSS_PX; // ≈ 931.84px
-const BODY_TEXT_FONT_SIZE_PX = 15;
+const PAGE_TITLE_FONT_SIZE_PT = 30;
+const H2_FONT_SIZE_PT = 22.5;
+const H3_FONT_SIZE_PT = 18;
+const H4_FONT_SIZE_PT = 15;
+const BODY_TEXT_FONT_SIZE_PT = 12;
+const INLINE_CODE_FONT_SIZE_PT = 8.2875;
+const CODE_BLOCK_FONT_SIZE_PT = 12;
+const TABLE_TEXT_FONT_SIZE_PT = 10.5;
+const BODY_TEXT_FONT_SIZE_PX = BODY_TEXT_FONT_SIZE_PT * PT_TO_CSS_PX;
+const CODE_BLOCK_FONT_SIZE_PX = CODE_BLOCK_FONT_SIZE_PT * PT_TO_CSS_PX;
 const CJK_VISUAL_SCALE = 0.96;
 const LATIN_VISUAL_SCALE = 1.08;
-const INLINE_CODE_SCALE = 0.93;
+const INLINE_CODE_SCALE = INLINE_CODE_FONT_SIZE_PT / BODY_TEXT_FONT_SIZE_PT;
 const INLINE_CODE_HORIZONTAL_PADDING_EM = 0.7;
 const MIN_SCALE_PERCENT = 11;
 const MAX_SCALE_PERCENT = 199;
@@ -718,7 +727,7 @@ function estimateTableRowHeights(block, layoutWidth) {
 
     const lineCount = Math.max(
       1,
-      ...row.map((cellText) => estimateWrappedLines(cellText, ptToPx(10.5), cellWidth))
+      ...row.map((cellText) => estimateWrappedLines(cellText, ptToPx(TABLE_TEXT_FONT_SIZE_PT), cellWidth))
     );
 
     return ptToPx(21.75 + 12 * (lineCount - 1));
@@ -983,7 +992,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     case "pageTitle": {
       // Notion page title, not markdown #.
       // Measured formula: 43.5n + 16 pt.
-      const lines = estimateWrappedLines(text, ptToPx(30), layoutWidth);
+      const lines = estimateWrappedLines(text, ptToPx(PAGE_TITLE_FONT_SIZE_PT), layoutWidth);
       return blockHeightFromPt(lines, 43.5, 0, 16);
     }
 
@@ -992,7 +1001,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // In Notion DOM, markdown # is rendered as h2.
       // Measured markdown # formula:
       // visible = 27n + 5.58 pt, after gap = 3 pt.
-      const lines = estimateWrappedLines(text, ptToPx(22.5), layoutWidth);
+      const lines = estimateWrappedLines(text, ptToPx(H2_FONT_SIZE_PT), layoutWidth);
       return blockHeightFromPt(lines, 27, 5.58, 3);
     }
 
@@ -1001,7 +1010,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // In Notion DOM, markdown ## is rendered as h3.
       // Measured markdown ## formula:
       // visible = 21.75n + 4.31 pt, after gap = 12.5 pt.
-      const lines = estimateWrappedLines(text, ptToPx(18), layoutWidth);
+      const lines = estimateWrappedLines(text, ptToPx(H3_FONT_SIZE_PT), layoutWidth);
       return blockHeightFromPt(lines, 21.75, 4.31, 12.5);
     }
 
@@ -1010,7 +1019,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // In Notion DOM, markdown ### is rendered as h4.
       // Measured markdown ### formula:
       // visible = 18n + 3.72 pt, after gap = 8 pt.
-      const lines = estimateWrappedLines(text, ptToPx(15), layoutWidth);
+      const lines = estimateWrappedLines(text, ptToPx(H4_FONT_SIZE_PT), layoutWidth);
       return blockHeightFromPt(lines, 18, 3.72, 8);
     }
 
@@ -1039,7 +1048,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       const lineSlots = Math.max(
         1,
         rawLines.reduce((sum, line) => {
-          return sum + estimateWrappedLines(line || " ", ptToPx(12), layoutWidth, ptToPx(24));
+          return sum + estimateWrappedLines(line || " ", ptToPx(CODE_BLOCK_FONT_SIZE_PT), layoutWidth, ptToPx(24));
         }, 0)
       );
 
@@ -1698,13 +1707,13 @@ function getSegmentWrapSettings(segment) {
 
   switch (segment.type) {
     case "pageTitle":
-      return { fontSize: ptToPx(30), layoutWidth, reservedWidth: 0 };
+      return { fontSize: ptToPx(PAGE_TITLE_FONT_SIZE_PT), layoutWidth, reservedWidth: 0 };
     case "h2":
-      return { fontSize: ptToPx(22.5), layoutWidth, reservedWidth: 0 };
+      return { fontSize: ptToPx(H2_FONT_SIZE_PT), layoutWidth, reservedWidth: 0 };
     case "h3":
-      return { fontSize: ptToPx(18), layoutWidth, reservedWidth: 0 };
+      return { fontSize: ptToPx(H3_FONT_SIZE_PT), layoutWidth, reservedWidth: 0 };
     case "h4":
-      return { fontSize: ptToPx(15), layoutWidth, reservedWidth: 0 };
+      return { fontSize: ptToPx(H4_FONT_SIZE_PT), layoutWidth, reservedWidth: 0 };
     case "list":
       return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(21.6) };
     case "quote":
@@ -1897,6 +1906,7 @@ function createSyntheticTextPreview(segment) {
   text.style.setProperty("--notion-pdf-preview-latin-scale", LATIN_VISUAL_SCALE);
   text.style.setProperty("--notion-pdf-preview-inline-code-scale", INLINE_CODE_SCALE);
   text.style.setProperty("--notion-pdf-preview-inline-code-side-padding", `${INLINE_CODE_HORIZONTAL_PADDING_EM / 2}em`);
+  text.style.setProperty("--notion-pdf-preview-code-font-size", `${CODE_BLOCK_FONT_SIZE_PX}px`);
   const lines = formatSegmentTextForPreview(segment).split("\n");
 
   for (const line of lines) {
