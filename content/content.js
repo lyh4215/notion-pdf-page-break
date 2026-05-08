@@ -1241,90 +1241,12 @@ function paginateBlocks(blocks, pageHeight) {
     usedHeight = 0;
   }
 
-  function getBottomOverflowTolerance(type) {
-    switch (type) {
-      case "h4":
-        return 0;
-      case "paragraph":
-      case "list":
-      case "quote":
-        return 60;
-      case "equation":
-        return 72;
-      default:
-        return 0;
-    }
-  }
-
   function isTextFlowType(type) {
     return type === "paragraph" || type === "list" || type === "quote" || type === "callout";
   }
 
   function isLineSplittableTextFlow(block) {
     return isTextFlowType(block.type) && block.height > ptToPx(42);
-  }
-
-  function isAvoidInsideType(type) {
-    return type === "equation" || type === "code" || type === "table" || type === "media";
-  }
-
-  function isHeadingType(type) {
-    return type === "h2" || type === "h3" || type === "h4";
-  }
-
-  function canUseBottomOverflowTolerance(block, overflow) {
-    if (overflow <= 0 || overflow > getBottomOverflowTolerance(block.type)) {
-      return false;
-    }
-
-    const previousSegment = currentPage().at(-1);
-    if (isHeadingType(block.type) && isAvoidInsideType(previousSegment?.type)) {
-      return false;
-    }
-
-    return true;
-  }
-
-  function shouldAvoidTinyTailAfterAtomicBlock(block) {
-    if (!isTextFlowType(block.type)) {
-      return false;
-    }
-
-    if (block.height > ptToPx(24)) {
-      return false;
-    }
-
-    const previousSegment = currentPage().at(-1);
-    if (!previousSegment || !isAvoidInsideType(previousSegment.type)) {
-      return false;
-    }
-
-    const remainingAfterBlock = pageHeight - usedHeight - block.height;
-    return remainingAfterBlock >= 0 && remainingAfterBlock < ptToPx(18);
-  }
-
-  function shouldStartCodeOnCleanPage(block) {
-    if (block.type !== "code" || usedHeight <= 0) {
-      return false;
-    }
-
-    const availableHeight = pageHeight - usedHeight;
-    const previousSegment = currentPage().at(-1);
-
-    if (block.height <= availableHeight) {
-      return availableHeight - block.height < 16;
-    }
-
-    return previousSegment?.type === "code" && availableHeight < ptToPx(108);
-  }
-
-  function canKeepCodeNearBottom(block) {
-    if (block.type !== "code" || usedHeight <= 0) {
-      return false;
-    }
-
-    const overflow = usedHeight + block.height - pageHeight;
-    return overflow > 0 && overflow <= 16;
   }
 
   function pushTableSegment(block, segmentHeight, consumedRows, rowCount, segmentIndex, clipOffset = 0) {
@@ -1491,7 +1413,7 @@ function paginateBlocks(blocks, pageHeight) {
 
       const finalHeight = sumHeights(lineHeights, lineIndex) + trailingGap;
 
-      if (finalHeight <= availableHeight || usedHeight === 0) {
+      if (finalHeight <= availableHeight) {
         pushTextFlowSegment(block, lines, lineIndex, totalLines, finalHeight, segmentIndex, totalLines);
         lineIndex = totalLines;
         break;
@@ -1538,24 +1460,6 @@ function paginateBlocks(blocks, pageHeight) {
       }
     }
 
-    if (shouldStartCodeOnCleanPage(block)) {
-      startNewPage({
-        element: block.element,
-        offsetRatio: 0
-      });
-    }
-
-    if (canKeepCodeNearBottom(block)) {
-      currentPage().push({
-        ...block,
-        continued: false,
-        segmentHeight: block.height,
-        splitAfter: false
-      });
-      usedHeight += block.height;
-      continue;
-    }
-
     if (block.type === "code" && usedHeight > 0 && usedHeight + block.height > pageHeight) {
       paginateHeightSplitBlock(block);
       continue;
@@ -1563,29 +1467,15 @@ function paginateBlocks(blocks, pageHeight) {
 
     if (
       isLineSplittableTextFlow(block) &&
-      usedHeight > 0 &&
-      usedHeight + block.height > pageHeight &&
-      !canUseBottomOverflowTolerance(block, usedHeight + block.height - pageHeight)
+      usedHeight + block.height > pageHeight
     ) {
-      paginateTextFlowBlock(block);
-      continue;
+      if (paginateTextFlowBlock(block)) {
+        continue;
+      }
     }
 
     if (block.height <= pageHeight) {
-      const overflow = usedHeight + block.height - pageHeight;
-      const canKeepNearBottom =
-        usedHeight > 0 &&
-        usedHeight <= pageHeight &&
-        canUseBottomOverflowTolerance(block, overflow);
-      const shouldStartCleanPage =
-        usedHeight > 0 &&
-        !canKeepNearBottom &&
-        shouldAvoidTinyTailAfterAtomicBlock(block);
-
-      if (
-        usedHeight > 0 &&
-        ((usedHeight + block.height > pageHeight && !canKeepNearBottom) || shouldStartCleanPage)
-      ) {
+      if (usedHeight > 0 && usedHeight + block.height > pageHeight) {
         startNewPage({
           element: block.element,
           offsetRatio: 0
@@ -1602,7 +1492,25 @@ function paginateBlocks(blocks, pageHeight) {
       continue;
     }
 
-    paginateHeightSplitBlock(block);
+    if (block.type === "code") {
+      paginateHeightSplitBlock(block);
+      continue;
+    }
+
+    if (usedHeight > 0) {
+      startNewPage({
+        element: block.element,
+        offsetRatio: 0
+      });
+    }
+
+    currentPage().push({
+      ...block,
+      continued: false,
+      segmentHeight: block.height,
+      splitAfter: false
+    });
+    usedHeight += block.height;
   }
 
   return {
