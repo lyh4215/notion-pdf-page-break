@@ -592,10 +592,6 @@ function getInlineCodeTokenWidth(token, fontSize) {
   return getTextWidth(token, codeFontSize) + codeFontSize * INLINE_CODE_HORIZONTAL_PADDING_EM;
 }
 
-function shouldKeepTokenUnbroken(token) {
-  return /[A-Za-z0-9_\\{}[\]^=|+\-*/]/.test(token);
-}
-
 function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0, inlineCodeFragments = []) {
   if (!text) {
     return ["(empty block)"];
@@ -640,12 +636,6 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
       }
 
       if (tokenWidth > availableWidth) {
-        if (shouldKeepTokenUnbroken(value)) {
-          currentLine += value;
-          currentWidth += tokenWidth;
-          return;
-        }
-
         appendBreakableCharacters(value, tokenFontSize);
         return;
       }
@@ -1868,6 +1858,14 @@ function appendSyntheticLineContent(lineElement, line, segment) {
 
   if (!fragments.length) {
     appendStyledTextRun(lineElement, line || " ");
+    return;
+  }
+
+  if (isInlineCodeOnlyLine) {
+    const code = document.createElement("span");
+    code.className = "notion-pdf-preview-inline-code";
+    code.textContent = line || " ";
+    lineElement.append(code);
     return;
   }
 
