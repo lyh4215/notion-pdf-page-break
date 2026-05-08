@@ -41,6 +41,12 @@ const CODE_BLOCK_PADDING_LEFT_PT = 12;
 const CODE_BLOCK_MARGIN_BOTTOM_PT = 5.5;
 const TABLE_TEXT_FONT_SIZE_PT = 10.5;
 const TABLE_TOP_GAP_PT = 6;
+const EQUATION_TOP_GAP_PT = 14.5;
+const EQUATION_SHORT_GLYPH_HEIGHT_PT = 19.13;
+const EQUATION_SHORT_MARGIN_BOTTOM_PT = 15.9;
+const EQUATION_TALL_GLYPH_HEIGHT_PT = 58.63;
+const EQUATION_TALL_MARGIN_BOTTOM_PT = 12.5;
+const EQUATION_TALL_PAGE_TOP_HEIGHT_PT = 68.6;
 const BODY_TEXT_FONT_SIZE_PX = BODY_TEXT_FONT_SIZE_PT * PT_TO_CSS_PX;
 const CODE_BLOCK_FONT_SIZE_PX = CODE_BLOCK_FONT_SIZE_PT * PT_TO_CSS_PX;
 const BODY_CJK_ADVANCE_RATIO = 0.92;
@@ -930,16 +936,35 @@ function getUnionRectFromRects(rects) {
 }
 
 function estimateEquationHeight(block) {
+  return ptToPx(getEquationMetrics(block).samePageHeightPt);
+}
+
+function getEquationMetrics(block) {
   const mathRects = getVisualMathRects(block);
   const mathUnionRect = getUnionRectFromRects(mathRects);
+  const domHeightPt = mathUnionRect ? mathUnionRect.height / PT_TO_CSS_PX : 0;
+  const rawText = getElementRawText(block);
+  const isTall = domHeightPt >= 36 || /\\begin|\\\\|matrix|cases|aligned|array/i.test(rawText);
 
-  // Block equation만 이 공식을 사용.
-  // PDF 보정값: visible math height + 약 16pt.
-  if (mathUnionRect) {
-    return mathUnionRect.height + ptToPx(16);
+  if (isTall) {
+    return {
+      isTall,
+      glyphHeightPt: EQUATION_TALL_GLYPH_HEIGHT_PT,
+      samePageTopGapPt: EQUATION_TOP_GAP_PT,
+      marginBottomPt: EQUATION_TALL_MARGIN_BOTTOM_PT,
+      samePageHeightPt: EQUATION_TOP_GAP_PT + EQUATION_TALL_GLYPH_HEIGHT_PT + EQUATION_TALL_MARGIN_BOTTOM_PT,
+      pageTopHeightPt: EQUATION_TALL_PAGE_TOP_HEIGHT_PT
+    };
   }
 
-  return ptToPx(36);
+  return {
+    isTall,
+    glyphHeightPt: EQUATION_SHORT_GLYPH_HEIGHT_PT,
+    samePageTopGapPt: EQUATION_TOP_GAP_PT,
+    marginBottomPt: EQUATION_SHORT_MARGIN_BOTTOM_PT,
+    samePageHeightPt: EQUATION_TOP_GAP_PT + EQUATION_SHORT_GLYPH_HEIGHT_PT + EQUATION_SHORT_MARGIN_BOTTOM_PT,
+    pageTopHeightPt: EQUATION_SHORT_GLYPH_HEIGHT_PT + EQUATION_SHORT_MARGIN_BOTTOM_PT
+  };
 }
 
 function estimateInlineMathAwareHeight(block, baseHeight) {
@@ -1546,6 +1571,31 @@ function paginateBlocks(blocks, pageHeight) {
     return true;
   }
 
+  function pushEquationBlock(block) {
+    const metrics = getEquationMetrics(block.element);
+    const samePageHeight = ptToPx(metrics.samePageHeightPt);
+
+    if (usedHeight > 0 && usedHeight + samePageHeight > pageHeight) {
+      startNewPage({
+        element: block.element,
+        offsetRatio: 0
+      });
+    }
+
+    const startsAtPageTop = usedHeight === 0;
+    const segmentHeight = startsAtPageTop ? ptToPx(metrics.pageTopHeightPt) : samePageHeight;
+    const equationTopGap = startsAtPageTop ? 0 : ptToPx(metrics.samePageTopGapPt);
+
+    currentPage().push({
+      ...block,
+      continued: false,
+      equationTopGap,
+      segmentHeight,
+      splitAfter: false
+    });
+    usedHeight += segmentHeight;
+  }
+
   for (const block of blocks) {
     if (
       block.type === "table" &&
@@ -1558,6 +1608,11 @@ function paginateBlocks(blocks, pageHeight) {
 
     if (block.type === "code" && usedHeight > 0 && usedHeight + block.height > pageHeight) {
       paginateCodeBlock(block);
+      continue;
+    }
+
+    if (block.type === "equation") {
+      pushEquationBlock(block);
       continue;
     }
 
@@ -2000,6 +2055,13 @@ function createRenderedPdfPreviewSegment(segment) {
       ? createSyntheticTextPreview(segment)
       : prepareCloneForMeasurement(segment.element.cloneNode(true), segment.type);
   clone.classList.add("notion-pdf-preview-rendered-clone");
+
+  if (segment.type === "equation") {
+    const equationTopGap = Number.isFinite(segment.equationTopGap)
+      ? segment.equationTopGap
+      : ptToPx(EQUATION_TOP_GAP_PT);
+    clone.style.marginTop = `${equationTopGap}px`;
+  }
 
   const clipOffset = Number(segment.clipOffset) || 0;
   if (clipOffset > 0) {

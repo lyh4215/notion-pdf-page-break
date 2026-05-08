@@ -318,6 +318,17 @@
   font: var(--notion-pdf-preview-code-font-size, 16px)/24px "DejaVu Sans Mono", SFMono-Regular, Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace;
 }
 
+.notion-pdf-preview-rendered-stack [data-pdf-preview-type="equation"] {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: flex-start !important;
+}
+
+.notion-pdf-preview-rendered-stack [data-pdf-preview-type="equation"] .katex-display {
+  margin: 0 !important;
+  text-align: center !important;
+}
+
 .notion-pdf-preview-measure-root .notion-selectable,
 .notion-pdf-preview-rendered-stack .notion-selectable {
   width: 100% !important;
