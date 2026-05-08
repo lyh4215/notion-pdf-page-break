@@ -25,7 +25,8 @@ const PAGE_BODY_HEIGHT_PT = 698.88;
 const PAGE_BODY_WIDTH_PX = PAGE_BODY_WIDTH_PT * PT_TO_CSS_PX;   // ≈ 603px
 const PAGE_BODY_HEIGHT_PX = PAGE_BODY_HEIGHT_PT * PT_TO_CSS_PX; // ≈ 931.84px
 const BODY_TEXT_WRAP_FONT_SIZE_PX = 16;
-const INLINE_CODE_WRAP_SCALE = 0.93;
+const INLINE_CODE_SCALE = 0.93;
+const INLINE_CODE_HORIZONTAL_PADDING_EM = 0.7;
 const MIN_SCALE_PERCENT = 11;
 const MAX_SCALE_PERCENT = 199;
 let previewState = null;
@@ -574,6 +575,11 @@ function isInlineCodeToken(token, inlineCodeFragments = []) {
   });
 }
 
+function getInlineCodeTokenWidth(token, fontSize) {
+  const codeFontSize = fontSize * INLINE_CODE_SCALE;
+  return getTextWidth(token, codeFontSize) + codeFontSize * INLINE_CODE_HORIZONTAL_PADDING_EM;
+}
+
 function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0, inlineCodeFragments = []) {
   if (!text) {
     return ["(empty block)"];
@@ -607,8 +613,9 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
     }
 
     function appendUnbreakableToken(value) {
-      const tokenFontSize = isInlineCodeToken(value, inlineCodeFragments) ? fontSize * INLINE_CODE_WRAP_SCALE : fontSize;
-      const tokenWidth = getTextWidth(value, tokenFontSize);
+      const isCodeToken = isInlineCodeToken(value, inlineCodeFragments);
+      const tokenFontSize = isCodeToken ? fontSize * INLINE_CODE_SCALE : fontSize;
+      const tokenWidth = isCodeToken ? getInlineCodeTokenWidth(value, fontSize) : getTextWidth(value, tokenFontSize);
 
       if (currentLine && currentWidth + tokenWidth > availableWidth) {
         lines.push(currentLine.trimEnd());
@@ -626,7 +633,7 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
     }
 
     function appendMixedToken(value) {
-      const tokenFontSize = isInlineCodeToken(value, inlineCodeFragments) ? fontSize * INLINE_CODE_WRAP_SCALE : fontSize;
+      const tokenFontSize = isInlineCodeToken(value, inlineCodeFragments) ? fontSize * INLINE_CODE_SCALE : fontSize;
 
       for (const part of value.match(/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]|[^\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]+/g) || []) {
         if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(part)) {
@@ -1883,6 +1890,7 @@ function createSyntheticTextPreview(segment) {
   const text = document.createElement("div");
   text.className = "notion-pdf-preview-synthetic-text";
   text.dataset.type = segment.type;
+  text.style.setProperty("--notion-pdf-preview-inline-code-scale", INLINE_CODE_SCALE);
   const lines = formatSegmentTextForPreview(segment).split("\n");
 
   for (const line of lines) {

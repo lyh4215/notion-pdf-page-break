@@ -296,7 +296,7 @@
   background: rgba(135, 131, 120, 0.15);
   color: #eb5757;
   font-family: SFMono-Regular, Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace;
-  font-size: 78%;
+  font-size: calc(var(--notion-pdf-preview-inline-code-scale, 0.93) * 1em);
   line-height: normal;
   position: relative;
   bottom: 0.04em;
