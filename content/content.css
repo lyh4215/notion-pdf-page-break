@@ -221,7 +221,7 @@
   overflow-wrap: normal;
   word-break: normal;
   color: #37352f;
-  font-family: Inter, "Noto Sans CJK KR", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", Arial, sans-serif;
+  font-family: Inter, "NotoSansCJKkr-Regular", "Noto Sans CJK KR", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", Arial, sans-serif;
 }
 
 .notion-pdf-preview-synthetic-line {
@@ -284,6 +284,14 @@
   display: inline-block;
   transform: scaleX(var(--notion-pdf-preview-cjk-scale, 0.96));
   transform-origin: left center;
+  font-family: "NotoSansCJKkr-Regular", "Noto Sans CJK KR", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+
+.notion-pdf-preview-synthetic-text[data-type="pageTitle"] .notion-pdf-preview-script-cjk,
+.notion-pdf-preview-synthetic-text[data-type="h2"] .notion-pdf-preview-script-cjk,
+.notion-pdf-preview-synthetic-text[data-type="h3"] .notion-pdf-preview-script-cjk,
+.notion-pdf-preview-synthetic-text[data-type="h4"] .notion-pdf-preview-script-cjk {
+  font-family: "NotoSansCJKkr-Bold", "Noto Sans CJK KR", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
 
 .notion-pdf-preview-script-latin {
@@ -414,7 +422,7 @@
   border-collapse: collapse;
   table-layout: fixed;
   color: inherit;
-  font: 14px/20px Inter, "Noto Sans CJK KR", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", Arial, sans-serif;
+  font: 14px/20px Inter, "NotoSansCJKkr-Regular", "Noto Sans CJK KR", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", Arial, sans-serif;
 }
 
 .notion-pdf-preview-synthetic-table td {

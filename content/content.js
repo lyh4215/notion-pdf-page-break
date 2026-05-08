@@ -39,6 +39,9 @@ const CJK_VISUAL_SCALE = 0.96;
 const LATIN_VISUAL_SCALE = 1.08;
 const INLINE_CODE_SCALE = INLINE_CODE_FONT_SIZE_PT / BODY_TEXT_FONT_SIZE_PT;
 const INLINE_CODE_HORIZONTAL_PADDING_EM = 0.7;
+const BODY_FONT_STACK = "Inter, \"NotoSansCJKkr-Regular\", \"Noto Sans CJK KR\", \"Noto Sans KR\", \"Apple SD Gothic Neo\", \"Malgun Gothic\", Arial, sans-serif";
+const HEADING_FONT_STACK = "Inter, \"NotoSansCJKkr-Bold\", \"Noto Sans CJK KR\", \"Noto Sans KR\", \"Apple SD Gothic Neo\", \"Malgun Gothic\", Arial, sans-serif";
+const CODE_FONT_STACK = "\"DejaVu Sans Mono\", SFMono-Regular, Menlo, Consolas, \"PT Mono\", \"Liberation Mono\", Courier, monospace";
 const MIN_SCALE_PERCENT = 11;
 const MAX_SCALE_PERCENT = 199;
 let previewState = null;
@@ -559,9 +562,12 @@ function measureRawTextWidth(text, fontSize, fontKind = "body") {
   }
 
   const family = fontKind === "code"
-    ? "\"DejaVu Sans Mono\", SFMono-Regular, Menlo, Consolas, \"PT Mono\", \"Liberation Mono\", Courier, monospace"
-    : "Inter, \"Noto Sans CJK KR\", \"Noto Sans KR\", \"Apple SD Gothic Neo\", \"Malgun Gothic\", Arial, sans-serif";
-  context.font = `${fontSize}px ${family}`;
+    ? CODE_FONT_STACK
+    : fontKind === "heading" || fontKind === "title"
+      ? HEADING_FONT_STACK
+      : BODY_FONT_STACK;
+  const weight = fontKind === "title" ? 700 : fontKind === "heading" ? 600 : 400;
+  context.font = `${weight} ${fontSize}px ${family}`;
 
   return context.measureText(text).width;
 }
@@ -578,8 +584,8 @@ function getCharacterWidth(character, fontSize, fontKind = "body") {
   return measureRawTextWidth(character, fontSize, fontKind) * LATIN_VISUAL_SCALE;
 }
 
-function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0) {
-  return wrapTextLinesForPreview(text || " ", fontSize, layoutWidth, reservedWidth).length;
+function estimateWrappedLines(text, fontSize, layoutWidth, reservedWidth = 0, fontKind = "body") {
+  return wrapTextLinesForPreview(text || " ", fontSize, layoutWidth, reservedWidth, [], fontKind).length;
 }
 
 function getComparableInlineCodeText(text) {
@@ -604,7 +610,7 @@ function getInlineCodeTokenWidth(token, fontSize) {
   return getTextWidth(token, codeFontSize, "code") + codeFontSize * INLINE_CODE_HORIZONTAL_PADDING_EM;
 }
 
-function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0, inlineCodeFragments = []) {
+function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0, inlineCodeFragments = [], fontKind = "body") {
   if (!text) {
     return ["(empty block)"];
   }
@@ -622,9 +628,9 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
     let currentWidth = 0;
     let currentLine = "";
 
-    function appendBreakableCharacters(value, characterFontSize = fontSize, fontKind = "body") {
+    function appendBreakableCharacters(value, characterFontSize = fontSize, characterFontKind = fontKind) {
       for (const character of value) {
-        const characterWidth = getCharacterWidth(character, characterFontSize, fontKind);
+        const characterWidth = getCharacterWidth(character, characterFontSize, characterFontKind);
         const remainingWidth = availableWidth - currentWidth;
         if (currentLine && characterWidth > remainingWidth) {
           lines.push(currentLine.trimEnd());
@@ -640,7 +646,7 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
     function appendUnbreakableToken(value) {
       const isCodeToken = isInlineCodeToken(value, inlineCodeFragments);
       const tokenFontSize = isCodeToken ? fontSize * INLINE_CODE_SCALE : fontSize;
-      const tokenWidth = isCodeToken ? getInlineCodeTokenWidth(value, fontSize) : getTextWidth(value, tokenFontSize, "body");
+      const tokenWidth = isCodeToken ? getInlineCodeTokenWidth(value, fontSize) : getTextWidth(value, tokenFontSize, fontKind);
       const remainingWidth = availableWidth - currentWidth;
 
       if (currentLine && tokenWidth > remainingWidth) {
@@ -656,11 +662,11 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
     function appendMixedToken(value) {
       const isCodeToken = isInlineCodeToken(value, inlineCodeFragments);
       const tokenFontSize = isCodeToken ? fontSize * INLINE_CODE_SCALE : fontSize;
-      const fontKind = isCodeToken ? "code" : "body";
+      const partFontKind = isCodeToken ? "code" : fontKind;
 
       for (const part of value.match(/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]|[^\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]+/g) || []) {
         if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(part)) {
-          appendBreakableCharacters(part, tokenFontSize, fontKind);
+          appendBreakableCharacters(part, tokenFontSize, partFontKind);
         } else {
           appendUnbreakableToken(part);
         }
@@ -1004,7 +1010,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     case "pageTitle": {
       // Notion page title, not markdown #.
       // Measured formula: 43.5n + 16 pt.
-      const lines = estimateWrappedLines(text, ptToPx(PAGE_TITLE_FONT_SIZE_PT), layoutWidth);
+      const lines = estimateWrappedLines(text, ptToPx(PAGE_TITLE_FONT_SIZE_PT), layoutWidth, 0, "title");
       return blockHeightFromPt(lines, 43.5, 0, 16);
     }
 
@@ -1013,7 +1019,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // In Notion DOM, markdown # is rendered as h2.
       // Measured markdown # formula:
       // visible = 27n + 5.58 pt, after gap = 3 pt.
-      const lines = estimateWrappedLines(text, ptToPx(H2_FONT_SIZE_PT), layoutWidth);
+      const lines = estimateWrappedLines(text, ptToPx(H2_FONT_SIZE_PT), layoutWidth, 0, "heading");
       return blockHeightFromPt(lines, 27, 5.58, 3);
     }
 
@@ -1022,7 +1028,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // In Notion DOM, markdown ## is rendered as h3.
       // Measured markdown ## formula:
       // visible = 21.75n + 4.31 pt, after gap = 12.5 pt.
-      const lines = estimateWrappedLines(text, ptToPx(H3_FONT_SIZE_PT), layoutWidth);
+      const lines = estimateWrappedLines(text, ptToPx(H3_FONT_SIZE_PT), layoutWidth, 0, "heading");
       return blockHeightFromPt(lines, 21.75, 4.31, 12.5);
     }
 
@@ -1031,7 +1037,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // In Notion DOM, markdown ### is rendered as h4.
       // Measured markdown ### formula:
       // visible = 18n + 3.72 pt, after gap = 8 pt.
-      const lines = estimateWrappedLines(text, ptToPx(H4_FONT_SIZE_PT), layoutWidth);
+      const lines = estimateWrappedLines(text, ptToPx(H4_FONT_SIZE_PT), layoutWidth, 0, "heading");
       return blockHeightFromPt(lines, 18, 3.72, 8);
     }
 
@@ -1719,22 +1725,22 @@ function getSegmentWrapSettings(segment) {
 
   switch (segment.type) {
     case "pageTitle":
-      return { fontSize: ptToPx(PAGE_TITLE_FONT_SIZE_PT), layoutWidth, reservedWidth: 0 };
+      return { fontSize: ptToPx(PAGE_TITLE_FONT_SIZE_PT), layoutWidth, reservedWidth: 0, fontKind: "title" };
     case "h2":
-      return { fontSize: ptToPx(H2_FONT_SIZE_PT), layoutWidth, reservedWidth: 0 };
+      return { fontSize: ptToPx(H2_FONT_SIZE_PT), layoutWidth, reservedWidth: 0, fontKind: "heading" };
     case "h3":
-      return { fontSize: ptToPx(H3_FONT_SIZE_PT), layoutWidth, reservedWidth: 0 };
+      return { fontSize: ptToPx(H3_FONT_SIZE_PT), layoutWidth, reservedWidth: 0, fontKind: "heading" };
     case "h4":
-      return { fontSize: ptToPx(H4_FONT_SIZE_PT), layoutWidth, reservedWidth: 0 };
+      return { fontSize: ptToPx(H4_FONT_SIZE_PT), layoutWidth, reservedWidth: 0, fontKind: "heading" };
     case "list":
-      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(21.6) };
+      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(21.6), fontKind: "body" };
     case "quote":
-      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(14.25) };
+      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(14.25), fontKind: "body" };
     case "callout":
-      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(40) };
+      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: ptToPx(40), fontKind: "body" };
     case "paragraph":
     default:
-      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: 0 };
+      return { fontSize: BODY_TEXT_FONT_SIZE_PX, layoutWidth, reservedWidth: 0, fontKind: "body" };
   }
 }
 
@@ -1764,9 +1770,9 @@ function formatSegmentTextForPreview(segment) {
     return segment.text || "(empty block)";
   }
 
-  const { fontSize, layoutWidth, reservedWidth } = getSegmentWrapSettings(segment);
+  const { fontSize, layoutWidth, reservedWidth, fontKind } = getSegmentWrapSettings(segment);
   const inlineCodeFragments = getInlineCodeFragmentsForPreview(segment.element, segment.type === "list");
-  return wrapTextLinesForPreview(segment.text || "", fontSize, layoutWidth, reservedWidth, inlineCodeFragments).join("\n");
+  return wrapTextLinesForPreview(segment.text || "", fontSize, layoutWidth, reservedWidth, inlineCodeFragments, fontKind).join("\n");
 }
 
 function copyTextToClipboard(text) {
