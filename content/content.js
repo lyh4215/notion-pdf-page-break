@@ -32,6 +32,7 @@ const H4_FONT_SIZE_PT = 15;
 const BODY_TEXT_FONT_SIZE_PT = 12;
 const INLINE_CODE_FONT_SIZE_PT = 8.75;
 const INLINE_CODE_ONLY_LINE_HEIGHT_PT = 12.5;
+const INLINE_MATH_LINE_HEIGHT_PT = 18.75;
 const CODE_BLOCK_FONT_SIZE_PT = 13;
 const CODE_BLOCK_LINE_HEIGHT_PT = 18;
 const CODE_BLOCK_PADDING_TOP_PT = 12;
@@ -156,6 +157,30 @@ function getVisibleTextForEstimate(element, fontSize = 14) {
   }
 
   return walk(element).replace(/\s+/g, " ").trim();
+}
+
+function getInlineMathPlaceholderFragments(element, ownOnly = false, fontSize = BODY_TEXT_FONT_SIZE_PX) {
+  const ownerBlock = element.closest("[data-block-id]") || element;
+  const fragments = Array.from(element.querySelectorAll(".katex"))
+    .filter((candidate) => !candidate.closest(".katex-display, .katex-mathml"))
+    .filter((candidate) => !ownOnly || (candidate.closest("[data-block-id]") || ownerBlock) === ownerBlock)
+    .map((candidate) => {
+      const rect = candidate.getBoundingClientRect();
+      const tokenCount = Math.max(1, Math.ceil((rect.width || fontSize) / (fontSize * 0.5)));
+      return "m".repeat(tokenCount);
+    })
+    .filter(Boolean);
+
+  return Array.from(new Set(fragments)).sort((a, b) => b.length - a.length);
+}
+
+function isInlineMathVisualLine(element, line, ownOnly = false) {
+  const normalizedLine = normalizeTextForInlineCodeStats(line);
+  if (!normalizedLine) {
+    return false;
+  }
+
+  return getInlineMathPlaceholderFragments(element, ownOnly).some((fragment) => normalizedLine.includes(fragment));
 }
 
 function normalizeTextForInlineCodeStats(text) {
@@ -968,30 +993,21 @@ function getEquationMetrics(block) {
 }
 
 function estimateInlineMathAwareHeight(block, baseHeight) {
-  const mathRects = getVisualMathRects(block);
-
-  if (!mathRects.length) {
-    return baseHeight;
-  }
-
-  const maxMathHeight = Math.max(...mathRects.map((rect) => rect.height));
-
-  // 일반 본문 line-height: 18pt
-  const normalLineHeightPx = ptToPx(18);
-
-  // inline 수식이 일반 줄높이보다 클 때만 조금 보정
-  const extra = Math.max(0, maxMathHeight - normalLineHeightPx);
-
-  // 핵심:
-  // inline 수식 때문에 문단 전체가 600px 되는 일은 없음.
-  // 그래서 보정값을 강하게 cap 한다.
-  const cappedExtra = Math.min(extra + ptToPx(2), ptToPx(16));
-
-  return baseHeight + cappedExtra;
+  return baseHeight;
 }
 
 function getTextFlowLineHeights(element, lines, ownOnly = false) {
-  return lines.map((line) => ptToPx(isInlineCodeOnlyVisualLine(element, line, ownOnly) ? INLINE_CODE_ONLY_LINE_HEIGHT_PT : 18));
+  return lines.map((line) => {
+    if (isInlineCodeOnlyVisualLine(element, line, ownOnly)) {
+      return ptToPx(INLINE_CODE_ONLY_LINE_HEIGHT_PT);
+    }
+
+    if (isInlineMathVisualLine(element, line, ownOnly)) {
+      return ptToPx(INLINE_MATH_LINE_HEIGHT_PT);
+    }
+
+    return ptToPx(18);
+  });
 }
 
 function sumHeights(heights, start = 0, end = heights.length) {
@@ -1952,9 +1968,14 @@ function appendSyntheticLineContent(lineElement, line, segment) {
   const isInlineCodeOnlyLine = isSyntheticTextSegment(segment.type)
     ? isInlineCodeOnlyVisualLine(segment.element, line, segment.type === "list")
     : false;
+  const isInlineMathLine = isSyntheticTextSegment(segment.type)
+    ? isInlineMathVisualLine(segment.element, line, segment.type === "list")
+    : false;
 
   if (isInlineCodeOnlyLine) {
     lineElement.classList.add("notion-pdf-preview-synthetic-line-inline-code-only");
+  } else if (isInlineMathLine) {
+    lineElement.classList.add("notion-pdf-preview-synthetic-line-inline-math");
   }
 
   if (!fragments.length) {
@@ -2016,6 +2037,7 @@ function createSyntheticTextPreview(segment) {
   text.style.setProperty("--notion-pdf-preview-latin-scale", LATIN_ADVANCE_RATIO);
   text.style.setProperty("--notion-pdf-preview-inline-code-scale", INLINE_CODE_SCALE);
   text.style.setProperty("--notion-pdf-preview-inline-code-only-line-height", `${ptToPx(INLINE_CODE_ONLY_LINE_HEIGHT_PT)}px`);
+  text.style.setProperty("--notion-pdf-preview-inline-math-line-height", `${ptToPx(INLINE_MATH_LINE_HEIGHT_PT)}px`);
   text.style.setProperty("--notion-pdf-preview-inline-code-side-padding", `${INLINE_CODE_HORIZONTAL_PADDING_EM / 2}em`);
   text.style.setProperty("--notion-pdf-preview-code-font-size", `${CODE_BLOCK_FONT_SIZE_PX}px`);
   text.style.setProperty("--notion-pdf-preview-code-padding-top", `${Number.isFinite(segment.codePaddingTop) ? segment.codePaddingTop : ptToPx(CODE_BLOCK_PADDING_TOP_PT)}px`);

@@ -280,6 +280,10 @@
   line-height: var(--notion-pdf-preview-inline-code-only-line-height, 16.5px);
 }
 
+.notion-pdf-preview-synthetic-line-inline-math {
+  line-height: var(--notion-pdf-preview-inline-math-line-height, 25px);
+}
+
 .notion-pdf-preview-script-cjk {
   display: inline-block;
   transform: scaleX(var(--notion-pdf-preview-cjk-scale, 0.92));
