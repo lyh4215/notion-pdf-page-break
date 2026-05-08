@@ -228,14 +228,14 @@
 }
 
 .notion-pdf-preview-synthetic-text[data-type="pageTitle"] {
-  padding: 0 0 27px;
+  padding: 0 0 21px;
   font-size: 40px;
   font-weight: 700;
   line-height: 58px;
 }
 
 .notion-pdf-preview-synthetic-text[data-type="h2"] {
-  padding: 7px 0 18px;
+  padding: 7px 0 12px;
   font-size: 30px;
   font-weight: 600;
   line-height: 36px;

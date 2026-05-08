@@ -124,6 +124,48 @@ function getVisibleTextForEstimate(element, fontSize = 14) {
   return walk(element).replace(/\s+/g, " ").trim();
 }
 
+function normalizeTextForInlineCodeStats(text) {
+  return (text || "").replace(/\s+/g, "");
+}
+
+function isInlineCodeElement(element) {
+  if (!element || element.closest("pre, .notion-code-block, .katex, .katex-mathml")) {
+    return false;
+  }
+
+  if (element.matches(".notion-inline-code-container, code")) {
+    return true;
+  }
+
+  const inlineStyle = (element.getAttribute("style") || "").toLowerCase();
+  if (inlineStyle.includes("sfmono") || inlineStyle.includes("monospace")) {
+    return true;
+  }
+
+  const style = window.getComputedStyle(element);
+  return style.fontFamily.toLowerCase().includes("mono");
+}
+
+function getInlineCodeTextForEstimate(element, ownOnly = false) {
+  const ownerBlock = element.closest("[data-block-id]") || element;
+  const inlineElements = Array.from(element.querySelectorAll(".notion-inline-code-container, code, span"))
+    .filter((candidate) => isInlineCodeElement(candidate))
+    .filter((candidate, index, candidates) => !candidates.some((other, otherIndex) => otherIndex !== index && other.contains(candidate)))
+    .filter((candidate) => !ownOnly || (candidate.closest("[data-block-id]") || ownerBlock) === ownerBlock);
+
+  return inlineElements.map(getElementText).join(" ").trim();
+}
+
+function isInlineCodeOnlyVisualLine(element, line, ownOnly = false) {
+  const normalizedLine = normalizeTextForInlineCodeStats(line);
+  if (!normalizedLine) {
+    return false;
+  }
+
+  const normalizedInlineText = normalizeTextForInlineCodeStats(getInlineCodeTextForEstimate(element, ownOnly));
+  return Boolean(normalizedInlineText) && normalizedInlineText.includes(normalizedLine);
+}
+
 function getOwnVisibleTextForEstimate(element) {
   const ownerBlock = element.closest("[data-block-id]") || element;
   const parts = [];
@@ -808,10 +850,23 @@ function estimateInlineMathAwareHeight(block, baseHeight) {
   return baseHeight + cappedExtra;
 }
 
-function estimateListItemHeight(text, layoutWidth, depth = 0, compact = false) {
+function getTextFlowLineHeights(element, lines, ownOnly = false) {
+  return lines.map((line) => ptToPx(isInlineCodeOnlyVisualLine(element, line, ownOnly) ? 16 : 18));
+}
+
+function sumHeights(heights, start = 0, end = heights.length) {
+  return heights.slice(start, end).reduce((sum, height) => sum + height, 0);
+}
+
+function estimateTextFlowHeight(block, text, layoutWidth, reservedWidth, afterGapPt, ownOnly = false) {
+  const lines = wrapTextLinesForPreview(text || " ", ptToPx(12), layoutWidth, reservedWidth);
+  const lineHeightSum = sumHeights(getTextFlowLineHeights(block, lines, ownOnly));
+  return lineHeightSum + ptToPx(-0.62 + afterGapPt);
+}
+
+function estimateListItemHeight(text, layoutWidth, depth = 0, compact = false, block = null) {
   const reservedWidth = ptToPx(21.6 + depth * 18);
-  const lines = estimateWrappedLines(text || " ", ptToPx(12), layoutWidth, reservedWidth);
-  return blockHeightFromPt(lines, 18, -0.62, compact ? 0 : 7.8);
+  return estimateTextFlowHeight(block || document.body, text, layoutWidth, reservedWidth, compact ? 0 : 7.8, true);
 }
 
 function isLogicalChildBlock(block, nestedBlock) {
@@ -853,7 +908,7 @@ function getEmbeddedTablesForList(block) {
 
 function estimateListHeight(block, layoutWidth, compact = false) {
   const ownText = getOwnVisibleTextForEstimate(block) || getVisibleTextForEstimate(block, ptToPx(12));
-  let height = estimateListItemHeight(ownText, layoutWidth, 0, compact);
+  let height = estimateListItemHeight(ownText, layoutWidth, 0, compact, block);
   const nestedLayoutWidth = Math.max(120, layoutWidth - ptToPx(21.6));
 
   for (const table of getEmbeddedTablesForList(block)) {
@@ -876,18 +931,18 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
   switch (type) {
     case "pageTitle": {
       // Notion page title, not markdown #.
-      // Measured formula: 43.5n + 20.5 pt.
+      // Measured formula: 43.5n + 16 pt.
       const lines = estimateWrappedLines(text, ptToPx(30), layoutWidth);
-      return blockHeightFromPt(lines, 43.5, 0, 20.5);
+      return blockHeightFromPt(lines, 43.5, 0, 16);
     }
 
     case "h2": {
       // Important:
       // In Notion DOM, markdown # is rendered as h2.
       // Measured markdown # formula:
-      // visible = 27n + 5.58 pt, after gap = 14 pt.
+      // visible = 27n + 5.58 pt, after gap = 9.5 pt.
       const lines = estimateWrappedLines(text, ptToPx(22.5), layoutWidth);
-      return blockHeightFromPt(lines, 27, 5.58, 14);
+      return blockHeightFromPt(lines, 27, 5.58, 9.5);
     }
 
     case "h3": {
@@ -913,8 +968,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     }
 
     case "quote": {
-      const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth, ptToPx(14.25));
-      const baseHeight = blockHeightFromPt(lines, 18, -0.62, 12.6);
+      const baseHeight = estimateTextFlowHeight(block, text, layoutWidth, ptToPx(14.25), 12.6);
       return estimateInlineMathAwareHeight(block, baseHeight);
     }
     
@@ -922,8 +976,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       return estimateEquationHeight(block);
 
     case "callout": {
-      const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth, ptToPx(40));
-      const baseHeight = blockHeightFromPt(lines, 18, -0.62, 18);
+      const baseHeight = estimateTextFlowHeight(block, text, layoutWidth, ptToPx(40), 18);
       return estimateInlineMathAwareHeight(block, baseHeight);
     }
 
@@ -955,8 +1008,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       return ptToPx(18);
 
     default: {
-      const lines = estimateWrappedLines(text, ptToPx(12), layoutWidth);
-      const baseHeight = blockHeightFromPt(lines, 18, -0.62, 6.6);
+      const baseHeight = estimateTextFlowHeight(block, text, layoutWidth, 0, 6.6);
       return estimateInlineMathAwareHeight(block, baseHeight);
     }
   }
@@ -1307,9 +1359,9 @@ function paginateBlocks(blocks, pageHeight) {
 
   function getTextFlowLineMetrics(block) {
     const lines = formatSegmentTextForPreview(block).split("\n");
-    const lineHeight = ptToPx(18);
-    const trailingGap = Math.max(0, block.height - lineHeight * Math.max(1, lines.length));
-    return { lines, lineHeight, trailingGap };
+    const lineHeights = getTextFlowLineHeights(block.element, lines, block.type === "list");
+    const trailingGap = Math.max(0, block.height - sumHeights(lineHeights));
+    return { lines, lineHeights, trailingGap };
   }
 
   function pushTextFlowSegment(block, lines, lineStart, lineEnd, segmentHeight, segmentIndex, totalLines) {
@@ -1325,7 +1377,7 @@ function paginateBlocks(blocks, pageHeight) {
   }
 
   function paginateTextFlowBlock(block) {
-    const { lines, lineHeight, trailingGap } = getTextFlowLineMetrics(block);
+    const { lines, lineHeights, trailingGap } = getTextFlowLineMetrics(block);
     const totalLines = Math.max(1, lines.length);
     let lineIndex = 0;
     let segmentIndex = 0;
@@ -1336,8 +1388,9 @@ function paginateBlocks(blocks, pageHeight) {
 
     while (lineIndex < totalLines) {
       let availableHeight = pageHeight - usedHeight;
+      const nextLineHeight = lineHeights[lineIndex] || ptToPx(18);
 
-      if (availableHeight < lineHeight && usedHeight > 0) {
+      if (availableHeight < nextLineHeight && usedHeight > 0) {
         startNewPage({
           element: block.element,
           offsetRatio: Math.min(1, lineIndex / totalLines)
@@ -1345,8 +1398,7 @@ function paginateBlocks(blocks, pageHeight) {
         availableHeight = pageHeight;
       }
 
-      const remainingLines = totalLines - lineIndex;
-      const finalHeight = remainingLines * lineHeight + trailingGap;
+      const finalHeight = sumHeights(lineHeights, lineIndex) + trailingGap;
 
       if (finalHeight <= availableHeight || usedHeight === 0) {
         pushTextFlowSegment(block, lines, lineIndex, totalLines, finalHeight, segmentIndex, totalLines);
@@ -1354,9 +1406,15 @@ function paginateBlocks(blocks, pageHeight) {
         break;
       }
 
-      const linesThatFit = Math.floor(availableHeight / lineHeight);
+      let lineEnd = lineIndex;
+      let segmentHeight = 0;
 
-      if (linesThatFit <= 0) {
+      while (lineEnd < totalLines && segmentHeight + lineHeights[lineEnd] <= availableHeight) {
+        segmentHeight += lineHeights[lineEnd];
+        lineEnd += 1;
+      }
+
+      if (lineEnd === lineIndex) {
         startNewPage({
           element: block.element,
           offsetRatio: Math.min(1, lineIndex / totalLines)
@@ -1364,8 +1422,6 @@ function paginateBlocks(blocks, pageHeight) {
         continue;
       }
 
-      const lineEnd = Math.min(totalLines, lineIndex + linesThatFit);
-      const segmentHeight = (lineEnd - lineIndex) * lineHeight;
       pushTextFlowSegment(block, lines, lineIndex, lineEnd, segmentHeight, segmentIndex, totalLines);
       lineIndex = lineEnd;
       segmentIndex += 1;
@@ -1473,10 +1529,11 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
   const headingFontLevels = getHeadingFontLevels(blocks);
   const measuredBlocks = blocks.map((element) => {
     const type = classifyBlock(element, headingFontLevels);
+    const text = type === "code" ? getCodeRawTextForEstimate(element) : getVisibleTextForEstimate(element);
     const measuredBlock = {
       element,
       type,
-      text: type === "code" ? getCodeRawTextForEstimate(element) : getVisibleTextForEstimate(element),
+      text,
       layoutWidth,
       height: estimateBlockHeight(element, layoutWidth, type)
     };
@@ -1489,10 +1546,11 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
     return measuredBlock;
   });
   if (pageTitleElement) {
+    const titleText = getVisibleTextForEstimate(pageTitleElement);
     measuredBlocks.unshift({
       element: pageTitleElement,
       type: "pageTitle",
-      text: getVisibleTextForEstimate(pageTitleElement),
+      text: titleText,
       layoutWidth,
       height: estimateBlockHeight(pageTitleElement, layoutWidth, "pageTitle")
     });
