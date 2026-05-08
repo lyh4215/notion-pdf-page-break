@@ -279,6 +279,16 @@
   line-height: 16px;
 }
 
+.notion-pdf-preview-script-cjk {
+  display: inline-block;
+  transform: scaleX(0.96);
+  transform-origin: left center;
+}
+
+.notion-pdf-preview-script-latin {
+  font-size: 1.08em;
+}
+
 .notion-pdf-preview-inline-code {
   display: inline;
   padding: 0.1em 0.35em;

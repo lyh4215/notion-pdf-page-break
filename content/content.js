@@ -25,7 +25,7 @@ const PAGE_BODY_HEIGHT_PT = 698.88;
 const PAGE_BODY_WIDTH_PX = PAGE_BODY_WIDTH_PT * PT_TO_CSS_PX;   // ≈ 603px
 const PAGE_BODY_HEIGHT_PX = PAGE_BODY_HEIGHT_PT * PT_TO_CSS_PX; // ≈ 931.84px
 const BODY_TEXT_WRAP_FONT_SIZE_PX = 16;
-const INLINE_CODE_FONT_SCALE = 0.78;
+const INLINE_CODE_WRAP_SCALE = 0.93;
 const MIN_SCALE_PERCENT = 11;
 const MAX_SCALE_PERCENT = 199;
 let previewState = null;
@@ -607,7 +607,7 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
     }
 
     function appendUnbreakableToken(value) {
-      const tokenFontSize = isInlineCodeToken(value, inlineCodeFragments) ? fontSize * INLINE_CODE_FONT_SCALE : fontSize;
+      const tokenFontSize = isInlineCodeToken(value, inlineCodeFragments) ? fontSize * INLINE_CODE_WRAP_SCALE : fontSize;
       const tokenWidth = getTextWidth(value, tokenFontSize);
 
       if (currentLine && currentWidth + tokenWidth > availableWidth) {
@@ -626,7 +626,7 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
     }
 
     function appendMixedToken(value) {
-      const tokenFontSize = isInlineCodeToken(value, inlineCodeFragments) ? fontSize * INLINE_CODE_FONT_SCALE : fontSize;
+      const tokenFontSize = isInlineCodeToken(value, inlineCodeFragments) ? fontSize * INLINE_CODE_WRAP_SCALE : fontSize;
 
       for (const part of value.match(/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]|[^\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]+/g) || []) {
         if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]/.test(part)) {
@@ -1804,6 +1804,27 @@ function createRenderedTablePreview(segment) {
   return table;
 }
 
+function appendStyledTextRun(parent, value) {
+  if (!value) {
+    return;
+  }
+
+  const runs = value.match(/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]+|[A-Za-z0-9_./:%+-]+|[^A-Za-z0-9_\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]+/g) || [value];
+
+  for (const run of runs) {
+    const span = document.createElement("span");
+    span.textContent = run;
+
+    if (/^[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]+$/.test(run)) {
+      span.className = "notion-pdf-preview-script-cjk";
+    } else if (/^[A-Za-z0-9_./:%+-]+$/.test(run)) {
+      span.className = "notion-pdf-preview-script-latin";
+    }
+
+    parent.append(span);
+  }
+}
+
 function appendSyntheticLineContent(lineElement, line, segment) {
   const fragments = isSyntheticTextSegment(segment.type)
     ? getInlineCodeFragmentsForPreview(segment.element, segment.type === "list")
@@ -1817,7 +1838,7 @@ function appendSyntheticLineContent(lineElement, line, segment) {
   }
 
   if (!fragments.length) {
-    lineElement.textContent = line || " ";
+    appendStyledTextRun(lineElement, line || " ");
     return;
   }
 
@@ -1837,12 +1858,12 @@ function appendSyntheticLineContent(lineElement, line, segment) {
     }
 
     if (nextIndex === -1) {
-      lineElement.append(document.createTextNode(line.slice(cursor)));
+      appendStyledTextRun(lineElement, line.slice(cursor));
       break;
     }
 
     if (nextIndex > cursor) {
-      lineElement.append(document.createTextNode(line.slice(cursor, nextIndex)));
+      appendStyledTextRun(lineElement, line.slice(cursor, nextIndex));
     }
 
     const code = document.createElement("span");
