@@ -37,6 +37,7 @@ const CODE_BLOCK_PADDING_TOP_PT = 12;
 const CODE_BLOCK_PADDING_RIGHT_PT = 12;
 const CODE_BLOCK_PADDING_BOTTOM_PT = 14;
 const CODE_BLOCK_PADDING_LEFT_PT = 12;
+const CODE_BLOCK_MARGIN_BOTTOM_PT = 5.5;
 const TABLE_TEXT_FONT_SIZE_PT = 10.5;
 const TABLE_TOP_GAP_PT = 11.5;
 const BODY_TEXT_FONT_SIZE_PX = BODY_TEXT_FONT_SIZE_PT * PT_TO_CSS_PX;
@@ -1099,7 +1100,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
         }, 0)
       );
 
-      return blockHeightFromPt(lineSlots, 18, CODE_BLOCK_PADDING_TOP_PT + CODE_BLOCK_PADDING_BOTTOM_PT, 0);
+      return blockHeightFromPt(lineSlots, 18, CODE_BLOCK_PADDING_TOP_PT + CODE_BLOCK_PADDING_BOTTOM_PT, CODE_BLOCK_MARGIN_BOTTOM_PT);
     }
 
     case "table":
