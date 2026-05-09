@@ -923,152 +923,136 @@ function isStandaloneEquationBlock(block, blockInfo) {
     block.matches("[class*='notion-equation']")
   );
 }
-
-function getUnionRect(elements) {
-  const rects = elements
-    .map((element) => element.getBoundingClientRect())
-    .filter((rect) => rect && rect.width > 0 && rect.height > 0);
-
-  if (!rects.length) {
-    return null;
-  }
-
-  const left = Math.min(...rects.map((rect) => rect.left));
-  const top = Math.min(...rects.map((rect) => rect.top));
-  const right = Math.max(...rects.map((rect) => rect.right));
-  const bottom = Math.max(...rects.map((rect) => rect.bottom));
-
-  return {
-    left,
-    top,
-    right,
-    bottom,
-    width: right - left,
-    height: bottom - top
-  };
-}
-function isVisibleEquationElement(element) {
-  if (!element || element.closest(".katex-mathml")) {
-    return false;
-  }
-
-  const rect = element.getBoundingClientRect();
-
-  if (!rect || rect.width <= 0 || rect.height <= 0) {
-    return false;
-  }
-
-  const style = window.getComputedStyle(element);
-
-  if (style.display === "none" || style.visibility === "hidden") {
-    return false;
-  }
-
-  return true;
+function cssPxToPt(px) {
+  return px / PT_TO_CSS_PX;
 }
 
-function getEquationMeasureElements(block) {
-  // display equation이면 .katex-display를 그대로 믿는다.
-  // Notion PDF도 결국 KaTeX display DOM을 Chromium print가 찍는 구조에 가깝기 때문.
-  const displayElements = Array.from(block.querySelectorAll(".katex-display"))
-    .filter(isVisibleEquationElement);
-
-  if (displayElements.length) {
-    return displayElements;
-  }
-
-  // 혹시 .katex-display가 없으면 top-level .katex만 사용.
-  // fallback preset은 쓰지 않는다. DOM이 없으면 height는 0으로 간다.
-  return Array.from(block.querySelectorAll(".katex"))
-    .filter((element) => !element.parentElement?.closest(".katex"))
-    .filter(isVisibleEquationElement);
+function getRectHeight(element) {
+  const rect = element?.getBoundingClientRect?.();
+  return rect && rect.height > 0 ? rect.height : 0;
 }
 
-function getUnionRectFromRects(rects) {
-  const validRects = rects.filter((rect) => rect && rect.width > 0 && rect.height > 0);
-
-  if (!validRects.length) {
-    return null;
-  }
-
-  const left = Math.min(...validRects.map((rect) => rect.left));
-  const top = Math.min(...validRects.map((rect) => rect.top));
-  const right = Math.max(...validRects.map((rect) => rect.right));
-  const bottom = Math.max(...validRects.map((rect) => rect.bottom));
-
-  return {
-    left,
-    top,
-    right,
-    bottom,
-    width: right - left,
-    height: bottom - top
-  };
-}
-
-function getCssMarginPt(element, propertyName) {
+function getNumericStylePx(element, propertyName) {
   if (!element) {
     return 0;
   }
 
-  const style = window.getComputedStyle(element);
-  const valuePx = Number.parseFloat(style?.[propertyName]) || 0;
-
-  return valuePx / PT_TO_CSS_PX;
+  const value = window.getComputedStyle(element)[propertyName];
+  return Number.parseFloat(value) || 0;
 }
 
-function estimateEquationHeight(block) {
-  return ptToPx(getEquationMetrics(block).samePageHeightPt);
+function findNearestPaddedAncestor(element, stopElement) {
+  let current = element?.parentElement || null;
+
+  while (current && current !== stopElement && stopElement?.contains(current)) {
+    const paddingTop = getNumericStylePx(current, "paddingTop");
+    const paddingBottom = getNumericStylePx(current, "paddingBottom");
+
+    if (paddingTop + paddingBottom > 0) {
+      return current;
+    }
+
+    current = current.parentElement;
+  }
+
+  return null;
+}
+
+function getEquationDomParts(block) {
+  const outer = block.matches?.(".notion-equation-block, [class*='notion-equation']")
+    ? block
+    : block.closest?.(".notion-equation-block, [class*='notion-equation']") || block;
+
+  const display = outer.querySelector(".katex-display");
+  const katex = display?.querySelector(".katex") || outer.querySelector(".katex");
+  const katexHtml = display?.querySelector(".katex-html") || katex?.querySelector(".katex-html");
+  const innerPadded = display ? findNearestPaddedAncestor(display, outer) : null;
+
+  return {
+    outer,
+    innerPadded,
+    display,
+    katex,
+    katexHtml
+  };
 }
 
 function getEquationMetrics(block) {
-  const equationElements = getEquationMeasureElements(block);
-  const rects = equationElements.map((element) => element.getBoundingClientRect());
-  const unionRect = getUnionRectFromRects(rects);
+  const parts = getEquationDomParts(block);
+  const { outer, innerPadded, display, katex, katexHtml } = parts;
 
-  if (!unionRect) {
-    console.warn("[notion-pdf-preview] Equation DOM was not measurable.", block);
+  const outerRect = outer.getBoundingClientRect();
+  const displayRect = display?.getBoundingClientRect?.();
+  const katexRect = katex?.getBoundingClientRect?.();
+  const katexHtmlRect = katexHtml?.getBoundingClientRect?.();
 
-    return {
-      preset: "dom-only-missing",
-      measurement: "dom-only-missing",
+  const outerHeightPx = getRectHeight(outer);
+  const displayHeightPx = getRectHeight(display);
+  const katexHeightPx = getRectHeight(katex);
+  const katexHtmlHeightPx = getRectHeight(katexHtml);
 
-      glyphHeightPt: 0,
-      topGapPt: 0,
-      bottomGapPt: 0,
+  const outerPaddingTopPx = getNumericStylePx(outer, "paddingTop");
+  const outerPaddingBottomPx = getNumericStylePx(outer, "paddingBottom");
 
-      samePageHeightPt: 0,
-      pageTopHeightPt: 0
-    };
-  }
+  const innerPaddingTopPx = getNumericStylePx(innerPadded, "paddingTop");
+  const innerPaddingBottomPx = getNumericStylePx(innerPadded, "paddingBottom");
 
-  const firstElement = equationElements[0];
-  const lastElement = equationElements[equationElements.length - 1];
+  const displayMarginTopPx = getNumericStylePx(display, "marginTop");
+  const displayMarginBottomPx = getNumericStylePx(display, "marginBottom");
 
-  // 핵심:
-  // glyphHeight는 preset이 아니라 실제 KaTeX DOM rect height를 그대로 사용.
-  const glyphHeightPt = unionRect.height / PT_TO_CSS_PX;
+  // 핵심: Notion PDF에서 실제로 한 block이 차지하는 높이는
+  // glyph preset이 아니라 outer .notion-equation-block의 실제 DOM height에 가깝다.
+  const samePageHeightPx =
+    outerHeightPx ||
+    outerPaddingTopPx +
+      innerPaddingTopPx +
+      displayMarginTopPx +
+      Math.max(displayHeightPx, katexHeightPx, katexHtmlHeightPx) +
+      displayMarginBottomPx +
+      innerPaddingBottomPx +
+      outerPaddingBottomPx;
 
-  // margin도 preset이 아니라 실제 DOM CSS margin을 사용.
-  // .katex-display에 margin이 있으면 이 값이 들어가고,
-  // 없으면 그냥 0이다. fallback 보정값은 넣지 않는다.
-  const topGapPt = getCssMarginPt(firstElement, "marginTop");
-  const bottomGapPt = getCssMarginPt(lastElement, "marginBottom");
+  const visualMathHeightPx = Math.max(displayHeightPx, katexHeightPx, katexHtmlHeightPx);
+
+  const topGapPx =
+    outerRect && displayRect
+      ? Math.max(0, displayRect.top - outerRect.top)
+      : outerPaddingTopPx + innerPaddingTopPx + displayMarginTopPx;
+
+  const bottomGapPx =
+    outerRect && displayRect
+      ? Math.max(0, outerRect.bottom - displayRect.bottom)
+      : displayMarginBottomPx + innerPaddingBottomPx + outerPaddingBottomPx;
 
   return {
-    preset: "dom-only",
-    measurement: "dom",
+    preset: "dom",
 
-    glyphHeightPt,
-    topGapPt,
-    bottomGapPt,
+    // 기존 코드 호환용 pt 값들
+    samePageHeightPt: cssPxToPt(samePageHeightPx),
+    pageTopHeightPt: cssPxToPt(samePageHeightPx),
+    glyphHeightPt: cssPxToPt(visualMathHeightPx),
+    topGapPt: cssPxToPt(topGapPx),
+    bottomGapPt: cssPxToPt(bottomGapPx),
 
-    // 같은 페이지에서 일반 블록 뒤에 올 때
-    samePageHeightPt: topGapPt + glyphHeightPt + bottomGapPt,
-
-    // 페이지 맨 위에서 시작하면 top margin은 보통 사라지는 쪽에 가깝게 처리
-    pageTopHeightPt: glyphHeightPt + bottomGapPt
+    // 디버깅용 px 값들
+    samePageHeightPx,
+    outerHeightPx,
+    displayHeightPx,
+    katexHeightPx,
+    katexHtmlHeightPx,
+    outerPaddingTopPx,
+    outerPaddingBottomPx,
+    innerPaddingTopPx,
+    innerPaddingBottomPx,
+    displayMarginTopPx,
+    displayMarginBottomPx,
+    topGapPx,
+    bottomGapPx
   };
+}
+
+function estimateEquationHeight(block) {
+  return getEquationMetrics(block).samePageHeightPx;
 }
 
 function estimateInlineMathAwareHeight(block, baseHeight) {
@@ -1669,38 +1653,28 @@ function paginateBlocks(blocks, pageHeight) {
 
   function pushEquationBlock(block) {
     const metrics = getEquationMetrics(block.element);
-    const previousSegment = currentPage().at(-1);
-    const followsEquation = previousSegment?.type === "equation";
 
-    // 수식이 연속될 때는 다음 수식의 top margin을 또 더하지 않는다.
-    // 일반 CSS vertical margin collapse와 비슷하게 보려는 처리.
-    const samePageHeightPt = followsEquation
-      ? metrics.glyphHeightPt + metrics.bottomGapPt
-      : metrics.samePageHeightPt;
+    // estimateBlockHeight에서 이미 block.height를 넣었더라도,
+    // 수식은 최종 배치 시점에 DOM 기준으로 다시 한 번 잡는다.
+    const blockHeight = metrics.samePageHeightPx || block.height;
 
-    if (usedHeight > 0 && usedHeight + ptToPx(samePageHeightPt) > pageHeight) {
+    if (usedHeight > 0 && usedHeight + blockHeight > pageHeight) {
       startNewPage({
         element: block.element,
         offsetRatio: 0
       });
     }
 
-    const startsAtPageTop = usedHeight === 0;
-
-    const segmentHeightPt = startsAtPageTop
-      ? metrics.pageTopHeightPt
-      : samePageHeightPt;
-
     currentPage().push({
       ...block,
       continued: false,
-      equationPreset: metrics.preset,
-      equationMeasurement: metrics.measurement,
-      segmentHeight: ptToPx(segmentHeightPt),
+      equationMetrics: metrics,
+      equationPreset: "dom",
+      segmentHeight: blockHeight,
       splitAfter: false
     });
 
-    usedHeight += ptToPx(segmentHeightPt);
+    usedHeight += blockHeight;
   }
 
   for (const block of blocks) {
