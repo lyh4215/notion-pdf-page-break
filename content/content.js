@@ -68,6 +68,10 @@ const BlockType = Object.freeze({
   DIVIDER: 13,
   BLANK: 14,
   PAGEMETADATA: 15,
+
+  // 실제 Notion block은 아님.
+  // column 내부 첫 block의 top gap 계산용 가상 타입.
+  COLUMNSTART: 16,
 });
 
 const T = BlockType;
@@ -91,6 +95,8 @@ const BLOCK_TYPE_INDEX = Object.freeze({
   divider: T.DIVIDER,
   blank: T.BLANK,
   pageMetadata: T.PAGEMETADATA,
+
+  columnStart: T.COLUMNSTART,
 });
 
 const PAIRWISE_GAP_PT = Array.from(
@@ -117,6 +123,7 @@ const BLOCK_TYPE_LABELS = Object.freeze([
   "divider",
   "blank",
   "pageMetadata",
+  "columnStart",
 ]);
 
 let PAIRWISE_GAP_DEFAULT_PT = null;
@@ -255,6 +262,8 @@ function isDefaultPairwiseGapCell(row, col) {
 // format: setPairwiseGap(prevType, nextType, gapPt);
 // pairwise gap matrix overrides
 // format: setPairwiseGap(prevType, nextType, gapPt);
+// pairwise gap matrix overrides
+// format: setPairwiseGap(prevType, nextType, gapPt);
 
 // pageTitle -> *
 setPairwiseGap(T.PAGETITLE, T.PAGETITLE, 6.6);
@@ -272,7 +281,7 @@ setPairwiseGap(T.PAGETITLE, T.MEDIA, 6.6);
 setPairwiseGap(T.PAGETITLE, T.COLUMNS, 6.6);
 setPairwiseGap(T.PAGETITLE, T.DIVIDER, 6.6);
 setPairwiseGap(T.PAGETITLE, T.BLANK, 6.6);
-setPairwiseGap(T.PAGETITLE, T.PAGEMETADATA, 20.0);
+setPairwiseGap(T.PAGETITLE, T.PAGEMETADATA, 23.0);
 
 // paragraph -> *
 setPairwiseGap(T.PARAGRAPH, T.PAGETITLE, 6.6);
@@ -527,22 +536,22 @@ setPairwiseGap(T.BLANK, T.BLANK, 6.6);
 setPairwiseGap(T.BLANK, T.PAGEMETADATA, 6.6);
 
 // pageMetadata -> *
-setPairwiseGap(T.PAGEMETADATA, T.PAGETITLE, 6.6);
-setPairwiseGap(T.PAGEMETADATA, T.PARAGRAPH, 6.6);
-setPairwiseGap(T.PAGEMETADATA, T.LIST, 6.6);
-setPairwiseGap(T.PAGEMETADATA, T.H2, 6.6);
-setPairwiseGap(T.PAGEMETADATA, T.H3, 6.6);
-setPairwiseGap(T.PAGEMETADATA, T.H4, 6.6);
-setPairwiseGap(T.PAGEMETADATA, T.EQUATION, 6.6);
-setPairwiseGap(T.PAGEMETADATA, T.TABLE, 6.6);
-setPairwiseGap(T.PAGEMETADATA, T.CODE, 6.6);
-setPairwiseGap(T.PAGEMETADATA, T.QUOTE, 6.6);
-setPairwiseGap(T.PAGEMETADATA, T.CALLOUT, 6.6);
-setPairwiseGap(T.PAGEMETADATA, T.MEDIA, 3.0);
-setPairwiseGap(T.PAGEMETADATA, T.COLUMNS, 3.0);
-setPairwiseGap(T.PAGEMETADATA, T.DIVIDER, 6.6);
-setPairwiseGap(T.PAGEMETADATA, T.BLANK, 3.0);
-setPairwiseGap(T.PAGEMETADATA, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.PAGEMETADATA, T.PAGETITLE, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.PARAGRAPH, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.LIST, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.H2, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.H3, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.H4, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.EQUATION, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.TABLE, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.CODE, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.QUOTE, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.CALLOUT, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.MEDIA, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.COLUMNS, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.DIVIDER, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.BLANK, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.PAGEMETADATA, 8.0);
 
 captureDefaultPairwiseGapMatrix();
 loadPairwiseGapOverrides();
@@ -1389,14 +1398,25 @@ function classifyBlock(block, headingFontLevels = null) {
 
   return "paragraph";
 }
-function estimateStackHeight(measuredBlocks) {
+function estimateStackHeight(measuredBlocks, options = {}) {
+  const {
+    initialPrevType = null,
+    applyFirstGap = false
+  } = options;
+
   let total = 0;
-  let prevType = null;
+  let prevType = initialPrevType;
 
   for (const block of measuredBlocks) {
-    const gapBeforePx = prevType === null
-      ? 0
-      : ptToPx(getPairwiseGapPt(prevType, block.type));
+    const shouldApplyGap = prevType !== null && (
+      applyFirstGap || total > 0
+    );
+
+    const gapBeforePx = shouldApplyGap
+      ? ptToPx(getPairwiseGapPt(prevType, block.type))
+      : 0;
+
+    block.gapBeforePx = gapBeforePx;
 
     total += gapBeforePx + Math.max(1, Number(block.height) || 0);
     prevType = block.type;
@@ -1520,7 +1540,10 @@ function measureColumnsBlock(columnListBlock, layoutWidth, headingFontLevels = n
       element: columnBlock,
       width: columnWidth,
       blocks,
-      height: estimateStackHeight(blocks)
+      height: estimateStackHeight(blocks, {
+        initialPrevType: "columnStart",
+        applyFirstGap: true
+      })
     };
   });
 
@@ -3721,19 +3744,31 @@ function appendSyntheticLineContent(lineElement, line, segment) {
     lineElement.textContent = " ";
   }
 }
-function createRenderedMeasuredBlockStack(blocks, stackWidth) {
+function createRenderedMeasuredBlockStack(blocks, stackWidth, options = {}) {
+  const {
+    initialPrevType = null,
+    applyFirstGap = false
+  } = options;
+
   const stack = document.createElement("div");
   stack.className = "notion-pdf-preview-rendered-stack";
   stack.style.width = `${stackWidth}px`;
   stack.style.boxSizing = "border-box";
   stack.style.overflow = "hidden";
 
-  let prevType = null;
+  let prevType = initialPrevType;
+  let isFirst = true;
 
   for (const block of blocks) {
-    const gapBeforePx = prevType === null
-      ? 0
-      : ptToPx(getPairwiseGapPt(prevType, block.type));
+    const shouldApplyGap = prevType !== null && (
+      applyFirstGap || !isFirst
+    );
+
+    const gapBeforePx = Number.isFinite(block.gapBeforePx)
+      ? block.gapBeforePx
+      : shouldApplyGap
+        ? ptToPx(getPairwiseGapPt(prevType, block.type))
+        : 0;
 
     const segment = {
       ...block,
@@ -3746,7 +3781,9 @@ function createRenderedMeasuredBlockStack(blocks, stackWidth) {
     };
 
     stack.append(createRenderedPdfPreviewSegment(segment));
+
     prevType = block.type;
+    isFirst = false;
   }
 
   return stack;
@@ -3794,7 +3831,11 @@ function createRenderedColumnsPreview(segment) {
     columnElement.append(
       createRenderedMeasuredBlockStack(
         column.blocks || [],
-        Math.max(1, Number(column.width) || 1)
+        Math.max(1, Number(column.width) || 1),
+        {
+          initialPrevType: "columnStart",
+          applyFirstGap: true
+        }
       )
     );
 
