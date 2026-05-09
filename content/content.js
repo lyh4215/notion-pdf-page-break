@@ -1337,17 +1337,164 @@ function estimateTableHeight(block, layoutWidth) {
   return tableHeight + blockHeightFromPt(extraLines, 18, -0.62, 0);
 }
 
+function readInlineStyleValue(element, propertyName) {
+  if (!element) {
+    return "";
+  }
+
+  const inlineStyle = element.getAttribute("style") || "";
+  const pattern = new RegExp(`${propertyName}\\s*:\\s*([^;]+)`, "i");
+  const match = inlineStyle.match(pattern);
+
+  return match ? match[1].trim() : "";
+}
+
+function parseCssLengthToPx(value, baseWidth = 0) {
+  if (!value || typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (!normalized || normalized === "auto" || normalized === "none") {
+    return null;
+  }
+
+  const pxMatch = normalized.match(/^(-?\d+(?:\.\d+)?)px$/);
+
+  if (pxMatch) {
+    return Number(pxMatch[1]);
+  }
+
+  const percentMatch = normalized.match(/^(-?\d+(?:\.\d+)?)%$/);
+
+  if (percentMatch && baseWidth > 0) {
+    return baseWidth * (Number(percentMatch[1]) / 100);
+  }
+
+  return null;
+}
+
+function getMediaPrintReferenceRoot(block) {
+  return (
+    block.closest(".notion-page-content") ||
+    block.closest("[data-content-editable-root='true']") ||
+    document.querySelector(".notion-page-content") ||
+    block.parentElement
+  );
+}
+
+function findNotionColumnAncestor(block) {
+  let node = block.parentElement;
+
+  while (node && node !== document.body) {
+    const className = String(node.className || "").toLowerCase();
+
+    if (className.includes("notion-column-block")) {
+      return node;
+    }
+
+    node = node.parentElement;
+  }
+
+  return null;
+}
+
+function getPrintMediaContainerWidth(block, layoutWidth) {
+  const safeLayoutWidth = Math.max(1, Number(layoutWidth) || PAGE_BODY_WIDTH_PX);
+
+  const column = findNotionColumnAncestor(block);
+
+  if (!column) {
+    return safeLayoutWidth;
+  }
+
+  const columnRect = getVisibleRect(column);
+  const root = getMediaPrintReferenceRoot(block);
+  const rootRect = root?.getBoundingClientRect?.();
+
+  if (
+    columnRect &&
+    rootRect &&
+    columnRect.width > 0 &&
+    rootRect.width > 0
+  ) {
+    const columnRatio = Math.max(
+      0.05,
+      Math.min(1, columnRect.width / rootRect.width)
+    );
+
+    return safeLayoutWidth * columnRatio;
+  }
+
+  return safeLayoutWidth;
+}
+
+function getPrintMediaTargetWidth(block, layoutWidth) {
+  const containerWidth = getPrintMediaContainerWidth(block, layoutWidth);
+
+  const widthValue = readInlineStyleValue(block, "width");
+  const maxWidthValue = readInlineStyleValue(block, "max-width");
+
+  const widthPx = parseCssLengthToPx(widthValue, containerWidth);
+  const maxWidthPx = parseCssLengthToPx(maxWidthValue, containerWidth);
+
+  let targetWidth = containerWidth;
+
+  if (Number.isFinite(widthPx) && widthPx > 0) {
+    targetWidth = Math.min(widthPx, containerWidth);
+  }
+
+  if (Number.isFinite(maxWidthPx) && maxWidthPx > 0) {
+    targetWidth = Math.min(targetWidth, maxWidthPx);
+  }
+
+  return Math.max(1, targetWidth);
+}
+
+
+function getPrintMediaTargetWidth(block, layoutWidth) {
+  const style = block.getAttribute("style") || "";
+
+  const widthPx = getStyleLengthPx(style, "width");
+  const maxWidthPx = getStyleLengthPx(style, "max-width");
+
+  const containerWidth = getPrintMediaContainerWidth(block, layoutWidth);
+
+  let targetWidth = containerWidth;
+
+  if (widthPx > 0) {
+    targetWidth = Math.min(widthPx, containerWidth);
+  }
+
+  if (maxWidthPx > 0) {
+    targetWidth = Math.min(targetWidth, maxWidthPx);
+  }
+
+  return Math.max(1, targetWidth);
+}
 function estimateMediaHeight(block, layoutWidth) {
-  const image = block.matches("img") ? block : getSubstantialMediaElement(block) || block.querySelector("img");
+  const image =
+    block.matches("img")
+      ? block
+      : getSubstantialMediaElement(block) || block.querySelector("img");
+
+  const targetWidth = getPrintMediaTargetWidth(block, layoutWidth);
+
   const naturalWidth = image?.naturalWidth || 0;
   const naturalHeight = image?.naturalHeight || 0;
 
   if (naturalWidth > 0 && naturalHeight > 0) {
-    return Math.min(520, Math.max(120, layoutWidth * (naturalHeight / naturalWidth))) + 18;
+    return targetWidth * (naturalHeight / naturalWidth);
   }
 
-  const rect = getVisibleRect(block);
-  return Math.min(520, Math.max(140, rect?.height || 220)) + 18;
+  const blockRect = getVisibleRect(block);
+
+  if (blockRect && blockRect.height > 0) {
+    return blockRect.height;
+  }
+
+  return 220;
 }
 function hasMathElement(block) {
   return Boolean(block.querySelector(".katex, .katex-display"));

@@ -1,5 +1,3 @@
-Rustlings 복기
-- link 뒤에 # 을 통해, 다시 계산 (link 계산, h2 top margin 계산)
-- bullet 다단계 계산
+- list안에 뭐가 들어가있을때, 코드일 경우에 줄바꿈이 안됨. 근데 높이계산은 잘됨. UI문제
 
 issue : notion 생성 시 엄청긴 영단어 있으면 배율이 달라짐
