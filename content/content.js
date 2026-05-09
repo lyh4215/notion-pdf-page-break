@@ -33,6 +33,7 @@ const BODY_TEXT_FONT_SIZE_PT = 12;
 const INLINE_CODE_FONT_SIZE_PT = 8.75;
 const INLINE_CODE_ONLY_LINE_HEIGHT_PT = 12.5;
 const INLINE_MATH_LINE_HEIGHT_PT = 18.75;
+
 const CODE_BLOCK_FONT_SIZE_PT = 13;
 const CODE_BLOCK_LINE_HEIGHT_PT = 18;
 const CODE_BLOCK_PADDING_TOP_PT = 12;
@@ -40,21 +41,94 @@ const CODE_BLOCK_PADDING_RIGHT_PT = 12;
 const CODE_BLOCK_PADDING_BOTTOM_PT = 14;
 const CODE_BLOCK_PADDING_LEFT_PT = 12;
 const CODE_BLOCK_MARGIN_BOTTOM_PT = 5.5;
+
 const TABLE_TEXT_FONT_SIZE_PT = 10.5;
-const TABLE_TOP_GAP_PT = 5.5;
+
+// 이 값은 "표 전용 추가 top gap"이다.
+// 이전 문단 afterGap 6.6pt + TABLE_TOP_GAP_PT 5.0pt ≈ 실제 표 앞 시각 gap 11.6pt
+const TABLE_TOP_GAP_PT = 5.0;
+
+// 연속 equation 사이의 최소 visual gap 참고값.
+// 실제 pushEquationBlock에서는 top gap 중복을 제거한다.
 const EQUATION_INTER_GAP_PT = 13;
-const EQUATION_TALL_PAGE_TOP_HEIGHT_PT = 68.6;
+
 const EQUATION_METRIC_PRESETS = {
-  short: { glyphHeightPt: 19.13, topGapPt: 13.6, bottomGapPt: 15 },
-  fraction: { glyphHeightPt: 36.56, topGapPt: 14, bottomGapPt: 12.5 },
-  sigma: { glyphHeightPt: 45.81, topGapPt: 14, bottomGapPt: 12.8 },
-  integral: { glyphHeightPt: 41.94, topGapPt: 13, bottomGapPt: 12 },
-  matrix2: { glyphHeightPt: 35.91, topGapPt: 15, bottomGapPt: 15 },
-  matrix3: { glyphHeightPt: 51.56, topGapPt: 15, bottomGapPt: 15.9 },
-  cases2: { glyphHeightPt: 43.56, topGapPt: 16.1, bottomGapPt: 14.4 },
-  cases3: { glyphHeightPt: 78.06, topGapPt: 0, bottomGapPt: 10.7, pageTopHeightPt: 88.8 },
-  aligned3: { glyphHeightPt: 63.38, topGapPt: 13.6, bottomGapPt: 20.4 },
-  alignedLarge: { glyphHeightPt: 139.56, topGapPt: 14.3, bottomGapPt: 16.1, pageTopHeightPt: 155.7 }
+  // Fallback only.
+  // KaTeX DOM rect가 있으면 preset height로 clamp하지 않고 DOM height를 그대로 사용한다.
+  short: {
+    glyphHeightPt: 19.13,
+    topGapPt: 13.6,
+    bottomGapPt: 15.0
+  },
+
+  fraction: {
+    glyphHeightPt: 36.56,
+    topGapPt: 14.0,
+    bottomGapPt: 12.5
+  },
+
+  sigma: {
+    glyphHeightPt: 45.81,
+    topGapPt: 14.0,
+    bottomGapPt: 12.8
+  },
+
+  integral: {
+    glyphHeightPt: 41.94,
+    topGapPt: 13.0,
+    bottomGapPt: 12.0
+  },
+
+  matrix2: {
+    glyphHeightPt: 35.91,
+    topGapPt: 15.0,
+    bottomGapPt: 15.0
+  },
+
+  matrix3: {
+    glyphHeightPt: 51.56,
+    topGapPt: 15.0,
+    bottomGapPt: 15.9
+  },
+
+  cases2: {
+    glyphHeightPt: 43.56,
+    topGapPt: 16.1,
+    bottomGapPt: 14.4
+  },
+
+  cases3: {
+    glyphHeightPt: 78.06,
+    topGapPt: 14.5,
+    bottomGapPt: 10.7,
+    pageTopHeightPt: 88.8
+  },
+
+  aligned3: {
+    glyphHeightPt: 63.38,
+    topGapPt: 13.6,
+    bottomGapPt: 20.4
+  },
+
+  // 예:
+  // \begin{aligned}
+  // ...
+  // \frac{...}{...}
+  // \end{aligned}
+  // 처럼 fraction은 있지만 sum/prod/int 같은 큰 연산자는 없는 경우
+  alignedFraction3: {
+    glyphHeightPt: 79.31,
+    topGapPt: 14.9,
+    bottomGapPt: 18.9
+  },
+
+  // likelihood처럼 \prod, \sum, 큰 연산자, 큰 fraction이 여러 줄에 있는 경우
+  alignedLargeOps: {
+    glyphHeightPt: 139.56,
+    topGapPt: 14.3,
+    bottomGapPt: 16.1,
+    pageTopHeightPt: 155.7
+  }
 };
 const BODY_TEXT_FONT_SIZE_PX = BODY_TEXT_FONT_SIZE_PT * PT_TO_CSS_PX;
 const CODE_BLOCK_FONT_SIZE_PX = CODE_BLOCK_FONT_SIZE_PT * PT_TO_CSS_PX;
@@ -952,34 +1026,45 @@ function getUnionRect(elements) {
     height: bottom - top
   };
 }
+function getVisualMathElements(block) {
+  // display equation은 .katex-display wrapper를 우선 사용한다.
+  // inline math fallback에서는 nested katex를 제외한 최상위 .katex만 사용한다.
+  const displayElements = Array.from(block.querySelectorAll(".katex-display"));
+
+  const candidates = displayElements.length
+    ? displayElements
+    : Array.from(block.querySelectorAll(".katex")).filter((element) => {
+        return !element.parentElement?.closest(".katex");
+      });
+
+  return candidates.filter((element) => {
+    if (element.closest(".katex-mathml")) {
+      return false;
+    }
+
+    const rect = element.getBoundingClientRect();
+
+    if (!rect || rect.width <= 0 || rect.height <= 0) {
+      return false;
+    }
+
+    // wrapper 오탐 방지
+    if (rect.height > 300) {
+      return false;
+    }
+
+    const style = window.getComputedStyle(element);
+
+    if (style.display === "none" || style.visibility === "hidden") {
+      return false;
+    }
+
+    return true;
+  });
+}
+
 function getVisualMathRects(block) {
-  return Array.from(block.querySelectorAll(".katex-display, .katex"))
-    .filter((element) => {
-      // KaTeX 내부의 접근성용 MathML은 시각적 높이 계산에서 제외
-      if (element.closest(".katex-mathml")) {
-        return false;
-      }
-
-      const rect = element.getBoundingClientRect();
-
-      if (!rect || rect.width <= 0 || rect.height <= 0) {
-        return false;
-      }
-
-      // 비정상적으로 큰 rect는 wrapper 오탐일 가능성이 큼
-      if (rect.height > 300) {
-        return false;
-      }
-
-      const style = window.getComputedStyle(element);
-
-      if (style.display === "none" || style.visibility === "hidden") {
-        return false;
-      }
-
-      return true;
-    })
-    .map((element) => element.getBoundingClientRect());
+  return getVisualMathElements(block).map((element) => element.getBoundingClientRect());
 }
 
 function getUnionRectFromRects(rects) {
@@ -1006,29 +1091,65 @@ function estimateEquationHeight(block) {
   return ptToPx(getEquationMetrics(block).samePageHeightPt);
 }
 
+function getCssMarginPt(element, propertyName) {
+  if (!element) {
+    return 0;
+  }
+
+  const style = window.getComputedStyle(element);
+  const valuePx = Number.parseFloat(style?.[propertyName]) || 0;
+
+  return valuePx > 0 ? valuePx / PT_TO_CSS_PX : 0;
+}
+
+function getEquationDomMetrics(block) {
+  const mathElements = getVisualMathElements(block);
+  const mathUnionRect = getUnionRectFromRects(
+    mathElements.map((element) => element.getBoundingClientRect())
+  );
+
+  const primaryElement = mathElements[0] || null;
+
+  return {
+    domHeightPt: mathUnionRect ? mathUnionRect.height / PT_TO_CSS_PX : 0,
+    cssMarginTopPt: primaryElement ? getCssMarginPt(primaryElement, "marginTop") : 0,
+    cssMarginBottomPt: primaryElement ? getCssMarginPt(primaryElement, "marginBottom") : 0
+  };
+}
+
 function getEquationMetrics(block) {
-  const mathRects = getVisualMathRects(block);
-  const mathUnionRect = getUnionRectFromRects(mathRects);
-  const domHeightPt = mathUnionRect ? mathUnionRect.height / PT_TO_CSS_PX : 0;
-  const presetName = classifyEquationPreset(block, domHeightPt);
+  const domMetrics = getEquationDomMetrics(block);
+  const presetName = classifyEquationPreset(block, domMetrics.domHeightPt);
   const preset = EQUATION_METRIC_PRESETS[presetName] || EQUATION_METRIC_PRESETS.short;
-  const glyphHeightPt = domHeightPt > 0
-    ? clamp(domHeightPt, preset.glyphHeightPt * 0.85, preset.glyphHeightPt * 1.15)
+
+  // 핵심:
+  // DOM에서 KaTeX가 실제로 렌더링되어 있으면 preset으로 clamp하지 않는다.
+  // 수식 종류별 preset은 DOM 측정 실패 시 fallback으로만 사용한다.
+  const glyphHeightPt = domMetrics.domHeightPt > 0
+    ? domMetrics.domHeightPt
     : preset.glyphHeightPt;
-  const samePageHeightPt = preset.topGapPt + glyphHeightPt + preset.bottomGapPt;
+
+  // CSS margin이 실제로 잡혀 있으면 우선 사용한다.
+  // 없으면 PDF에서 측정한 보정값을 fallback으로 쓴다.
+  const topGapPt = domMetrics.cssMarginTopPt || preset.topGapPt;
+  const bottomGapPt = domMetrics.cssMarginBottomPt || preset.bottomGapPt;
 
   return {
     preset: presetName,
     glyphHeightPt,
-    topGapPt: preset.topGapPt,
-    bottomGapPt: preset.bottomGapPt,
-    samePageHeightPt,
-    pageTopHeightPt: preset.pageTopHeightPt || glyphHeightPt + preset.bottomGapPt
-  };
-}
+    topGapPt,
+    bottomGapPt,
 
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
+    // 일반적으로 같은 페이지에서 이전 블록 다음에 붙을 때
+    samePageHeightPt: topGapPt + glyphHeightPt + bottomGapPt,
+
+    // 페이지 맨 위로 넘어가면 top gap은 버려지는 것처럼 보인다.
+    pageTopHeightPt: domMetrics.domHeightPt > 0
+      ? glyphHeightPt + bottomGapPt
+      : preset.pageTopHeightPt || glyphHeightPt + bottomGapPt,
+
+    measurement: domMetrics.domHeightPt > 0 ? "dom" : "preset"
+  };
 }
 
 function getEquationSourceText(block) {
@@ -1043,17 +1164,30 @@ function classifyEquationPreset(block, domHeightPt = 0) {
   const rowBreakCount = (source.match(/\\\\/g) || []).length;
 
   if (/aligned|align|gather|multline/i.test(source)) {
-    return /prod|sum|\\sum|\\prod|frac|\\frac/i.test(source) || domHeightPt > 100
-      ? "alignedLarge"
-      : "aligned3";
+    const hasLargeOps = /prod|sum|\\sum|\\prod|\\int|∑|∏|∫/i.test(source);
+    const hasFraction = /\\frac|\\dfrac|\\tfrac/i.test(source);
+
+    if (hasLargeOps || domHeightPt > 110) {
+      return "alignedLargeOps";
+    }
+
+    if (hasFraction || domHeightPt > 70) {
+      return "alignedFraction3";
+    }
+
+    return "aligned3";
   }
 
   if (/cases/i.test(source)) {
-    return rowBreakCount >= 2 || domHeightPt > 60 ? "cases3" : "cases2";
+    return rowBreakCount >= 2 || domHeightPt > 60
+      ? "cases3"
+      : "cases2";
   }
 
   if (/matrix|pmatrix|bmatrix|vmatrix|array/i.test(source)) {
-    return rowBreakCount >= 2 || domHeightPt > 44 ? "matrix3" : "matrix2";
+    return rowBreakCount >= 2 || domHeightPt > 44
+      ? "matrix3"
+      : "matrix2";
   }
 
   if (/\\int|∫/.test(source)) {
@@ -1669,14 +1803,25 @@ function paginateBlocks(blocks, pageHeight) {
 
   function pushEquationBlock(block) {
     const metrics = getEquationMetrics(block.element);
-    const samePageHeight = ptToPx(metrics.samePageHeightPt);
     const previousSegment = currentPage().at(-1);
     const followsEquation = previousSegment?.type === "equation";
-    const blockHeight = followsEquation
-      ? ptToPx(Math.max(EQUATION_INTER_GAP_PT, metrics.glyphHeightPt + metrics.bottomGapPt))
-      : samePageHeight;
 
-    if (usedHeight > 0 && usedHeight + blockHeight > pageHeight) {
+    // 같은 페이지에서의 equation layout:
+    //
+    // 1. 일반 텍스트 뒤 equation:
+    //    topGap + glyphHeight + bottomGap
+    //
+    // 2. equation 바로 뒤 equation:
+    //    다음 equation의 topGap을 또 더하지 않는다.
+    //    이전 equation의 bottomGap이 이미 inter-equation gap처럼 보이기 때문이다.
+    //
+    // 3. 페이지 맨 위 equation:
+    //    topGap은 버린다.
+    const samePageHeightPt = followsEquation
+      ? metrics.glyphHeightPt + metrics.bottomGapPt
+      : metrics.topGapPt + metrics.glyphHeightPt + metrics.bottomGapPt;
+
+    if (usedHeight > 0 && usedHeight + ptToPx(samePageHeightPt) > pageHeight) {
       startNewPage({
         element: block.element,
         offsetRatio: 0
@@ -1684,20 +1829,21 @@ function paginateBlocks(blocks, pageHeight) {
     }
 
     const startsAtPageTop = usedHeight === 0;
-    const segmentHeight = startsAtPageTop
-      ? ptToPx(metrics.pageTopHeightPt)
-      : followsEquation
-        ? blockHeight
-        : samePageHeight;
+
+    const segmentHeightPt = startsAtPageTop
+      ? metrics.pageTopHeightPt
+      : samePageHeightPt;
 
     currentPage().push({
       ...block,
       continued: false,
       equationPreset: metrics.preset,
-      segmentHeight,
+      equationMeasurement: metrics.measurement,
+      segmentHeight: ptToPx(segmentHeightPt),
       splitAfter: false
     });
-    usedHeight += segmentHeight;
+
+    usedHeight += ptToPx(segmentHeightPt);
   }
 
   for (const block of blocks) {
