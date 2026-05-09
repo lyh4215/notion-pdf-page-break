@@ -572,3 +572,37 @@
 .notion-pdf-preview-rendered-stack * {
   box-sizing: border-box;
 }
+
+.notion-pdf-preview-synthetic-list-line {
+  display: flex;
+  align-items: baseline;
+  padding-left: var(--notion-pdf-preview-list-depth-indent, 0px);
+  box-sizing: border-box;
+}
+
+.notion-pdf-preview-synthetic-list-marker {
+  flex: 0 0 var(--notion-pdf-preview-list-marker-width, 28.8px);
+  width: var(--notion-pdf-preview-list-marker-width, 28.8px);
+  min-width: var(--notion-pdf-preview-list-marker-width, 28.8px);
+  max-width: var(--notion-pdf-preview-list-marker-width, 28.8px);
+  text-align: center;
+  white-space: pre;
+  box-sizing: border-box;
+}
+
+.notion-pdf-preview-synthetic-list-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: pre-wrap;
+}
+
+.notion-pdf-preview-synthetic-list-embedded-block {
+  padding-left: var(--notion-pdf-preview-list-depth-indent, 0px);
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.notion-pdf-preview-synthetic-list-embedded-block .notion-pdf-preview-synthetic-table {
+  margin: 0;
+  width: 100%;
+}

@@ -236,17 +236,22 @@ function isDefaultPairwiseGapCell(row, col) {
 }
 // pairwise gap matrix overrides
 // format: setPairwiseGap(prevType, nextType, gapPt);
+// pairwise gap matrix overrides
+// format: setPairwiseGap(prevType, nextType, gapPt);
+
+// pairwise gap matrix overrides
+// format: setPairwiseGap(prevType, nextType, gapPt);
 
 // pageTitle -> *
 setPairwiseGap(T.PAGETITLE, T.PAGETITLE, 6.6);
 setPairwiseGap(T.PAGETITLE, T.PARAGRAPH, 8.5);
 setPairwiseGap(T.PAGETITLE, T.LIST, 8.5);
-setPairwiseGap(T.PAGETITLE, T.H2, 8.5);
+setPairwiseGap(T.PAGETITLE, T.H2, 15.4);
 setPairwiseGap(T.PAGETITLE, T.H3, 8.5);
 setPairwiseGap(T.PAGETITLE, T.H4, 8.5);
 setPairwiseGap(T.PAGETITLE, T.EQUATION, 10.0);
 setPairwiseGap(T.PAGETITLE, T.TABLE, 10.0);
-setPairwiseGap(T.PAGETITLE, T.CODE, 10.0);
+setPairwiseGap(T.PAGETITLE, T.CODE, 4.0);
 setPairwiseGap(T.PAGETITLE, T.QUOTE, 6.6);
 setPairwiseGap(T.PAGETITLE, T.CALLOUT, 6.6);
 setPairwiseGap(T.PAGETITLE, T.MEDIA, 6.6);
@@ -256,13 +261,13 @@ setPairwiseGap(T.PAGETITLE, T.BLANK, 6.6);
 // paragraph -> *
 setPairwiseGap(T.PARAGRAPH, T.PAGETITLE, 6.6);
 setPairwiseGap(T.PARAGRAPH, T.PARAGRAPH, 6.6);
-setPairwiseGap(T.PARAGRAPH, T.LIST, 6.6);
+setPairwiseGap(T.PARAGRAPH, T.LIST, 7.0);
 setPairwiseGap(T.PARAGRAPH, T.H2, 19.3);
 setPairwiseGap(T.PARAGRAPH, T.H3, 15.5);
 setPairwiseGap(T.PARAGRAPH, T.H4, 12.9);
 setPairwiseGap(T.PARAGRAPH, T.EQUATION, 14.0);
 setPairwiseGap(T.PARAGRAPH, T.TABLE, 10.6);
-setPairwiseGap(T.PARAGRAPH, T.CODE, 10.0);
+setPairwiseGap(T.PARAGRAPH, T.CODE, 4.0);
 setPairwiseGap(T.PARAGRAPH, T.QUOTE, 10.0);
 setPairwiseGap(T.PARAGRAPH, T.CALLOUT, 10.0);
 setPairwiseGap(T.PARAGRAPH, T.MEDIA, 6.6);
@@ -274,11 +279,11 @@ setPairwiseGap(T.LIST, T.PAGETITLE, 6.6);
 setPairwiseGap(T.LIST, T.PARAGRAPH, 7.8);
 setPairwiseGap(T.LIST, T.LIST, 7.8);
 setPairwiseGap(T.LIST, T.H2, 19.2);
-setPairwiseGap(T.LIST, T.H3, 14.6);
+setPairwiseGap(T.LIST, T.H3, 15.6);
 setPairwiseGap(T.LIST, T.H4, 12.9);
 setPairwiseGap(T.LIST, T.EQUATION, 13.2);
 setPairwiseGap(T.LIST, T.TABLE, 10.6);
-setPairwiseGap(T.LIST, T.CODE, 10.0);
+setPairwiseGap(T.LIST, T.CODE, 4.0);
 setPairwiseGap(T.LIST, T.QUOTE, 6.6);
 setPairwiseGap(T.LIST, T.CALLOUT, 6.6);
 setPairwiseGap(T.LIST, T.MEDIA, 6.6);
@@ -287,14 +292,14 @@ setPairwiseGap(T.LIST, T.BLANK, 6.6);
 
 // h2 -> *
 setPairwiseGap(T.H2, T.PAGETITLE, 6.6);
-setPairwiseGap(T.H2, T.PARAGRAPH, 4.3);
+setPairwiseGap(T.H2, T.PARAGRAPH, 3.7);
 setPairwiseGap(T.H2, T.LIST, 4.4);
 setPairwiseGap(T.H2, T.H2, 16.9);
 setPairwiseGap(T.H2, T.H3, 12.4);
 setPairwiseGap(T.H2, T.H4, 10.6);
 setPairwiseGap(T.H2, T.EQUATION, 10.0);
 setPairwiseGap(T.H2, T.TABLE, 10.6);
-setPairwiseGap(T.H2, T.CODE, 10.0);
+setPairwiseGap(T.H2, T.CODE, 4.0);
 setPairwiseGap(T.H2, T.QUOTE, 6.6);
 setPairwiseGap(T.H2, T.CALLOUT, 6.6);
 setPairwiseGap(T.H2, T.MEDIA, 6.6);
@@ -310,7 +315,7 @@ setPairwiseGap(T.H3, T.H3, 13.7);
 setPairwiseGap(T.H3, T.H4, 12.0);
 setPairwiseGap(T.H3, T.EQUATION, 15.0);
 setPairwiseGap(T.H3, T.TABLE, 9.0);
-setPairwiseGap(T.H3, T.CODE, 10.0);
+setPairwiseGap(T.H3, T.CODE, 4.0);
 setPairwiseGap(T.H3, T.QUOTE, 7.8);
 setPairwiseGap(T.H3, T.CALLOUT, 6.6);
 setPairwiseGap(T.H3, T.MEDIA, 6.6);
@@ -326,7 +331,7 @@ setPairwiseGap(T.H4, T.H3, 13.0);
 setPairwiseGap(T.H4, T.H4, 11.3);
 setPairwiseGap(T.H4, T.EQUATION, 10.0);
 setPairwiseGap(T.H4, T.TABLE, 10.6);
-setPairwiseGap(T.H4, T.CODE, 10.0);
+setPairwiseGap(T.H4, T.CODE, 4.0);
 setPairwiseGap(T.H4, T.QUOTE, 6.6);
 setPairwiseGap(T.H4, T.CALLOUT, 6.6);
 setPairwiseGap(T.H4, T.MEDIA, 6.6);
@@ -1445,22 +1450,160 @@ function estimateInlineMathAwareHeight(block, baseHeight) {
 
 function getTextFlowLineHeights(element, lines, ownOnly = false) {
   return lines.map((line) => {
-    if (isInlineCodeOnlyVisualLine(element, line, ownOnly)) {
-      return ptToPx(INLINE_CODE_ONLY_LINE_HEIGHT_PT);
-    }
-
-    if (isInlineMathVisualLine(element, line, ownOnly)) {
-      return ptToPx(INLINE_MATH_LINE_HEIGHT_PT);
-    }
-
-    return ptToPx(18);
+    return getTextFlowLineHeightForElement(element, line, ownOnly);
   });
 }
 
 function sumHeights(heights, start = 0, end = heights.length) {
   return heights.slice(start, end).reduce((sum, height) => sum + height, 0);
 }
+const LIST_MARKER_RESERVED_PT = 21.6;
+const LIST_NESTED_INDENT_PT = 18;
 
+function getListBlockInfo(block) {
+  return `${block.tagName || ""} ${block.className || ""} ${block.getAttribute?.("role") || ""} ${block.getAttribute?.("aria-label") || ""}`.toLowerCase();
+}
+
+function getListOwnText(block) {
+  return getOwnVisibleTextForEstimate(block) || " ";
+}
+
+function getListMarkerText(block, depth = 0, index = 0) {
+  const info = getListBlockInfo(block);
+
+  if (info.includes("numbered") || block.closest("ol")) {
+    return `${index + 1}.`;
+  }
+
+  if (info.includes("to_do") || info.includes("checkbox")) {
+    return "☐";
+  }
+
+  const bullets = ["•", "◦", "▪"];
+  return bullets[depth % bullets.length];
+}
+
+function isImmediateNestedChildBlock(parentBlock, candidateBlock) {
+  if (!parentBlock || !candidateBlock || parentBlock === candidateBlock) {
+    return false;
+  }
+
+  const parentId = parentBlock.getAttribute("data-block-id");
+  const candidateId = candidateBlock.getAttribute("data-block-id");
+
+  if (!parentId || !candidateId || parentId === candidateId) {
+    return false;
+  }
+
+  let parent = candidateBlock.parentElement?.closest("[data-block-id]");
+
+  // Notion은 같은 data-block-id wrapper가 중첩될 수 있으므로,
+  // candidate와 같은 id의 wrapper는 건너뛴다.
+  while (
+    parent &&
+    parent !== parentBlock &&
+    parent.getAttribute("data-block-id") === candidateId
+  ) {
+    parent = parent.parentElement?.closest("[data-block-id]");
+  }
+
+  return parent === parentBlock;
+}
+
+function getImmediateNestedContentBlocks(block) {
+  return sortBlocksByPagePosition(
+    Array.from(block.querySelectorAll("[data-block-id]"))
+      .filter((nestedBlock) => getVisibleRect(nestedBlock))
+      .filter((nestedBlock) => isImmediateNestedChildBlock(block, nestedBlock))
+  );
+}
+
+function getTextFlowLineHeightForElement(element, line, ownOnly = false) {
+  if (isInlineCodeOnlyVisualLine(element, line, ownOnly)) {
+    return ptToPx(INLINE_CODE_ONLY_LINE_HEIGHT_PT);
+  }
+
+  if (isInlineMathVisualLine(element, line, ownOnly)) {
+    return ptToPx(INLINE_MATH_LINE_HEIGHT_PT);
+  }
+
+  return ptToPx(18);
+}
+
+function buildListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0) {
+  const ownText = getListOwnText(block);
+  const reservedWidth = ptToPx(
+    LIST_MARKER_RESERVED_PT + depth * LIST_NESTED_INDENT_PT
+  );
+
+  const inlineCodeFragments = getInlineCodeFragmentsForPreview(block, true);
+  const inlineMathFragments = getInlineMathFragmentsForPreview(block, true);
+
+  const wrappedLines = wrapTextLinesForPreview(
+    ownText,
+    BODY_TEXT_FONT_SIZE_PX,
+    layoutWidth,
+    reservedWidth,
+    inlineCodeFragments,
+    "body",
+    inlineMathFragments
+  );
+
+  const rows = wrappedLines.map((line, lineIndex) => ({
+    kind: "line",
+    text: line || " ",
+    element: block,
+    depth,
+    lineIndex,
+    firstLine: lineIndex === 0,
+    marker: lineIndex === 0 ? getListMarkerText(block, depth, siblingIndex) : ""
+  }));
+
+  const childBlocks = getImmediateNestedContentBlocks(block);
+
+  childBlocks.forEach((childBlock, index) => {
+    const childType = classifyBlock(childBlock);
+
+    if (childType === "list") {
+      rows.push(
+        ...buildListPreviewRows(
+          childBlock,
+          layoutWidth,
+          depth + 1,
+          index
+        )
+      );
+      return;
+    }
+
+    if (childType === "table") {
+      const childLayoutWidth = Math.max(
+        120,
+        layoutWidth - ptToPx((depth + 1) * LIST_NESTED_INDENT_PT)
+      );
+
+      rows.push({
+        kind: "embeddedBlock",
+        blockType: "table",
+        element: childBlock,
+        depth: depth + 1,
+        text: "",
+        height: estimateTableHeight(childBlock, childLayoutWidth),
+        layoutWidth: childLayoutWidth
+      });
+
+      return;
+    }
+
+    // 나중에 equation/code/callout도 여기서 추가 가능
+  });
+
+  return rows;
+}
+
+function getPreviewRowText(row) {
+  return typeof row === "string" ? row : row.text;
+}
 function estimateTextFlowHeight(block, text, layoutWidth, reservedWidth, afterGapPt, ownOnly = false) {
   const inlineCodeFragments = getInlineCodeFragmentsForPreview(block, ownOnly);
   const inlineMathFragments = getInlineMathFragmentsForPreview(block, ownOnly);
@@ -1470,8 +1613,18 @@ function estimateTextFlowHeight(block, text, layoutWidth, reservedWidth, afterGa
 }
 
 function estimateListItemHeight(text, layoutWidth, depth = 0, compact = false, block = null) {
-  const reservedWidth = ptToPx(21.6 + depth * 18);
-  return estimateTextFlowHeight(block || document.body, text, layoutWidth, reservedWidth, 0, true);
+  const reservedWidth = ptToPx(
+    LIST_MARKER_RESERVED_PT + depth * LIST_NESTED_INDENT_PT
+  );
+
+  return estimateTextFlowHeight(
+    block || document.body,
+    text,
+    layoutWidth,
+    reservedWidth,
+    0,
+    true
+  );
 }
 
 function isLogicalChildBlock(block, nestedBlock) {
@@ -1512,20 +1665,17 @@ function getEmbeddedTablesForList(block) {
 }
 
 function estimateListHeight(block, layoutWidth, compact = false) {
-  const ownText = getOwnVisibleTextForEstimate(block) || getVisibleTextForEstimate(block, ptToPx(12));
-  let height = estimateListItemHeight(ownText, layoutWidth, 0, compact, block);
-  const nestedLayoutWidth = Math.max(120, layoutWidth - ptToPx(21.6));
+  const rows = buildListPreviewRows(block, layoutWidth, 0, 0);
 
-  for (const table of getEmbeddedTablesForList(block)) {
-    height += estimateTableHeight(table, nestedLayoutWidth);
-  }
+  const lineHeights = rows.map((row) => {
+    if (row.kind === "embeddedBlock") {
+      return Math.max(1, Number(row.height) || 0);
+    }
 
-  for (const nestedBlock of getNestedContentBlocks(block)) {
-    const nestedType = classifyBlock(nestedBlock);
-    height += nestedType === "list"
-      ? estimateListHeight(nestedBlock, nestedLayoutWidth, true)
-      : estimateBlockHeight(nestedBlock, nestedLayoutWidth, nestedType);
-  }
+    return getTextFlowLineHeightForElement(row.element, row.text, true);
+  });
+
+  const height = sumHeights(lineHeights);
 
   return estimateInlineMathAwareHeight(block, height);
 }
@@ -1925,16 +2075,49 @@ function paginateBlocks(blocks, pageHeight) {
   }
 
   function getTextFlowLineMetrics(block) {
+    if (block.type === "list") {
+      const rows = buildListPreviewRows(
+        block.element,
+        block.layoutWidth || PAGE_BODY_WIDTH_PX,
+        0,
+        0
+      );
+
+      const lineHeights = rows.map((row) => {
+        if (row.kind === "embeddedBlock") {
+          return Math.max(1, Number(row.height) || 0);
+        }
+
+        return getTextFlowLineHeightForElement(row.element, row.text, true);
+      });
+
+      const trailingGap = Math.max(0, block.height - sumHeights(lineHeights));
+
+      return {
+        rows,
+        lineHeights,
+        trailingGap
+      };
+    }
+
     const lines = formatSegmentTextForPreview(block).split("\n");
-    const lineHeights = getTextFlowLineHeights(block.element, lines, block.type === "list");
+    const lineHeights = getTextFlowLineHeights(block.element, lines, false);
     const trailingGap = Math.max(0, block.height - sumHeights(lineHeights));
-    return { lines, lineHeights, trailingGap };
+
+    return {
+      rows: lines,
+      lineHeights,
+      trailingGap
+    };
   }
 
-  function pushTextFlowSegment(block, lines, lineStart, lineEnd, segmentHeight, segmentIndex, totalLines) {
+  function pushTextFlowSegment(block, rows, lineStart, lineEnd, segmentHeight, segmentIndex, totalLines) {
     const splitAfter = lineEnd < totalLines;
+    const selectedRows = rows.slice(lineStart, lineEnd);
+
     pushPairwiseSegment(block, {
-      text: lines.slice(lineStart, lineEnd).join("\n"),
+      text: selectedRows.map(getPreviewRowText).join("\n"),
+      listRows: block.type === "list" ? selectedRows : undefined,
       continued: segmentIndex > 0,
       segmentHeight,
       splitAfter
@@ -1942,8 +2125,8 @@ function paginateBlocks(blocks, pageHeight) {
   }
 
   function paginateTextFlowBlock(block) {
-    const { lines, lineHeights, trailingGap } = getTextFlowLineMetrics(block);
-    const totalLines = Math.max(1, lines.length);
+    const { rows, lineHeights, trailingGap } = getTextFlowLineMetrics(block);
+    const totalLines = Math.max(1, rows.length);
     let lineIndex = 0;
     let segmentIndex = 0;
 
@@ -1966,7 +2149,7 @@ function paginateBlocks(blocks, pageHeight) {
       const finalHeight = sumHeights(lineHeights, lineIndex) + trailingGap;
 
       if (finalHeight <= availableHeight) {
-        pushTextFlowSegment(block, lines, lineIndex, totalLines, finalHeight, segmentIndex, totalLines);
+        pushTextFlowSegment(block, rows, lineIndex, totalLines, finalHeight, segmentIndex, totalLines);
         lineIndex = totalLines;
         break;
       }
@@ -1987,7 +2170,7 @@ function paginateBlocks(blocks, pageHeight) {
         continue;
       }
 
-      pushTextFlowSegment(block, lines, lineIndex, lineEnd, segmentHeight, segmentIndex, totalLines);
+      pushTextFlowSegment(block, rows, lineIndex, lineEnd, segmentHeight, segmentIndex, totalLines);
       lineIndex = lineEnd;
       segmentIndex += 1;
 
@@ -2357,6 +2540,21 @@ function formatSegmentTextForPreview(segment) {
     return getCodePreviewLines(segment.text || "", layoutWidth).join("\n") || "(empty block)";
   }
 
+  if (segment.type === "list") {
+    const rows = segment.listRows || buildListPreviewRows(
+      segment.element,
+      segment.layoutWidth || PAGE_BODY_WIDTH_PX,
+      0,
+      0
+    );
+
+    return rows.map((row) => {
+      const indent = "  ".repeat(row.depth);
+      const marker = row.firstLine ? `${row.marker} ` : "  ";
+      return `${indent}${marker}${row.text}`;
+    }).join("\n") || "(empty block)";
+  }
+
   if (!isSyntheticTextSegment(segment.type)) {
     return segment.text || "(empty block)";
   }
@@ -2548,6 +2746,66 @@ function createSyntheticTextPreview(segment) {
   text.style.setProperty("--notion-pdf-preview-code-padding-right", `${ptToPx(CODE_BLOCK_PADDING_RIGHT_PT)}px`);
   text.style.setProperty("--notion-pdf-preview-code-padding-bottom", `${Number.isFinite(segment.codePaddingBottom) ? segment.codePaddingBottom : ptToPx(CODE_BLOCK_PADDING_BOTTOM_PT)}px`);
   text.style.setProperty("--notion-pdf-preview-code-padding-left", `${ptToPx(CODE_BLOCK_PADDING_LEFT_PT)}px`);
+
+  if (segment.type === "list" && Array.isArray(segment.listRows)) {
+    for (const row of segment.listRows) {
+      if (row.kind === "embeddedBlock" && row.blockType === "table") {
+        const embedded = document.createElement("div");
+        embedded.className = "notion-pdf-preview-synthetic-list-embedded-block";
+
+        embedded.style.setProperty(
+          "--notion-pdf-preview-list-depth-indent",
+          `${ptToPx(row.depth * LIST_NESTED_INDENT_PT)}px`
+        );
+
+        const tableSegment = {
+          ...segment,
+          type: "table",
+          element: row.element,
+          layoutWidth: row.layoutWidth,
+          gapBeforePx: 0,
+          contentHeight: row.height,
+          segmentHeight: row.height
+        };
+
+        embedded.append(createRenderedTablePreview(tableSegment));
+        text.append(embedded);
+        continue;
+      }
+
+      const lineElement = document.createElement("div");
+      lineElement.className =
+        "notion-pdf-preview-synthetic-line notion-pdf-preview-synthetic-list-line";
+
+      lineElement.style.setProperty(
+        "--notion-pdf-preview-list-depth-indent",
+        `${ptToPx(row.depth * LIST_NESTED_INDENT_PT)}px`
+      );
+
+      lineElement.style.setProperty(
+        "--notion-pdf-preview-list-marker-width",
+        `${ptToPx(LIST_MARKER_RESERVED_PT)}px`
+      );
+
+      const marker = document.createElement("span");
+      marker.className = "notion-pdf-preview-synthetic-list-marker";
+      marker.textContent = row.firstLine ? row.marker : "";
+
+      const content = document.createElement("span");
+      content.className = "notion-pdf-preview-synthetic-list-content";
+
+      appendSyntheticLineContent(content, row.text, {
+        ...segment,
+        element: row.element || segment.element
+      });
+
+      lineElement.append(marker, content);
+      text.append(lineElement);
+    }
+
+    return text;
+  }
+
   const lines = formatSegmentTextForPreview(segment).split("\n");
 
   for (const line of lines) {
