@@ -51,6 +51,171 @@ const TABLE_TOP_GAP_PT = 5.0;
 const EQUATION_DISPLAY_MARGIN_TOP_PT = 9;
 const EQUATION_DISPLAY_MARGIN_BOTTOM_PT = 11;
 
+const BlockType = Object.freeze({
+  PAGE_TITLE: 0,
+  PARAGRAPH: 1,
+  LIST: 2,
+  H2: 3,
+  H3: 4,
+  H4: 5,
+  EQUATION: 6,
+  TABLE: 7,
+  CODE: 8,
+  QUOTE: 9,
+  CALLOUT: 10,
+  MEDIA: 11,
+  DIVIDER: 12,
+  BLANK: 13,
+});
+
+const T = BlockType;
+const BLOCK_TYPE_COUNT = Object.keys(BlockType).length;
+const DEFAULT_PAIRWISE_GAP_PT = 6.6;
+
+const BLOCK_TYPE_INDEX = Object.freeze({
+  pageTitle: T.PAGE_TITLE,
+  paragraph: T.PARAGRAPH,
+  list: T.LIST,
+  h2: T.H2,
+  h3: T.H3,
+  h4: T.H4,
+  equation: T.EQUATION,
+  table: T.TABLE,
+  code: T.CODE,
+  quote: T.QUOTE,
+  callout: T.CALLOUT,
+  media: T.MEDIA,
+  divider: T.DIVIDER,
+  blank: T.BLANK,
+});
+
+const PAIRWISE_GAP_PT = Array.from(
+  { length: BLOCK_TYPE_COUNT },
+  () => Array(BLOCK_TYPE_COUNT).fill(DEFAULT_PAIRWISE_GAP_PT)
+);
+
+function setPairwiseGap(prevType, nextType, gapPt) {
+  PAIRWISE_GAP_PT[prevType][nextType] = gapPt;
+}
+
+function getBlockTypeIndex(type) {
+  return BLOCK_TYPE_INDEX[type] ?? T.PARAGRAPH;
+}
+
+function getPairwiseGapPt(prevType, nextType) {
+  if (!prevType || !nextType) {
+    return 0;
+  }
+
+  const prevIndex = getBlockTypeIndex(prevType);
+  const nextIndex = getBlockTypeIndex(nextType);
+
+  return PAIRWISE_GAP_PT[prevIndex]?.[nextIndex] ?? DEFAULT_PAIRWISE_GAP_PT;
+}
+
+// pageTitle -> *
+setPairwiseGap(T.PAGE_TITLE, T.PARAGRAPH, 8.5);
+setPairwiseGap(T.PAGE_TITLE, T.H2, 8.5);
+setPairwiseGap(T.PAGE_TITLE, T.H3, 8.5);
+setPairwiseGap(T.PAGE_TITLE, T.H4, 8.5);
+setPairwiseGap(T.PAGE_TITLE, T.LIST, 8.5);
+setPairwiseGap(T.PAGE_TITLE, T.EQUATION, 10.0);
+setPairwiseGap(T.PAGE_TITLE, T.TABLE, 10.0);
+setPairwiseGap(T.PAGE_TITLE, T.CODE, 10.0);
+
+// paragraph -> *
+setPairwiseGap(T.PARAGRAPH, T.PARAGRAPH, 6.6);
+setPairwiseGap(T.PARAGRAPH, T.LIST, 6.6);
+setPairwiseGap(T.PARAGRAPH, T.H2, 19.2);
+setPairwiseGap(T.PARAGRAPH, T.H3, 14.6);
+setPairwiseGap(T.PARAGRAPH, T.H4, 12.9);
+setPairwiseGap(T.PARAGRAPH, T.EQUATION, 13.2);
+setPairwiseGap(T.PARAGRAPH, T.TABLE, 10.6);
+setPairwiseGap(T.PARAGRAPH, T.CODE, 10.0);
+setPairwiseGap(T.PARAGRAPH, T.QUOTE, 10.0);
+setPairwiseGap(T.PARAGRAPH, T.CALLOUT, 10.0);
+
+// list -> *
+setPairwiseGap(T.LIST, T.PARAGRAPH, 7.8);
+setPairwiseGap(T.LIST, T.LIST, 7.8);
+setPairwiseGap(T.LIST, T.H2, 19.2);
+setPairwiseGap(T.LIST, T.H3, 14.6);
+setPairwiseGap(T.LIST, T.H4, 12.9);
+setPairwiseGap(T.LIST, T.EQUATION, 13.2);
+setPairwiseGap(T.LIST, T.TABLE, 10.6);
+setPairwiseGap(T.LIST, T.CODE, 10.0);
+
+// h2, Notion markdown #
+setPairwiseGap(T.H2, T.PARAGRAPH, 4.4);
+setPairwiseGap(T.H2, T.LIST, 4.4);
+setPairwiseGap(T.H2, T.H2, 16.9);
+setPairwiseGap(T.H2, T.H3, 12.4);
+setPairwiseGap(T.H2, T.H4, 10.6);
+setPairwiseGap(T.H2, T.EQUATION, 10.0);
+setPairwiseGap(T.H2, T.TABLE, 10.6);
+setPairwiseGap(T.H2, T.CODE, 10.0);
+
+// h3, Notion markdown ##
+setPairwiseGap(T.H3, T.PARAGRAPH, 5.7);
+setPairwiseGap(T.H3, T.LIST, 5.7);
+setPairwiseGap(T.H3, T.H2, 18.2);
+setPairwiseGap(T.H3, T.H3, 13.7);
+setPairwiseGap(T.H3, T.H4, 12.0);
+setPairwiseGap(T.H3, T.EQUATION, 10.0);
+setPairwiseGap(T.H3, T.TABLE, 10.6);
+setPairwiseGap(T.H3, T.CODE, 10.0);
+
+// h4, Notion markdown ###
+setPairwiseGap(T.H4, T.PARAGRAPH, 5.0);
+setPairwiseGap(T.H4, T.LIST, 5.0);
+setPairwiseGap(T.H4, T.H2, 17.6);
+setPairwiseGap(T.H4, T.H3, 13.0);
+setPairwiseGap(T.H4, T.H4, 11.3);
+setPairwiseGap(T.H4, T.EQUATION, 10.0);
+setPairwiseGap(T.H4, T.TABLE, 10.6);
+setPairwiseGap(T.H4, T.CODE, 10.0);
+
+// equation -> *
+setPairwiseGap(T.EQUATION, T.PARAGRAPH, 12.0);
+setPairwiseGap(T.EQUATION, T.LIST, 12.0);
+setPairwiseGap(T.EQUATION, T.H2, 14.0);
+setPairwiseGap(T.EQUATION, T.H3, 13.5);
+setPairwiseGap(T.EQUATION, T.H4, 13.0);
+setPairwiseGap(T.EQUATION, T.EQUATION, 6.0);
+setPairwiseGap(T.EQUATION, T.TABLE, 10.6);
+
+// table -> *
+setPairwiseGap(T.TABLE, T.PARAGRAPH, 6.6);
+setPairwiseGap(T.TABLE, T.LIST, 6.6);
+setPairwiseGap(T.TABLE, T.H2, 14.0);
+setPairwiseGap(T.TABLE, T.H3, 13.5);
+setPairwiseGap(T.TABLE, T.H4, 13.0);
+setPairwiseGap(T.TABLE, T.EQUATION, 10.0);
+setPairwiseGap(T.TABLE, T.TABLE, 8.0);
+
+// code -> *
+setPairwiseGap(T.CODE, T.PARAGRAPH, 5.5);
+setPairwiseGap(T.CODE, T.LIST, 5.5);
+setPairwiseGap(T.CODE, T.H2, 14.0);
+setPairwiseGap(T.CODE, T.H3, 13.5);
+setPairwiseGap(T.CODE, T.H4, 13.0);
+setPairwiseGap(T.CODE, T.EQUATION, 10.0);
+setPairwiseGap(T.CODE, T.CODE, 8.0);
+
+// quote -> *
+setPairwiseGap(T.QUOTE, T.PARAGRAPH, 12.6);
+setPairwiseGap(T.QUOTE, T.H2, 16.0);
+setPairwiseGap(T.QUOTE, T.H3, 14.0);
+setPairwiseGap(T.QUOTE, T.H4, 13.0);
+setPairwiseGap(T.QUOTE, T.EQUATION, 10.0);
+
+// callout -> *
+setPairwiseGap(T.CALLOUT, T.PARAGRAPH, 18.0);
+setPairwiseGap(T.CALLOUT, T.H2, 18.0);
+setPairwiseGap(T.CALLOUT, T.H3, 16.0);
+setPairwiseGap(T.CALLOUT, T.H4, 15.0);
+setPairwiseGap(T.CALLOUT, T.EQUATION, 10.0);
+
 // 연속 equation 사이의 최소 visual gap 참고값.
 // 실제 pushEquationBlock에서는 top gap 중복을 제거한다.
 
@@ -887,14 +1052,12 @@ function estimateTableHeight(block, layoutWidth) {
   const rowHeights = estimateTableRowHeights(block, layoutWidth);
   const tableHeight = rowHeights.reduce((sum, rowHeight) => sum + rowHeight, ptToPx(0.75));
   const extraText = getTextOutsideTable(block);
-  const topGap = ptToPx(TABLE_TOP_GAP_PT);
-
   if (!extraText) {
-    return topGap + tableHeight;
+    return tableHeight;
   }
 
   const extraLines = estimateWrappedLines(extraText, ptToPx(12), layoutWidth);
-  return topGap + tableHeight + blockHeightFromPt(extraLines, 18, -0.62, 6.6);
+  return tableHeight + blockHeightFromPt(extraLines, 18, -0.62, 0);
 }
 
 function estimateMediaHeight(block, layoutWidth) {
@@ -978,11 +1141,7 @@ function getEquationMetrics(block) {
   const fixedBottomMarginPx = ptToPx(EQUATION_DISPLAY_MARGIN_BOTTOM_PT);
 
   const displayHeightPx = displayRect.height;
-
-  const segmentHeightPx =
-    fixedTopMarginPx +
-    displayHeightPx +
-    fixedBottomMarginPx;
+  const segmentHeightPx = displayHeightPx;
 
   return {
     preset: "katex-display-fixed-padding",
@@ -995,13 +1154,11 @@ function getEquationMetrics(block) {
     samePageHeightPt: cssPxToPt(segmentHeightPx),
     pageTopHeightPt: cssPxToPt(segmentHeightPx),
     glyphHeightPt: cssPxToPt(displayHeightPx),
-    topGapPt: EQUATION_DISPLAY_MARGIN_TOP_PT,
-    bottomGapPt: EQUATION_DISPLAY_MARGIN_BOTTOM_PT,
+    topGapPt: 0,
+    bottomGapPt: 0,
 
     debugParts: {
       displayHeightPx,
-      fixedTopMarginPx,
-      fixedBottomMarginPx,
       segmentHeightPx,
     },
   };
@@ -1042,7 +1199,7 @@ function estimateTextFlowHeight(block, text, layoutWidth, reservedWidth, afterGa
 
 function estimateListItemHeight(text, layoutWidth, depth = 0, compact = false, block = null) {
   const reservedWidth = ptToPx(21.6 + depth * 18);
-  return estimateTextFlowHeight(block || document.body, text, layoutWidth, reservedWidth, compact ? 0 : 7.8, true);
+  return estimateTextFlowHeight(block || document.body, text, layoutWidth, reservedWidth, 0, true);
 }
 
 function isLogicalChildBlock(block, nestedBlock) {
@@ -1109,7 +1266,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // Notion page title, not markdown #.
       // Measured formula: 43.5n + 16 pt.
       const lines = estimateWrappedLines(text, ptToPx(PAGE_TITLE_FONT_SIZE_PT), layoutWidth, 0, "title");
-      return blockHeightFromPt(lines, 43.5, 0, 15);
+      return blockHeightFromPt(lines, 43.5, 2.25, 0);
     }
 
     case "h2": {
@@ -1118,7 +1275,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // Measured markdown # formula:
       // visible = 27n + 5.58 pt, after gap = 3 pt.
       const lines = estimateWrappedLines(text, ptToPx(H2_FONT_SIZE_PT), layoutWidth, 0, "heading");
-      return blockHeightFromPt(lines, 27, 5.58, 8);
+      return blockHeightFromPt(lines, 27, 5.58, 0);
     }
 
     case "h3": {
@@ -1127,7 +1284,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // Measured markdown ## formula:
       // visible = 21.75n + 4.31 pt, after gap = 12.5 pt.
       const lines = estimateWrappedLines(text, ptToPx(H3_FONT_SIZE_PT), layoutWidth, 0, "heading");
-      return blockHeightFromPt(lines, 21.75, 4.31, 13);
+      return blockHeightFromPt(lines, 21.75, 4.31, 0);
     }
 
     case "h4": {
@@ -1136,7 +1293,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // Measured markdown ### formula:
       // visible = 18n + 3.72 pt, after gap = 8 pt.
       const lines = estimateWrappedLines(text, ptToPx(H4_FONT_SIZE_PT), layoutWidth, 0, "heading");
-      return blockHeightFromPt(lines, 18, 3.72, 8);
+      return blockHeightFromPt(lines, 18, 3.72, 0);
     }
 
     case "list": {
@@ -1144,7 +1301,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     }
 
     case "quote": {
-      const baseHeight = estimateTextFlowHeight(block, text, layoutWidth, ptToPx(14.25), 12.6);
+      const baseHeight = estimateTextFlowHeight(block, text, layoutWidth, ptToPx(14.25), 0);
       return estimateInlineMathAwareHeight(block, baseHeight);
     }
     
@@ -1152,7 +1309,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       return estimateEquationHeight(block);
 
     case "callout": {
-      const baseHeight = estimateTextFlowHeight(block, text, layoutWidth, ptToPx(40), 18);
+      const baseHeight = estimateTextFlowHeight(block, text, layoutWidth, ptToPx(40), 0);
       return estimateInlineMathAwareHeight(block, baseHeight);
     }
 
@@ -1160,7 +1317,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // Measured code block formula: 18n + 26 pt.
       // n is visual line slots, including blank lines and wrapped long code lines.
       const lineSlots = Math.max(1, getCodePreviewLines(getCodeRawTextForEstimate(block), layoutWidth).length);
-      return blockHeightFromPt(lineSlots, CODE_BLOCK_LINE_HEIGHT_PT, CODE_BLOCK_PADDING_TOP_PT + CODE_BLOCK_PADDING_BOTTOM_PT, CODE_BLOCK_MARGIN_BOTTOM_PT);
+      return blockHeightFromPt(lineSlots, CODE_BLOCK_LINE_HEIGHT_PT, CODE_BLOCK_PADDING_TOP_PT + CODE_BLOCK_PADDING_BOTTOM_PT, 0);
     }
 
     case "table":
@@ -1176,7 +1333,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       return ptToPx(18);
 
     default: {
-      const baseHeight = estimateTextFlowHeight(block, text, layoutWidth, 0, 6.6);
+      const baseHeight = estimateTextFlowHeight(block, text, layoutWidth, 0, 0);
       return estimateInlineMathAwareHeight(block, baseHeight);
     }
   }
@@ -1318,6 +1475,58 @@ function paginateBlocks(blocks, pageHeight) {
     usedHeight = 0;
   }
 
+  function lastSegment() {
+    const page = currentPage();
+    return page.length ? page[page.length - 1] : null;
+  }
+
+  function getGapBeforePx(block, continued = false) {
+    if (continued) {
+      return 0;
+    }
+
+    const prev = lastSegment();
+
+    if (!prev || prev.splitAfter) {
+      return 0;
+    }
+
+    return ptToPx(getPairwiseGapPt(prev.type, block.type));
+  }
+
+  function getSegmentContentHeight(block, segmentHeight = block.height) {
+    return Math.max(1, Number(segmentHeight) || 0);
+  }
+
+  function getAvailableContentHeight(block, continued = false) {
+    return pageHeight - usedHeight - getGapBeforePx(block, continued);
+  }
+
+  function wouldOverflowSegment(block, segmentHeight = block.height, continued = false) {
+    const contentHeight = getSegmentContentHeight(block, segmentHeight);
+    const gapBeforePx = getGapBeforePx(block, continued);
+
+    return usedHeight > 0 && usedHeight + gapBeforePx + contentHeight > pageHeight;
+  }
+
+  function pushPairwiseSegment(block, options = {}) {
+    const continued = Boolean(options.continued);
+    const contentHeight = getSegmentContentHeight(block, options.segmentHeight);
+    const gapBeforePx = getGapBeforePx(block, continued);
+    const segmentHeight = gapBeforePx + contentHeight;
+
+    currentPage().push({
+      ...block,
+      ...options,
+      continued,
+      gapBeforePx,
+      contentHeight,
+      segmentHeight
+    });
+
+    usedHeight += segmentHeight;
+  }
+
   function isTextFlowType(type) {
     return type === "paragraph" || type === "list" || type === "quote" || type === "callout";
   }
@@ -1328,16 +1537,13 @@ function paginateBlocks(blocks, pageHeight) {
 
   function pushTableSegment(block, segmentHeight, consumedRows, rowCount, segmentIndex, clipOffset = 0) {
     const splitAfter = consumedRows < rowCount;
-    const tableTopGap = segmentIndex === 0 ? ptToPx(TABLE_TOP_GAP_PT) : 0;
-    currentPage().push({
-      ...block,
+
+    pushPairwiseSegment(block, {
       clipOffset,
       continued: segmentIndex > 0,
-      tableTopGap,
       segmentHeight,
       splitAfter
     });
-    usedHeight += segmentHeight;
   }
 
   function paginateTableBlock(block) {
@@ -1355,7 +1561,7 @@ function paginateBlocks(blocks, pageHeight) {
     let segmentIndex = 0;
 
     while (consumedRows < rowCount) {
-      let availableHeight = pageHeight - usedHeight;
+      let availableHeight = getAvailableContentHeight(block, segmentIndex > 0);
 
       if (availableHeight <= 0) {
         startNewPage({
@@ -1367,8 +1573,7 @@ function paginateBlocks(blocks, pageHeight) {
 
       const isContinuation = segmentIndex > 0;
       const repeatedHeaderHeight = isContinuation && repeatsHeader ? headerHeight : 0;
-      const tableTopGap = segmentIndex === 0 ? ptToPx(TABLE_TOP_GAP_PT) : 0;
-      let segmentHeight = tableTopGap + borderHeight + repeatedHeaderHeight;
+      let segmentHeight = borderHeight + repeatedHeaderHeight;
       let originalRows = 0;
       const segmentStartRow = consumedRows;
 
@@ -1415,7 +1620,7 @@ function paginateBlocks(blocks, pageHeight) {
     let segmentIndex = 0;
 
     while (remainingHeight > 0) {
-      let availableHeight = pageHeight - usedHeight;
+      let availableHeight = getAvailableContentHeight(block, segmentIndex > 0);
 
       if (availableHeight <= 0) {
         startNewPage({
@@ -1430,15 +1635,12 @@ function paginateBlocks(blocks, pageHeight) {
       consumedHeight += segmentHeight;
       remainingHeight -= segmentHeight;
 
-      currentPage().push({
-        ...block,
+      pushPairwiseSegment(block, {
         clipOffset,
         continued: segmentIndex > 0,
         segmentHeight,
         splitAfter: remainingHeight > 0
       });
-
-      usedHeight += segmentHeight;
       segmentIndex += 1;
 
       if (remainingHeight > 0) {
@@ -1459,14 +1661,12 @@ function paginateBlocks(blocks, pageHeight) {
 
   function pushTextFlowSegment(block, lines, lineStart, lineEnd, segmentHeight, segmentIndex, totalLines) {
     const splitAfter = lineEnd < totalLines;
-    currentPage().push({
-      ...block,
+    pushPairwiseSegment(block, {
       text: lines.slice(lineStart, lineEnd).join("\n"),
       continued: segmentIndex > 0,
       segmentHeight,
       splitAfter
     });
-    usedHeight += segmentHeight;
   }
 
   function paginateTextFlowBlock(block) {
@@ -1480,7 +1680,7 @@ function paginateBlocks(blocks, pageHeight) {
     }
 
     while (lineIndex < totalLines) {
-      let availableHeight = pageHeight - usedHeight;
+      let availableHeight = getAvailableContentHeight(block, segmentIndex > 0);
       const nextLineHeight = lineHeights[lineIndex] || ptToPx(18);
 
       if (availableHeight < nextLineHeight && usedHeight > 0) {
@@ -1532,8 +1732,7 @@ function paginateBlocks(blocks, pageHeight) {
 
   function pushCodeSegment(block, lines, lineStart, lineEnd, segmentHeight, segmentIndex, totalLines, codePaddingTop, codePaddingBottom) {
     const splitAfter = lineEnd < totalLines;
-    currentPage().push({
-      ...block,
+    pushPairwiseSegment(block, {
       text: lines.slice(lineStart, lineEnd).join("\n"),
       continued: segmentIndex > 0,
       codePaddingTop,
@@ -1541,7 +1740,6 @@ function paginateBlocks(blocks, pageHeight) {
       segmentHeight,
       splitAfter
     });
-    usedHeight += segmentHeight;
   }
 
   function paginateCodeBlock(block) {
@@ -1549,12 +1747,12 @@ function paginateBlocks(blocks, pageHeight) {
     const totalLines = Math.max(1, lines.length);
     const lineHeight = ptToPx(CODE_BLOCK_LINE_HEIGHT_PT);
     const firstTopPadding = ptToPx(CODE_BLOCK_PADDING_TOP_PT);
-    const finalBottomSpace = ptToPx(CODE_BLOCK_PADDING_BOTTOM_PT + CODE_BLOCK_MARGIN_BOTTOM_PT);
+  const finalBottomSpace = ptToPx(CODE_BLOCK_PADDING_BOTTOM_PT);
     let lineIndex = 0;
     let segmentIndex = 0;
 
     while (lineIndex < totalLines) {
-      let availableHeight = pageHeight - usedHeight;
+      let availableHeight = getAvailableContentHeight(block, segmentIndex > 0);
       const codePaddingTop = segmentIndex === 0 ? firstTopPadding : 0;
 
       if (usedHeight > 0 && availableHeight < codePaddingTop + lineHeight) {
@@ -1609,88 +1807,99 @@ function paginateBlocks(blocks, pageHeight) {
   function pushEquationBlock(block) {
     const metrics = getEquationMetrics(block.element);
 
-    const segmentHeight =
+    const contentHeight =
       metrics.segmentHeightPx ||
       metrics.samePageHeightPx ||
       block.height;
 
-    if (usedHeight > 0 && usedHeight + segmentHeight > pageHeight) {
+    if (wouldOverflowSegment(block, contentHeight)) {
       startNewPage({
         element: block.element,
         offsetRatio: 0
       });
     }
 
-    currentPage().push({
-      ...block,
+    pushPairwiseSegment(block, {
       continued: false,
-
-      // 중요: equation에서는 clipOffset을 쓰지 않는다.
       clipOffset: 0,
 
       equationMetrics: metrics,
       equationPreset: metrics.preset,
       equationMeasurement: metrics.measurement,
 
-      segmentHeight,
+      segmentHeight: contentHeight,
       splitAfter: false
     });
-
-    usedHeight += segmentHeight;
   }
 
   for (const block of blocks) {
+    const blockHeight = Math.max(1, Number(block.height) || 0);
+    const isOversized = blockHeight > pageHeight;
+
+    // 1. Table
+    // table은 row 단위 split이 가능하므로 먼저 처리한다.
+    // 단, row가 1개 이하라 paginateTableBlock()이 false를 반환할 수 있으므로
+    // 그 경우에는 아래 일반 block 처리로 fall through 시킨다.
     if (
       block.type === "table" &&
-      (block.height > pageHeight || (usedHeight > 0 && usedHeight + block.height > pageHeight))
+      (isOversized || wouldOverflowSegment(block))
     ) {
       if (paginateTableBlock(block)) {
         continue;
       }
     }
 
-    if (block.type === "code" && usedHeight > 0 && usedHeight + block.height > pageHeight) {
+    // 2. Code block
+    // code는 line 단위 split을 우선 적용한다.
+    if (
+      block.type === "code" &&
+      (isOversized || wouldOverflowSegment(block))
+    ) {
       paginateCodeBlock(block);
       continue;
     }
 
+    // 3. Equation
+    // equation은 자체 content height를 다시 재므로 전용 push 함수로 보낸다.
+    // pushEquationBlock 내부에서 pairwise gap + page overflow를 처리해야 한다.
     if (block.type === "equation") {
       pushEquationBlock(block);
       continue;
     }
 
+    // 4. Paragraph / List / Quote / Callout
+    // 여러 줄짜리 text flow는 line 단위 split을 시도한다.
     if (
       isLineSplittableTextFlow(block) &&
-      usedHeight + block.height > pageHeight
+      (isOversized || wouldOverflowSegment(block))
     ) {
       if (paginateTextFlowBlock(block)) {
         continue;
       }
     }
 
-    if (block.height <= pageHeight) {
-      if (usedHeight > 0 && usedHeight + block.height > pageHeight) {
+    // 5. 일반 block
+    // 현재 페이지에 들어갈 수 있으면 pairwise gap을 붙여 push한다.
+    if (!isOversized) {
+      if (wouldOverflowSegment(block)) {
         startNewPage({
           element: block.element,
           offsetRatio: 0
         });
       }
 
-      currentPage().push({
-        ...block,
+      pushPairwiseSegment(block, {
         continued: false,
         segmentHeight: block.height,
         splitAfter: false
       });
-      usedHeight += block.height;
+
       continue;
     }
 
-    if (block.type === "code") {
-      paginateCodeBlock(block);
-      continue;
-    }
-
+    // 6. 너무 큰 block fallback
+    // table/code/text-flow에서 처리되지 않은 큰 block은 height 기준으로 잘라낸다.
+    // 예: media, 큰 custom block 등.
     if (usedHeight > 0) {
       startNewPage({
         element: block.element,
@@ -1698,13 +1907,7 @@ function paginateBlocks(blocks, pageHeight) {
       });
     }
 
-    currentPage().push({
-      ...block,
-      continued: false,
-      segmentHeight: block.height,
-      splitAfter: false
-    });
-    usedHeight += block.height;
+    paginateHeightSplitBlock(block);
   }
 
   return {
@@ -1941,11 +2144,6 @@ function createPdfPreviewBlock(segment, pageScale) {
 function createRenderedTablePreview(segment) {
   const table = document.createElement("table");
   table.className = "notion-pdf-preview-synthetic-table";
-  const tableTopGap = Number.isFinite(segment.tableTopGap)
-    ? segment.tableTopGap
-    : segment.continued
-      ? 0
-      : ptToPx(TABLE_TOP_GAP_PT);
   table.style.marginTop = `${tableTopGap}px`;
 
   for (const row of getTableRows(segment.element)) {
@@ -2090,8 +2288,8 @@ function createRenderedEquationPreview(segment) {
   wrapper.style.boxSizing = "border-box";
   wrapper.style.width = "100%";
   wrapper.style.height = "100%";
-  wrapper.style.paddingTop = `${ptToPx(EQUATION_DISPLAY_MARGIN_TOP_PT)}px`;
-  wrapper.style.paddingBottom = `${ptToPx(EQUATION_DISPLAY_MARGIN_BOTTOM_PT)}px`;
+  wrapper.style.paddingTop = "0px";
+  wrapper.style.paddingBottom = "0px";
   wrapper.style.overflow = "hidden";
 
   const sourceDisplay = getEquationDisplayElement(segment.element);
@@ -2120,7 +2318,9 @@ function createRenderedEquationPreview(segment) {
 function createRenderedPdfPreviewSegment(segment) {
   const segmentElement = document.createElement("div");
   const segmentHeight = Math.max(1, segment.segmentHeight ?? segment.height);
-  const debugLabel = `${segment.type} | ${Math.round(segmentHeight)}px${segment.continued ? " | continued" : ""}${segment.splitAfter ? " | splits" : ""}`;
+  const gapBeforePx = Math.max(0, Number(segment.gapBeforePx) || 0);
+  const contentHeight = Math.max(1, Number(segment.contentHeight ?? segment.height) || 0);
+  const debugLabel = `${segment.type} | ${Math.round(segmentHeight)}px | gap ${Math.round(gapBeforePx || 0)}px | content ${Math.round(contentHeight || segmentHeight)}px${segment.continued ? " | continued" : ""}${segment.splitAfter ? " | splits" : ""}`;
 
   segmentElement.className = "notion-pdf-preview-rendered-segment";
   segmentElement.dataset.type = segment.type;
@@ -2148,7 +2348,9 @@ function createRenderedPdfPreviewSegment(segment) {
         ? createSyntheticTextPreview(segment)
         : prepareCloneForMeasurement(segment.element.cloneNode(true), segment.type);
   clone.classList.add("notion-pdf-preview-rendered-clone");
-
+  if (gapBeforePx > 0) {
+    clone.style.marginTop = `${gapBeforePx}px`;
+  }
   const clipOffset = segment.type === "equation"
     ? 0
     : Number(segment.clipOffset) || 0;
