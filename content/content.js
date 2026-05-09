@@ -251,22 +251,8 @@ function isDefaultPairwiseGapCell(row, col) {
 // pairwise gap matrix overrides
 // format: setPairwiseGap(prevType, nextType, gapPt);
 
-setPairwiseGap(T.PAGETITLE, T.PAGEMETADATA, 0.0);
-
-setPairwiseGap(T.PAGEMETADATA, T.PARAGRAPH, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.LIST, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.H2, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.H3, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.H4, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.EQUATION, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.TABLE, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.CODE, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.QUOTE, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.CALLOUT, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.MEDIA, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.COLUMNS, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.DIVIDER, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.BLANK, 0.0);
+// pairwise gap matrix overrides
+// format: setPairwiseGap(prevType, nextType, gapPt);
 
 // pageTitle -> *
 setPairwiseGap(T.PAGETITLE, T.PAGETITLE, 6.6);
@@ -284,6 +270,7 @@ setPairwiseGap(T.PAGETITLE, T.MEDIA, 6.6);
 setPairwiseGap(T.PAGETITLE, T.COLUMNS, 6.6);
 setPairwiseGap(T.PAGETITLE, T.DIVIDER, 6.6);
 setPairwiseGap(T.PAGETITLE, T.BLANK, 6.6);
+setPairwiseGap(T.PAGETITLE, T.PAGEMETADATA, 13.2);
 
 // paragraph -> *
 setPairwiseGap(T.PARAGRAPH, T.PAGETITLE, 6.6);
@@ -301,6 +288,7 @@ setPairwiseGap(T.PARAGRAPH, T.MEDIA, 6.6);
 setPairwiseGap(T.PARAGRAPH, T.COLUMNS, 6.6);
 setPairwiseGap(T.PARAGRAPH, T.DIVIDER, 6.6);
 setPairwiseGap(T.PARAGRAPH, T.BLANK, 6.6);
+setPairwiseGap(T.PARAGRAPH, T.PAGEMETADATA, 6.6);
 
 // list -> *
 setPairwiseGap(T.LIST, T.PAGETITLE, 6.6);
@@ -318,6 +306,7 @@ setPairwiseGap(T.LIST, T.MEDIA, 6.6);
 setPairwiseGap(T.LIST, T.COLUMNS, 6.6);
 setPairwiseGap(T.LIST, T.DIVIDER, 6.6);
 setPairwiseGap(T.LIST, T.BLANK, 6.6);
+setPairwiseGap(T.LIST, T.PAGEMETADATA, 6.6);
 
 // h2 -> *
 setPairwiseGap(T.H2, T.PAGETITLE, 6.6);
@@ -335,11 +324,12 @@ setPairwiseGap(T.H2, T.MEDIA, 6.6);
 setPairwiseGap(T.H2, T.COLUMNS, 6.6);
 setPairwiseGap(T.H2, T.DIVIDER, 6.6);
 setPairwiseGap(T.H2, T.BLANK, 6.6);
+setPairwiseGap(T.H2, T.PAGEMETADATA, 6.6);
 
 // h3 -> *
 setPairwiseGap(T.H3, T.PAGETITLE, 6.6);
 setPairwiseGap(T.H3, T.PARAGRAPH, 4.7);
-setPairwiseGap(T.H3, T.LIST, 5.7);
+setPairwiseGap(T.H3, T.LIST, 5.3);
 setPairwiseGap(T.H3, T.H2, 18.2);
 setPairwiseGap(T.H3, T.H3, 13.7);
 setPairwiseGap(T.H3, T.H4, 12.0);
@@ -352,6 +342,7 @@ setPairwiseGap(T.H3, T.MEDIA, 6.6);
 setPairwiseGap(T.H3, T.COLUMNS, 6.6);
 setPairwiseGap(T.H3, T.DIVIDER, 6.6);
 setPairwiseGap(T.H3, T.BLANK, 6.6);
+setPairwiseGap(T.H3, T.PAGEMETADATA, 6.6);
 
 // h4 -> *
 setPairwiseGap(T.H4, T.PAGETITLE, 6.6);
@@ -369,6 +360,7 @@ setPairwiseGap(T.H4, T.MEDIA, 6.6);
 setPairwiseGap(T.H4, T.COLUMNS, 6.6);
 setPairwiseGap(T.H4, T.DIVIDER, 6.6);
 setPairwiseGap(T.H4, T.BLANK, 6.6);
+setPairwiseGap(T.H4, T.PAGEMETADATA, 6.6);
 
 // equation -> *
 setPairwiseGap(T.EQUATION, T.PAGETITLE, 6.6);
@@ -386,6 +378,7 @@ setPairwiseGap(T.EQUATION, T.MEDIA, 6.6);
 setPairwiseGap(T.EQUATION, T.COLUMNS, 6.6);
 setPairwiseGap(T.EQUATION, T.DIVIDER, 6.6);
 setPairwiseGap(T.EQUATION, T.BLANK, 6.6);
+setPairwiseGap(T.EQUATION, T.PAGEMETADATA, 6.6);
 
 // table -> *
 setPairwiseGap(T.TABLE, T.PAGETITLE, 6.6);
@@ -403,6 +396,7 @@ setPairwiseGap(T.TABLE, T.MEDIA, 6.6);
 setPairwiseGap(T.TABLE, T.COLUMNS, 6.6);
 setPairwiseGap(T.TABLE, T.DIVIDER, 6.6);
 setPairwiseGap(T.TABLE, T.BLANK, 6.6);
+setPairwiseGap(T.TABLE, T.PAGEMETADATA, 6.6);
 
 // code -> *
 setPairwiseGap(T.CODE, T.PAGETITLE, 6.6);
@@ -410,7 +404,7 @@ setPairwiseGap(T.CODE, T.PARAGRAPH, 5.5);
 setPairwiseGap(T.CODE, T.LIST, 5.5);
 setPairwiseGap(T.CODE, T.H2, 18.5);
 setPairwiseGap(T.CODE, T.H3, 13.5);
-setPairwiseGap(T.CODE, T.H4, 13.0);
+setPairwiseGap(T.CODE, T.H4, 12.5);
 setPairwiseGap(T.CODE, T.EQUATION, 10.0);
 setPairwiseGap(T.CODE, T.TABLE, 6.6);
 setPairwiseGap(T.CODE, T.CODE, 8.0);
@@ -420,6 +414,7 @@ setPairwiseGap(T.CODE, T.MEDIA, 6.6);
 setPairwiseGap(T.CODE, T.COLUMNS, 6.6);
 setPairwiseGap(T.CODE, T.DIVIDER, 6.6);
 setPairwiseGap(T.CODE, T.BLANK, 6.6);
+setPairwiseGap(T.CODE, T.PAGEMETADATA, 6.6);
 
 // quote -> *
 setPairwiseGap(T.QUOTE, T.PAGETITLE, 6.6);
@@ -437,6 +432,7 @@ setPairwiseGap(T.QUOTE, T.MEDIA, 6.6);
 setPairwiseGap(T.QUOTE, T.COLUMNS, 6.6);
 setPairwiseGap(T.QUOTE, T.DIVIDER, 6.6);
 setPairwiseGap(T.QUOTE, T.BLANK, 6.6);
+setPairwiseGap(T.QUOTE, T.PAGEMETADATA, 6.6);
 
 // callout -> *
 setPairwiseGap(T.CALLOUT, T.PAGETITLE, 6.6);
@@ -454,6 +450,7 @@ setPairwiseGap(T.CALLOUT, T.MEDIA, 6.6);
 setPairwiseGap(T.CALLOUT, T.COLUMNS, 6.6);
 setPairwiseGap(T.CALLOUT, T.DIVIDER, 6.6);
 setPairwiseGap(T.CALLOUT, T.BLANK, 6.6);
+setPairwiseGap(T.CALLOUT, T.PAGEMETADATA, 6.6);
 
 // media -> *
 setPairwiseGap(T.MEDIA, T.PAGETITLE, 6.6);
@@ -471,6 +468,7 @@ setPairwiseGap(T.MEDIA, T.MEDIA, 6.6);
 setPairwiseGap(T.MEDIA, T.COLUMNS, 6.6);
 setPairwiseGap(T.MEDIA, T.DIVIDER, 6.6);
 setPairwiseGap(T.MEDIA, T.BLANK, 6.6);
+setPairwiseGap(T.MEDIA, T.PAGEMETADATA, 6.6);
 
 // columns -> *
 setPairwiseGap(T.COLUMNS, T.PAGETITLE, 6.6);
@@ -488,6 +486,7 @@ setPairwiseGap(T.COLUMNS, T.MEDIA, 6.6);
 setPairwiseGap(T.COLUMNS, T.COLUMNS, 6.6);
 setPairwiseGap(T.COLUMNS, T.DIVIDER, 6.6);
 setPairwiseGap(T.COLUMNS, T.BLANK, 6.6);
+setPairwiseGap(T.COLUMNS, T.PAGEMETADATA, 6.6);
 
 // divider -> *
 setPairwiseGap(T.DIVIDER, T.PAGETITLE, 6.6);
@@ -505,6 +504,7 @@ setPairwiseGap(T.DIVIDER, T.MEDIA, 6.6);
 setPairwiseGap(T.DIVIDER, T.COLUMNS, 6.6);
 setPairwiseGap(T.DIVIDER, T.DIVIDER, 6.6);
 setPairwiseGap(T.DIVIDER, T.BLANK, 6.6);
+setPairwiseGap(T.DIVIDER, T.PAGEMETADATA, 6.6);
 
 // blank -> *
 setPairwiseGap(T.BLANK, T.PAGETITLE, 6.6);
@@ -522,6 +522,25 @@ setPairwiseGap(T.BLANK, T.MEDIA, 6.6);
 setPairwiseGap(T.BLANK, T.COLUMNS, 6.6);
 setPairwiseGap(T.BLANK, T.DIVIDER, 6.6);
 setPairwiseGap(T.BLANK, T.BLANK, 6.6);
+setPairwiseGap(T.BLANK, T.PAGEMETADATA, 6.6);
+
+// pageMetadata -> *
+setPairwiseGap(T.PAGEMETADATA, T.PAGETITLE, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.PARAGRAPH, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.LIST, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.H2, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.H3, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.H4, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.EQUATION, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.TABLE, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.CODE, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.QUOTE, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.CALLOUT, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.MEDIA, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.COLUMNS, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.DIVIDER, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.BLANK, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.PAGEMETADATA, 6.6);
 
 captureDefaultPairwiseGapMatrix();
 loadPairwiseGapOverrides();
@@ -941,7 +960,20 @@ function isInsidePageMetadata(element) {
     element?.closest?.("[role='table'][aria-label='페이지 속성']")
   );
 }
+function getPageMetadataTableWidth(layoutWidth) {
+  const safeLayoutWidth = Math.max(1, Number(layoutWidth) || PAGE_BODY_WIDTH_PX);
 
+  return Math.min(
+    safeLayoutWidth,
+    Math.max(
+      PAGE_METADATA_TABLE_MIN_WIDTH_PX,
+      Math.min(
+        PAGE_METADATA_TABLE_MAX_WIDTH_PX,
+        safeLayoutWidth * PAGE_METADATA_TABLE_WIDTH_RATIO
+      )
+    )
+  );
+}
 function getPageMetadataTable(metadataElement) {
   if (!metadataElement) {
     return null;
@@ -970,7 +1002,11 @@ function getPageMetadataRows(metadataElement) {
       const labelCell = labelId ? document.getElementById(labelId) : null;
       const valueElement = row.querySelector("[data-testid='property-value']");
 
-      const label = getElementText(labelCell || row)
+      const labelSource =
+        labelCell?.querySelector("div[style*='white-space: nowrap']") ||
+        labelCell;
+
+      const label = getElementText(labelSource || row)
         .replace(/\s+/g, " ")
         .trim();
 
@@ -2542,35 +2578,37 @@ function estimateListHeight(block, layoutWidth, compact = false) {
   return estimateInlineMathAwareHeight(block, height);
 }
 const PAGE_METADATA_FONT_SIZE_PX = 14;
-const PAGE_METADATA_ROW_MIN_HEIGHT_PX = 34;
-const PAGE_METADATA_VALUE_LINE_HEIGHT_PX = 21;
-const PAGE_METADATA_VALUE_VERTICAL_PADDING_PX = 12;
-const PAGE_METADATA_LABEL_WIDTH_PX = 160;
-const PAGE_METADATA_CELL_GAP_PX = 4;
-const PAGE_METADATA_ROW_MARGIN_BOTTOM_PX = 4;
-const PAGE_METADATA_BOTTOM_EXTRA_PX = 20; // margin-bottom 12 + padding-bottom 8
+const PAGE_METADATA_ROW_HEIGHT_PX = 34;
+const PAGE_METADATA_LABEL_WIDTH_PX = 154;
+const PAGE_METADATA_ICON_WIDTH_PX = 22;
+const PAGE_METADATA_CELL_GAP_PX = 0;
+const PAGE_METADATA_BORDER_COLOR = "rgba(55, 53, 47, 0.16)";
+const PAGE_METADATA_LABEL_COLOR = "rgba(55, 53, 47, 0.55)";
+const PAGE_METADATA_VALUE_COLOR = "rgb(55, 53, 47)";
+const PAGE_METADATA_TABLE_WIDTH_RATIO = 0.66;
+const PAGE_METADATA_TABLE_MIN_WIDTH_PX = 420;
+const PAGE_METADATA_TABLE_MAX_WIDTH_PX = 620;
+const PAGE_METADATA_BOTTOM_GAP_PX = 14;
 
 function estimatePageMetadataRowHeight(row, layoutWidth) {
+  const tableWidth = getPageMetadataTableWidth(layoutWidth);
+
   const valueWidth = Math.max(
     80,
-    layoutWidth -
-      PAGE_METADATA_LABEL_WIDTH_PX -
-      PAGE_METADATA_CELL_GAP_PX -
-      12
+    tableWidth - PAGE_METADATA_LABEL_WIDTH_PX
   );
 
   const lines = estimateWrappedLines(
     row.value || " ",
     PAGE_METADATA_FONT_SIZE_PX,
-    valueWidth,
+    valueWidth - 12,
     0,
     "body"
   );
 
   return Math.max(
-    PAGE_METADATA_ROW_MIN_HEIGHT_PX,
-    lines * PAGE_METADATA_VALUE_LINE_HEIGHT_PX +
-      PAGE_METADATA_VALUE_VERTICAL_PADDING_PX
+    PAGE_METADATA_ROW_HEIGHT_PX,
+    lines * 21 + 12
   );
 }
 
@@ -2585,9 +2623,7 @@ function estimatePageMetadataHeight(metadataElement, layoutWidth) {
     return sum + estimatePageMetadataRowHeight(row, layoutWidth);
   }, 0);
 
-  const rowGaps = Math.max(0, rows.length - 1) * PAGE_METADATA_ROW_MARGIN_BOTTOM_PX;
-
-  return rowsHeight + rowGaps + PAGE_METADATA_BOTTOM_EXTRA_PX;
+  return rowsHeight + PAGE_METADATA_BOTTOM_GAP_PX;
 }
 
 function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
@@ -3792,63 +3828,99 @@ function createRenderedTextContainerPreview(segment) {
 
   return wrapper;
 }
+
 function createRenderedPageMetadataPreview(segment) {
   const rows = Array.isArray(segment.metadataRows)
     ? segment.metadataRows
     : getPageMetadataRows(segment.element);
 
+  const layoutWidth = segment.layoutWidth || PAGE_BODY_WIDTH_PX;
+  const tableWidth = getPageMetadataTableWidth(layoutWidth);
+
   const wrapper = document.createElement("div");
   wrapper.className = "notion-pdf-preview-page-metadata";
-  wrapper.style.width = `${segment.layoutWidth || PAGE_BODY_WIDTH_PX}px`;
+  wrapper.style.width = `${layoutWidth}px`;
   wrapper.style.height = `${Math.max(1, Number(segment.height) || 1)}px`;
   wrapper.style.boxSizing = "border-box";
-  wrapper.style.marginInlineStart = "-6px";
-  wrapper.style.paddingBottom = "8px";
-  wrapper.style.marginBottom = "12px";
   wrapper.style.overflow = "hidden";
-  wrapper.style.fontSize = "14px";
-  wrapper.style.color = "rgb(55, 53, 47)";
+  wrapper.style.fontSize = `${PAGE_METADATA_FONT_SIZE_PX}px`;
+  wrapper.style.color = PAGE_METADATA_VALUE_COLOR;
+
+  const table = document.createElement("div");
+  table.className = "notion-pdf-preview-page-metadata-table";
+  table.style.width = `${tableWidth}px`;
+  table.style.boxSizing = "border-box";
+  table.style.border = `1px solid ${PAGE_METADATA_BORDER_COLOR}`;
+  table.style.borderBottom = "0";
+  table.style.background = "#ffffff";
 
   for (const row of rows) {
+    const rowHeight = estimatePageMetadataRowHeight(row, layoutWidth);
+
     const rowElement = document.createElement("div");
     rowElement.className = "notion-pdf-preview-page-metadata-row";
     rowElement.style.display = "flex";
     rowElement.style.width = "100%";
-    rowElement.style.position = "relative";
-    rowElement.style.marginBottom = `${PAGE_METADATA_ROW_MARGIN_BOTTOM_PX}px`;
-    rowElement.style.minHeight = `${PAGE_METADATA_ROW_MIN_HEIGHT_PX}px`;
+    rowElement.style.minHeight = `${rowHeight}px`;
+    rowElement.style.boxSizing = "border-box";
+    rowElement.style.borderBottom = `1px solid ${PAGE_METADATA_BORDER_COLOR}`;
 
     const label = document.createElement("div");
     label.className = "notion-pdf-preview-page-metadata-label";
-    label.textContent = row.label;
     label.style.display = "flex";
     label.style.alignItems = "center";
     label.style.width = `${PAGE_METADATA_LABEL_WIDTH_PX}px`;
-    label.style.maxWidth = `${PAGE_METADATA_LABEL_WIDTH_PX}px`;
-    label.style.height = `${PAGE_METADATA_ROW_MIN_HEIGHT_PX}px`;
-    label.style.padding = "0 6px";
+    label.style.flex = `0 0 ${PAGE_METADATA_LABEL_WIDTH_PX}px`;
+    label.style.minWidth = "0";
     label.style.boxSizing = "border-box";
-    label.style.color = "rgba(55, 53, 47, 0.65)";
-    label.style.whiteSpace = "nowrap";
+    label.style.borderRight = `1px solid ${PAGE_METADATA_BORDER_COLOR}`;
+    label.style.padding = "0 8px";
+    label.style.color = PAGE_METADATA_LABEL_COLOR;
     label.style.overflow = "hidden";
-    label.style.textOverflow = "ellipsis";
+
+    const icon = document.createElement("span");
+    icon.className = "notion-pdf-preview-page-metadata-icon";
+    icon.textContent = "≡";
+    icon.style.display = "inline-flex";
+    icon.style.alignItems = "center";
+    icon.style.justifyContent = "center";
+    icon.style.width = `${PAGE_METADATA_ICON_WIDTH_PX}px`;
+    icon.style.flex = `0 0 ${PAGE_METADATA_ICON_WIDTH_PX}px`;
+    icon.style.marginRight = "6px";
+    icon.style.fontSize = "18px";
+    icon.style.lineHeight = "1";
+    icon.style.color = PAGE_METADATA_LABEL_COLOR;
+    icon.style.transform = "translateY(-1px)";
+
+    const labelText = document.createElement("span");
+    labelText.textContent = row.label;
+    labelText.style.display = "block";
+    labelText.style.minWidth = "0";
+    labelText.style.whiteSpace = "nowrap";
+    labelText.style.overflow = "hidden";
+    labelText.style.textOverflow = "ellipsis";
+    labelText.style.lineHeight = "20px";
+
+    label.append(icon, labelText);
 
     const value = document.createElement("div");
     value.className = "notion-pdf-preview-page-metadata-value";
     value.textContent = row.value;
     value.style.flex = "1 1 auto";
     value.style.minWidth = "0";
-    value.style.marginInlineStart = `${PAGE_METADATA_CELL_GAP_PX}px`;
-    value.style.padding = "6px";
     value.style.boxSizing = "border-box";
-    value.style.lineHeight = "1.5";
+    value.style.padding = "6px 10px";
+    value.style.color = PAGE_METADATA_VALUE_COLOR;
+    value.style.lineHeight = "21px";
     value.style.whiteSpace = "pre-wrap";
     value.style.wordBreak = "break-word";
+    value.style.overflow = "hidden";
 
     rowElement.append(label, value);
-    wrapper.append(rowElement);
+    table.append(rowElement);
   }
 
+  wrapper.append(table);
   return wrapper;
 }
 
