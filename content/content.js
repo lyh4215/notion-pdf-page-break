@@ -932,6 +932,11 @@ function getRectHeight(element) {
   return rect && rect.height > 0 ? rect.height : 0;
 }
 
+function getRectWidth(element) {
+  const rect = element?.getBoundingClientRect?.();
+  return rect && rect.width > 0 ? rect.width : 0;
+}
+
 function getNumericStylePx(element, propertyName) {
   if (!element) {
     return 0;
@@ -939,23 +944,6 @@ function getNumericStylePx(element, propertyName) {
 
   const value = window.getComputedStyle(element)[propertyName];
   return Number.parseFloat(value) || 0;
-}
-
-function findNearestPaddedAncestor(element, stopElement) {
-  let current = element?.parentElement || null;
-
-  while (current && current !== stopElement && stopElement?.contains(current)) {
-    const paddingTop = getNumericStylePx(current, "paddingTop");
-    const paddingBottom = getNumericStylePx(current, "paddingBottom");
-
-    if (paddingTop + paddingBottom > 0) {
-      return current;
-    }
-
-    current = current.parentElement;
-  }
-
-  return null;
 }
 
 function getEquationDomParts(block) {
@@ -966,11 +954,24 @@ function getEquationDomParts(block) {
   const display = outer.querySelector(".katex-display");
   const katex = display?.querySelector(".katex") || outer.querySelector(".katex");
   const katexHtml = display?.querySelector(".katex-html") || katex?.querySelector(".katex-html");
-  const innerPadded = display ? findNearestPaddedAncestor(display, outer) : null;
+
+  // 핵심:
+  // Notion equation block에서 실제 PDF에 보이는 박스 기준은
+  // outer .notion-equation-block이 아니라 그 안의 role=button wrapper에 가깝다.
+  const button =
+    display?.closest("[role='button']") ||
+    katex?.closest("[role='button']") ||
+    Array.from(outer.querySelectorAll("[role='button']")).find((candidate) =>
+      candidate.querySelector(".katex-display, .katex")
+    );
+
+  if (!button) {
+    throw new Error("Could not find inner equation button wrapper.");
+  }
 
   return {
     outer,
-    innerPadded,
+    button,
     display,
     katex,
     katexHtml
@@ -978,81 +979,70 @@ function getEquationDomParts(block) {
 }
 
 function getEquationMetrics(block) {
-  const parts = getEquationDomParts(block);
-  const { outer, innerPadded, display, katex, katexHtml } = parts;
+  const { outer, button, display, katex, katexHtml } = getEquationDomParts(block);
 
   const outerRect = outer.getBoundingClientRect();
+  const buttonRect = button.getBoundingClientRect();
   const displayRect = display?.getBoundingClientRect?.();
   const katexRect = katex?.getBoundingClientRect?.();
   const katexHtmlRect = katexHtml?.getBoundingClientRect?.();
 
-  const outerHeightPx = getRectHeight(outer);
-  const displayHeightPx = getRectHeight(display);
-  const katexHeightPx = getRectHeight(katex);
-  const katexHtmlHeightPx = getRectHeight(katexHtml);
+  const outerHeightPx = outerRect?.height || getRectHeight(outer);
+  const buttonHeightPx = buttonRect?.height || getRectHeight(button);
+  const displayHeightPx = displayRect?.height || getRectHeight(display);
+  const katexHeightPx = katexRect?.height || getRectHeight(katex);
+  const katexHtmlHeightPx = katexHtmlRect?.height || getRectHeight(katexHtml);
+
+  const visualMathHeightPx = Math.max(displayHeightPx, katexHeightPx, katexHtmlHeightPx);
+
+  // outer clone을 그대로 렌더링하되,
+  // button 부분만 보이게 하기 위해 위로 얼마나 당길지 계산.
+  const buttonOffsetTopPx = Math.max(0, buttonRect.top - outerRect.top);
+  const buttonOffsetBottomPx = Math.max(0, outerRect.bottom - buttonRect.bottom);
 
   const outerPaddingTopPx = getNumericStylePx(outer, "paddingTop");
   const outerPaddingBottomPx = getNumericStylePx(outer, "paddingBottom");
 
-  const innerPaddingTopPx = getNumericStylePx(innerPadded, "paddingTop");
-  const innerPaddingBottomPx = getNumericStylePx(innerPadded, "paddingBottom");
+  const buttonPaddingTopPx = getNumericStylePx(button, "paddingTop");
+  const buttonPaddingBottomPx = getNumericStylePx(button, "paddingBottom");
 
   const displayMarginTopPx = getNumericStylePx(display, "marginTop");
   const displayMarginBottomPx = getNumericStylePx(display, "marginBottom");
 
-  // 핵심: Notion PDF에서 실제로 한 block이 차지하는 높이는
-  // glyph preset이 아니라 outer .notion-equation-block의 실제 DOM height에 가깝다.
-  const samePageHeightPx =
-    outerHeightPx ||
-    outerPaddingTopPx +
-      innerPaddingTopPx +
-      displayMarginTopPx +
-      Math.max(displayHeightPx, katexHeightPx, katexHtmlHeightPx) +
-      displayMarginBottomPx +
-      innerPaddingBottomPx +
-      outerPaddingBottomPx;
-
-  const visualMathHeightPx = Math.max(displayHeightPx, katexHeightPx, katexHtmlHeightPx);
-
-  const topGapPx =
-    outerRect && displayRect
-      ? Math.max(0, displayRect.top - outerRect.top)
-      : outerPaddingTopPx + innerPaddingTopPx + displayMarginTopPx;
-
-  const bottomGapPx =
-    outerRect && displayRect
-      ? Math.max(0, outerRect.bottom - displayRect.bottom)
-      : displayMarginBottomPx + innerPaddingBottomPx + outerPaddingBottomPx;
-
   return {
-    preset: "dom",
+    preset: "inner-button",
 
-    // 기존 코드 호환용 pt 값들
-    samePageHeightPt: cssPxToPt(samePageHeightPx),
-    pageTopHeightPt: cssPxToPt(samePageHeightPx),
+    // 실제 page 계산에 쓸 값
+    samePageHeightPx: buttonHeightPx,
+    pageTopHeightPx: buttonHeightPx,
+    buttonHeightPx,
+    buttonWidthPx: getRectWidth(button),
+    buttonOffsetTopPx,
+    buttonOffsetBottomPx,
+
+    // 기존 코드 호환용 pt 값
+    samePageHeightPt: cssPxToPt(buttonHeightPx),
+    pageTopHeightPt: cssPxToPt(buttonHeightPx),
     glyphHeightPt: cssPxToPt(visualMathHeightPx),
-    topGapPt: cssPxToPt(topGapPx),
-    bottomGapPt: cssPxToPt(bottomGapPx),
+    topGapPt: 0,
+    bottomGapPt: 0,
 
-    // 디버깅용 px 값들
-    samePageHeightPx,
+    // 디버깅용
     outerHeightPx,
     displayHeightPx,
     katexHeightPx,
     katexHtmlHeightPx,
     outerPaddingTopPx,
     outerPaddingBottomPx,
-    innerPaddingTopPx,
-    innerPaddingBottomPx,
+    buttonPaddingTopPx,
+    buttonPaddingBottomPx,
     displayMarginTopPx,
-    displayMarginBottomPx,
-    topGapPx,
-    bottomGapPx
+    displayMarginBottomPx
   };
 }
 
 function estimateEquationHeight(block) {
-  return getEquationMetrics(block).samePageHeightPx;
+  return getEquationMetrics(block).buttonHeightPx;
 }
 
 function estimateInlineMathAwareHeight(block, baseHeight) {
@@ -1654,11 +1644,12 @@ function paginateBlocks(blocks, pageHeight) {
   function pushEquationBlock(block) {
     const metrics = getEquationMetrics(block.element);
 
-    // estimateBlockHeight에서 이미 block.height를 넣었더라도,
-    // 수식은 최종 배치 시점에 DOM 기준으로 다시 한 번 잡는다.
-    const blockHeight = metrics.samePageHeightPx || block.height;
+    // 핵심:
+    // 이제 equation block은 outer 높이가 아니라
+    // 내부 role=button wrapper 높이만 차지한다.
+    const segmentHeight = metrics.buttonHeightPx;
 
-    if (usedHeight > 0 && usedHeight + blockHeight > pageHeight) {
+    if (usedHeight > 0 && usedHeight + segmentHeight > pageHeight) {
       startNewPage({
         element: block.element,
         offsetRatio: 0
@@ -1668,13 +1659,14 @@ function paginateBlocks(blocks, pageHeight) {
     currentPage().push({
       ...block,
       continued: false,
+      clipOffset: metrics.buttonOffsetTopPx,
       equationMetrics: metrics,
-      equationPreset: "dom",
-      segmentHeight: blockHeight,
+      equationPreset: "inner-button",
+      segmentHeight,
       splitAfter: false
     });
 
-    usedHeight += blockHeight;
+    usedHeight += segmentHeight;
   }
 
   for (const block of blocks) {
@@ -2139,6 +2131,10 @@ function createRenderedPdfPreviewSegment(segment) {
 
   if (segment.type === "equation") {
     segmentElement.classList.add("notion-pdf-preview-rendered-segment-equation");
+
+    // outer .notion-equation-block clone은 그대로 두되,
+    // 내부 button 영역만 보이게 자른다.
+    segmentElement.style.overflow = "hidden";
   }
 
   const clone = segment.type === "table"
