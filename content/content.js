@@ -1179,7 +1179,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // Measured markdown # formula:
       // visible = 27n + 5.58 pt, after gap = 3 pt.
       const lines = estimateWrappedLines(text, ptToPx(H2_FONT_SIZE_PT), layoutWidth, 0, "heading");
-      return blockHeightFromPt(lines, 27, 5.58, 3);
+      return blockHeightFromPt(lines, 27, 5.58, 8);
     }
 
     case "h3": {
