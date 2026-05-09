@@ -1170,7 +1170,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // Notion page title, not markdown #.
       // Measured formula: 43.5n + 16 pt.
       const lines = estimateWrappedLines(text, ptToPx(PAGE_TITLE_FONT_SIZE_PT), layoutWidth, 0, "title");
-      return blockHeightFromPt(lines, 43.5, 0, 16);
+      return blockHeightFromPt(lines, 43.5, 0, 15);
     }
 
     case "h2": {
@@ -1188,7 +1188,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // Measured markdown ## formula:
       // visible = 21.75n + 4.31 pt, after gap = 12.5 pt.
       const lines = estimateWrappedLines(text, ptToPx(H3_FONT_SIZE_PT), layoutWidth, 0, "heading");
-      return blockHeightFromPt(lines, 21.75, 4.31, 12.5);
+      return blockHeightFromPt(lines, 21.75, 4.31, 13);
     }
 
     case "h4": {
