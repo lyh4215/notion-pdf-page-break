@@ -162,7 +162,7 @@ setPairwiseGap(T.H3, T.H2, 18.2);
 setPairwiseGap(T.H3, T.H3, 13.7);
 setPairwiseGap(T.H3, T.H4, 12.0);
 setPairwiseGap(T.H3, T.EQUATION, 10.0);
-setPairwiseGap(T.H3, T.QUOTE, 7)
+setPairwiseGap(T.H3, T.QUOTE, 7.4);
 setPairwiseGap(T.H3, T.TABLE, 10.6);
 setPairwiseGap(T.H3, T.CODE, 10.0);
 
@@ -184,6 +184,7 @@ setPairwiseGap(T.EQUATION, T.H3, 13.5);
 setPairwiseGap(T.EQUATION, T.H4, 13.0);
 setPairwiseGap(T.EQUATION, T.EQUATION, 6.0);
 setPairwiseGap(T.EQUATION, T.TABLE, 10.6);
+setPairwiseGap(T.EQUATION, T.QUOTE, 13.0);
 
 // table -> *
 setPairwiseGap(T.TABLE, T.PARAGRAPH, 6.6);
@@ -208,7 +209,7 @@ setPairwiseGap(T.QUOTE, T.PARAGRAPH, 12.6);
 setPairwiseGap(T.QUOTE, T.H2, 16.0);
 setPairwiseGap(T.QUOTE, T.H3, 14.0);
 setPairwiseGap(T.QUOTE, T.H4, 13.0);
-setPairwiseGap(T.QUOTE, T.EQUATION, 10.0);
+setPairwiseGap(T.QUOTE, T.EQUATION, 17.0);
 
 // callout -> *
 setPairwiseGap(T.CALLOUT, T.PARAGRAPH, 18.0);
