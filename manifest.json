@@ -21,7 +21,10 @@
         "https://notion.site/*",
         "https://*.notion.site/*"
       ],
-      "js": ["content/content.js"],
+      "js": [
+        "content/pairwiseGapDebugPanel.js",
+        "content/content.js"
+      ],
       "css": ["content/content.css"],
       "run_at": "document_idle"
     }

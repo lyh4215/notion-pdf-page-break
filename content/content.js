@@ -94,23 +94,145 @@ const PAIRWISE_GAP_PT = Array.from(
   () => Array(BLOCK_TYPE_COUNT).fill(DEFAULT_PAIRWISE_GAP_PT)
 );
 
-function setPairwiseGap(prevType, nextType, gapPt) {
-  PAIRWISE_GAP_PT[prevType][nextType] = gapPt;
-}
+const PAIRWISE_GAP_STORAGE_KEY = "notion-pdf-preview-pairwise-gap-v1";
 
-function getBlockTypeIndex(type) {
+const BLOCK_TYPE_LABELS = Object.freeze([
+  "pageTitle",
+  "paragraph",
+  "list",
+  "h2",
+  "h3",
+  "h4",
+  "equation",
+  "table",
+  "code",
+  "quote",
+  "callout",
+  "media",
+  "divider",
+  "blank",
+]);
+
+let PAIRWISE_GAP_DEFAULT_PT = null;
+
+function normalizeBlockTypeIndex(type) {
+  if (Number.isInteger(type) && type >= 0 && type < BLOCK_TYPE_COUNT) {
+    return type;
+  }
+
   return BLOCK_TYPE_INDEX[type] ?? T.PARAGRAPH;
 }
 
+function getBlockTypeName(index) {
+  return BLOCK_TYPE_LABELS[index] ?? `type-${index}`;
+}
+
+function setPairwiseGap(prevType, nextType, gapPt) {
+  const prevIndex = normalizeBlockTypeIndex(prevType);
+  const nextIndex = normalizeBlockTypeIndex(nextType);
+  const value = Number(gapPt);
+
+  if (!Number.isFinite(value)) {
+    return;
+  }
+
+  PAIRWISE_GAP_PT[prevIndex][nextIndex] = value;
+}
+
+function getBlockTypeIndex(type) {
+  return normalizeBlockTypeIndex(type);
+}
+
 function getPairwiseGapPt(prevType, nextType) {
-  if (!prevType || !nextType) {
+  // 주의:
+  // numeric enum에서 pageTitle은 0이라서 !prevType 체크를 쓰면 안 됨.
+  if (
+    prevType === null ||
+    prevType === undefined ||
+    nextType === null ||
+    nextType === undefined ||
+    prevType === "" ||
+    nextType === ""
+  ) {
     return 0;
   }
 
-  const prevIndex = getBlockTypeIndex(prevType);
-  const nextIndex = getBlockTypeIndex(nextType);
+  const prevIndex = normalizeBlockTypeIndex(prevType);
+  const nextIndex = normalizeBlockTypeIndex(nextType);
 
   return PAIRWISE_GAP_PT[prevIndex]?.[nextIndex] ?? DEFAULT_PAIRWISE_GAP_PT;
+}
+
+function captureDefaultPairwiseGapMatrix() {
+  PAIRWISE_GAP_DEFAULT_PT = PAIRWISE_GAP_PT.map((row) => row.slice());
+}
+
+function restoreDefaultPairwiseGapMatrix() {
+  if (!PAIRWISE_GAP_DEFAULT_PT) {
+    return;
+  }
+
+  for (let row = 0; row < BLOCK_TYPE_COUNT; row += 1) {
+    for (let col = 0; col < BLOCK_TYPE_COUNT; col += 1) {
+      PAIRWISE_GAP_PT[row][col] = PAIRWISE_GAP_DEFAULT_PT[row][col];
+    }
+  }
+}
+
+function savePairwiseGapOverrides() {
+  try {
+    localStorage.setItem(PAIRWISE_GAP_STORAGE_KEY, JSON.stringify(PAIRWISE_GAP_PT));
+  } catch (error) {
+    console.warn("[notion-pdf-preview] Failed to save pairwise gap matrix.", error);
+  }
+}
+
+function loadPairwiseGapOverrides() {
+  try {
+    const raw = localStorage.getItem(PAIRWISE_GAP_STORAGE_KEY);
+
+    if (!raw) {
+      return;
+    }
+
+    const parsed = JSON.parse(raw);
+
+    if (!Array.isArray(parsed)) {
+      return;
+    }
+
+    for (let row = 0; row < Math.min(parsed.length, BLOCK_TYPE_COUNT); row += 1) {
+      if (!Array.isArray(parsed[row])) {
+        continue;
+      }
+
+      for (let col = 0; col < Math.min(parsed[row].length, BLOCK_TYPE_COUNT); col += 1) {
+        const value = Number(parsed[row][col]);
+
+        if (Number.isFinite(value)) {
+          PAIRWISE_GAP_PT[row][col] = value;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("[notion-pdf-preview] Failed to load pairwise gap matrix.", error);
+  }
+}
+
+function clearPairwiseGapOverrides() {
+  try {
+    localStorage.removeItem(PAIRWISE_GAP_STORAGE_KEY);
+  } catch (error) {
+    console.warn("[notion-pdf-preview] Failed to clear pairwise gap matrix.", error);
+  }
+}
+
+function isDefaultPairwiseGapCell(row, col) {
+  if (!PAIRWISE_GAP_DEFAULT_PT) {
+    return true;
+  }
+
+  return Math.abs(PAIRWISE_GAP_PT[row][col] - PAIRWISE_GAP_DEFAULT_PT[row][col]) < 0.0001;
 }
 
 // pageTitle -> *
@@ -161,9 +283,9 @@ setPairwiseGap(T.H3, T.LIST, 5.7);
 setPairwiseGap(T.H3, T.H2, 18.2);
 setPairwiseGap(T.H3, T.H3, 13.7);
 setPairwiseGap(T.H3, T.H4, 12.0);
-setPairwiseGap(T.H3, T.EQUATION, 10.0);
+setPairwiseGap(T.H3, T.EQUATION, 15.0);
 setPairwiseGap(T.H3, T.QUOTE, 7.4);
-setPairwiseGap(T.H3, T.TABLE, 10.6);
+setPairwiseGap(T.H3, T.TABLE, 10.0);
 setPairwiseGap(T.H3, T.CODE, 10.0);
 
 // h4, Notion markdown ###
@@ -182,9 +304,9 @@ setPairwiseGap(T.EQUATION, T.LIST, 12.0);
 setPairwiseGap(T.EQUATION, T.H2, 14.0);
 setPairwiseGap(T.EQUATION, T.H3, 13.5);
 setPairwiseGap(T.EQUATION, T.H4, 13.0);
-setPairwiseGap(T.EQUATION, T.EQUATION, 6.0);
+setPairwiseGap(T.EQUATION, T.EQUATION, 4.0);
 setPairwiseGap(T.EQUATION, T.TABLE, 10.6);
-setPairwiseGap(T.EQUATION, T.QUOTE, 13.0);
+setPairwiseGap(T.EQUATION, T.QUOTE, 12.0);
 
 // table -> *
 setPairwiseGap(T.TABLE, T.PARAGRAPH, 6.6);
@@ -217,6 +339,33 @@ setPairwiseGap(T.CALLOUT, T.H2, 18.0);
 setPairwiseGap(T.CALLOUT, T.H3, 16.0);
 setPairwiseGap(T.CALLOUT, T.H4, 15.0);
 setPairwiseGap(T.CALLOUT, T.EQUATION, 10.0);
+
+captureDefaultPairwiseGapMatrix();
+loadPairwiseGapOverrides();
+
+const pairwiseGapDebug = window.NotionPdfGapDebugPanel.createPairwiseGapDebugPanel({
+  blockTypeCount: BLOCK_TYPE_COUNT,
+  pairwiseGapPt: PAIRWISE_GAP_PT,
+  getBlockTypeName,
+  isDefaultPairwiseGapCell,
+  savePairwiseGapOverrides,
+  restoreDefaultPairwiseGapMatrix,
+  clearPairwiseGapOverrides,
+  refreshPreview: () => {
+    document.querySelector(".notion-pdf-preview-pages")?.remove();
+    openPdfPreview();
+  }
+});
+
+window.__openPairwiseGapDebugPanel = pairwiseGapDebug.openPairwiseGapDebugPanel;
+window.__PAIRWISE_GAP_PT = PAIRWISE_GAP_PT;
+
+document.addEventListener("keydown", (event) => {
+  if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "g") {
+    event.preventDefault();
+    pairwiseGapDebug.openPairwiseGapDebugPanel();
+  }
+});
 
 // 연속 equation 사이의 최소 visual gap 참고값.
 // 실제 pushEquationBlock에서는 top gap 중복을 제거한다.
@@ -2555,6 +2704,8 @@ function showPreview(scalePercentInput) {
 
   return { estimatedPages: layout.estimatedPages };
 }
+
+
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   try {
