@@ -1452,27 +1452,6 @@ function getPrintMediaTargetWidth(block, layoutWidth) {
   return Math.max(1, targetWidth);
 }
 
-
-function getPrintMediaTargetWidth(block, layoutWidth) {
-  const style = block.getAttribute("style") || "";
-
-  const widthPx = getStyleLengthPx(style, "width");
-  const maxWidthPx = getStyleLengthPx(style, "max-width");
-
-  const containerWidth = getPrintMediaContainerWidth(block, layoutWidth);
-
-  let targetWidth = containerWidth;
-
-  if (widthPx > 0) {
-    targetWidth = Math.min(widthPx, containerWidth);
-  }
-
-  if (maxWidthPx > 0) {
-    targetWidth = Math.min(targetWidth, maxWidthPx);
-  }
-
-  return Math.max(1, targetWidth);
-}
 function estimateMediaHeight(block, layoutWidth) {
   const image =
     block.matches("img")
