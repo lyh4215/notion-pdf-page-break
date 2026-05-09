@@ -48,6 +48,9 @@ const TABLE_TEXT_FONT_SIZE_PT = 10.5;
 // 이전 문단 afterGap 6.6pt + TABLE_TOP_GAP_PT 5.0pt ≈ 실제 표 앞 시각 gap 11.6pt
 const TABLE_TOP_GAP_PT = 5.0;
 
+const EQUATION_DISPLAY_MARGIN_TOP_PT = 12;
+const EQUATION_DISPLAY_MARGIN_BOTTOM_PT = 12;
+
 // 연속 equation 사이의 최소 visual gap 참고값.
 // 실제 pushEquationBlock에서는 top gap 중복을 제거한다.
 
@@ -927,124 +930,107 @@ function cssPxToPt(px) {
   return px / PT_TO_CSS_PX;
 }
 
-function getRectHeight(element) {
-  const rect = element?.getBoundingClientRect?.();
-  return rect && rect.height > 0 ? rect.height : 0;
-}
-
-function getRectWidth(element) {
-  const rect = element?.getBoundingClientRect?.();
-  return rect && rect.width > 0 ? rect.width : 0;
-}
-
-function getNumericStylePx(element, propertyName) {
-  if (!element) {
-    return 0;
-  }
-
-  const value = window.getComputedStyle(element)[propertyName];
-  return Number.parseFloat(value) || 0;
-}
-
-function getEquationDomParts(block) {
-  const outer = block.matches?.(".notion-equation-block, [class*='notion-equation']")
+function getEquationOuterElement(block) {
+  return block.matches?.(".notion-equation-block, [class*='notion-equation']")
     ? block
     : block.closest?.(".notion-equation-block, [class*='notion-equation']") || block;
+}
 
-  const display = outer.querySelector(".katex-display");
-  const katex = display?.querySelector(".katex") || outer.querySelector(".katex");
-  const katexHtml = display?.querySelector(".katex-html") || katex?.querySelector(".katex-html");
+function getEquationDisplayElement(block) {
+  const outer = getEquationOuterElement(block);
 
-  // 핵심:
-  // Notion equation block에서 실제 PDF에 보이는 박스 기준은
-  // outer .notion-equation-block이 아니라 그 안의 role=button wrapper에 가깝다.
-  const button =
-    display?.closest("[role='button']") ||
-    katex?.closest("[role='button']") ||
-    Array.from(outer.querySelectorAll("[role='button']")).find((candidate) =>
-      candidate.querySelector(".katex-display, .katex")
-    );
+  return Array.from(outer.querySelectorAll(".katex-display"))
+    .find((element) => {
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
 
-  if (!button) {
-    throw new Error("Could not find inner equation button wrapper.");
-  }
-
-  return {
-    outer,
-    button,
-    display,
-    katex,
-    katexHtml
-  };
+      return (
+        rect &&
+        rect.width > 0 &&
+        rect.height > 0 &&
+        style.display !== "none" &&
+        style.visibility !== "hidden"
+      );
+    }) || null;
 }
 
 function getEquationMetrics(block) {
-  const { outer, button, display, katex, katexHtml } = getEquationDomParts(block);
+  const outer = getEquationOuterElement(block);
+  const display = getEquationDisplayElement(outer);
+
+  if (!display) {
+    console.warn("[notion-pdf-preview] No visible .katex-display found.", block);
+
+    return {
+      preset: "katex-display-missing",
+      measurement: "missing",
+
+      samePageHeightPx: 0,
+      pageTopHeightPx: 0,
+      segmentHeightPx: 0,
+
+      samePageHeightPt: 0,
+      pageTopHeightPt: 0,
+      glyphHeightPt: 0,
+      topGapPt: 0,
+      bottomGapPt: 0,
+
+      clipOffsetPx: 0,
+      displayOffsetTopPx: 0
+    };
+  }
 
   const outerRect = outer.getBoundingClientRect();
-  const buttonRect = button.getBoundingClientRect();
-  const displayRect = display?.getBoundingClientRect?.();
-  const katexRect = katex?.getBoundingClientRect?.();
-  const katexHtmlRect = katexHtml?.getBoundingClientRect?.();
+  const displayRect = display.getBoundingClientRect();
 
-  const outerHeightPx = outerRect?.height || getRectHeight(outer);
-  const buttonHeightPx = buttonRect?.height || getRectHeight(button);
-  const displayHeightPx = displayRect?.height || getRectHeight(display);
-  const katexHeightPx = katexRect?.height || getRectHeight(katex);
-  const katexHtmlHeightPx = katexHtmlRect?.height || getRectHeight(katexHtml);
+  const fixedTopMarginPx = ptToPx(EQUATION_DISPLAY_MARGIN_TOP_PT);
+  const fixedBottomMarginPx = ptToPx(EQUATION_DISPLAY_MARGIN_BOTTOM_PT);
 
-  const visualMathHeightPx = Math.max(displayHeightPx, katexHeightPx, katexHtmlHeightPx);
+  const displayHeightPx = displayRect.height;
 
-  // outer clone을 그대로 렌더링하되,
-  // button 부분만 보이게 하기 위해 위로 얼마나 당길지 계산.
-  const buttonOffsetTopPx = Math.max(0, buttonRect.top - outerRect.top);
-  const buttonOffsetBottomPx = Math.max(0, outerRect.bottom - buttonRect.bottom);
+  // 실제 PDF preview에서 수식 블록이 차지할 높이:
+  // 고정 top margin + katex-display 실제 높이 + 고정 bottom margin
+  const segmentHeightPx =
+    fixedTopMarginPx +
+    displayHeightPx +
+    fixedBottomMarginPx;
 
-  const outerPaddingTopPx = getNumericStylePx(outer, "paddingTop");
-  const outerPaddingBottomPx = getNumericStylePx(outer, "paddingBottom");
-
-  const buttonPaddingTopPx = getNumericStylePx(button, "paddingTop");
-  const buttonPaddingBottomPx = getNumericStylePx(button, "paddingBottom");
-
-  const displayMarginTopPx = getNumericStylePx(display, "marginTop");
-  const displayMarginBottomPx = getNumericStylePx(display, "marginBottom");
+  // clone은 outer equation block 전체를 복제하므로,
+  // .katex-display보다 12pt 위 지점이 segment top에 오도록 위로 당긴다.
+  const wantedTopPx = displayRect.top - fixedTopMarginPx;
+  const clipOffsetPx = Math.max(0, wantedTopPx - outerRect.top);
 
   return {
-    preset: "inner-button",
+    preset: "katex-display-fixed-margin",
+    measurement: "katex-display",
 
-    // 실제 page 계산에 쓸 값
-    samePageHeightPx: buttonHeightPx,
-    pageTopHeightPx: buttonHeightPx,
-    buttonHeightPx,
-    buttonWidthPx: getRectWidth(button),
-    buttonOffsetTopPx,
-    buttonOffsetBottomPx,
+    samePageHeightPx: segmentHeightPx,
+    pageTopHeightPx: segmentHeightPx,
+    segmentHeightPx,
 
-    // 기존 코드 호환용 pt 값
-    samePageHeightPt: cssPxToPt(buttonHeightPx),
-    pageTopHeightPt: cssPxToPt(buttonHeightPx),
-    glyphHeightPt: cssPxToPt(visualMathHeightPx),
-    topGapPt: 0,
-    bottomGapPt: 0,
+    samePageHeightPt: cssPxToPt(segmentHeightPx),
+    pageTopHeightPt: cssPxToPt(segmentHeightPx),
+    glyphHeightPt: cssPxToPt(displayHeightPx),
+    topGapPt: EQUATION_DISPLAY_MARGIN_TOP_PT,
+    bottomGapPt: EQUATION_DISPLAY_MARGIN_BOTTOM_PT,
 
-    // 디버깅용
-    outerHeightPx,
-    displayHeightPx,
-    katexHeightPx,
-    katexHtmlHeightPx,
-    outerPaddingTopPx,
-    outerPaddingBottomPx,
-    buttonPaddingTopPx,
-    buttonPaddingBottomPx,
-    displayMarginTopPx,
-    displayMarginBottomPx
+    clipOffsetPx,
+
+    debugParts: {
+      outerHeightPx: outerRect.height,
+      displayHeightPx,
+      fixedTopMarginPx,
+      fixedBottomMarginPx,
+      segmentHeightPx,
+      displayOffsetTopPx: displayRect.top - outerRect.top,
+      clipOffsetPx
+    }
   };
 }
 
 function estimateEquationHeight(block) {
-  return getEquationMetrics(block).buttonHeightPx;
+  return getEquationMetrics(block).segmentHeightPx;
 }
-
 function estimateInlineMathAwareHeight(block, baseHeight) {
   return baseHeight;
 }
@@ -1644,10 +1630,10 @@ function paginateBlocks(blocks, pageHeight) {
   function pushEquationBlock(block) {
     const metrics = getEquationMetrics(block.element);
 
-    // 핵심:
-    // 이제 equation block은 outer 높이가 아니라
-    // 내부 role=button wrapper 높이만 차지한다.
-    const segmentHeight = metrics.buttonHeightPx;
+    const segmentHeight =
+      metrics.segmentHeightPx ||
+      metrics.samePageHeightPx ||
+      block.height;
 
     if (usedHeight > 0 && usedHeight + segmentHeight > pageHeight) {
       startNewPage({
@@ -1659,9 +1645,14 @@ function paginateBlocks(blocks, pageHeight) {
     currentPage().push({
       ...block,
       continued: false,
-      clipOffset: metrics.buttonOffsetTopPx,
+
+      // .katex-display보다 12pt 위부터 보이게 자르기 위한 offset
+      clipOffset: metrics.clipOffsetPx,
+
       equationMetrics: metrics,
-      equationPreset: "inner-button",
+      equationPreset: metrics.preset,
+      equationMeasurement: metrics.measurement,
+
       segmentHeight,
       splitAfter: false
     });
