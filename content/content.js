@@ -48,8 +48,8 @@ const TABLE_TEXT_FONT_SIZE_PT = 10.5;
 // 이전 문단 afterGap 6.6pt + TABLE_TOP_GAP_PT 5.0pt ≈ 실제 표 앞 시각 gap 11.6pt
 const TABLE_TOP_GAP_PT = 5.0;
 
-const EQUATION_DISPLAY_MARGIN_TOP_PT = 12;
-const EQUATION_DISPLAY_MARGIN_BOTTOM_PT = 12;
+const EQUATION_DISPLAY_MARGIN_TOP_PT = 8;
+const EQUATION_DISPLAY_MARGIN_BOTTOM_PT = 8;
 
 // 연속 equation 사이의 최소 visual gap 참고값.
 // 실제 pushEquationBlock에서는 top gap 중복을 제거한다.
@@ -955,8 +955,7 @@ function getEquationDisplayElement(block) {
 }
 
 function getEquationMetrics(block) {
-  const outer = getEquationOuterElement(block);
-  const display = getEquationDisplayElement(outer);
+  const display = getEquationDisplayElement(block);
 
   if (!display) {
     console.warn("[notion-pdf-preview] No visible .katex-display found.", block);
@@ -964,23 +963,15 @@ function getEquationMetrics(block) {
     return {
       preset: "katex-display-missing",
       measurement: "missing",
-
-      samePageHeightPx: 0,
-      pageTopHeightPx: 0,
       segmentHeightPx: 0,
-
+      samePageHeightPx: 0,
       samePageHeightPt: 0,
-      pageTopHeightPt: 0,
       glyphHeightPt: 0,
       topGapPt: 0,
       bottomGapPt: 0,
-
-      clipOffsetPx: 0,
-      displayOffsetTopPx: 0
     };
   }
 
-  const outerRect = outer.getBoundingClientRect();
   const displayRect = display.getBoundingClientRect();
 
   const fixedTopMarginPx = ptToPx(EQUATION_DISPLAY_MARGIN_TOP_PT);
@@ -988,25 +979,18 @@ function getEquationMetrics(block) {
 
   const displayHeightPx = displayRect.height;
 
-  // 실제 PDF preview에서 수식 블록이 차지할 높이:
-  // 고정 top margin + katex-display 실제 높이 + 고정 bottom margin
   const segmentHeightPx =
     fixedTopMarginPx +
     displayHeightPx +
     fixedBottomMarginPx;
 
-  // clone은 outer equation block 전체를 복제하므로,
-  // .katex-display보다 12pt 위 지점이 segment top에 오도록 위로 당긴다.
-  const wantedTopPx = displayRect.top - fixedTopMarginPx;
-  const clipOffsetPx = Math.max(0, wantedTopPx - outerRect.top);
-
   return {
-    preset: "katex-display-fixed-margin",
+    preset: "katex-display-fixed-padding",
     measurement: "katex-display",
 
+    segmentHeightPx,
     samePageHeightPx: segmentHeightPx,
     pageTopHeightPx: segmentHeightPx,
-    segmentHeightPx,
 
     samePageHeightPt: cssPxToPt(segmentHeightPx),
     pageTopHeightPt: cssPxToPt(segmentHeightPx),
@@ -1014,17 +998,12 @@ function getEquationMetrics(block) {
     topGapPt: EQUATION_DISPLAY_MARGIN_TOP_PT,
     bottomGapPt: EQUATION_DISPLAY_MARGIN_BOTTOM_PT,
 
-    clipOffsetPx,
-
     debugParts: {
-      outerHeightPx: outerRect.height,
       displayHeightPx,
       fixedTopMarginPx,
       fixedBottomMarginPx,
       segmentHeightPx,
-      displayOffsetTopPx: displayRect.top - outerRect.top,
-      clipOffsetPx
-    }
+    },
   };
 }
 
@@ -1646,8 +1625,8 @@ function paginateBlocks(blocks, pageHeight) {
       ...block,
       continued: false,
 
-      // .katex-display보다 12pt 위부터 보이게 자르기 위한 offset
-      clipOffset: metrics.clipOffsetPx,
+      // 중요: equation에서는 clipOffset을 쓰지 않는다.
+      clipOffset: 0,
 
       equationMetrics: metrics,
       equationPreset: metrics.preset,
@@ -2104,6 +2083,39 @@ function createSyntheticTextPreview(segment) {
 
   return text;
 }
+function createRenderedEquationPreview(segment) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "notion-pdf-preview-rendered-equation-inner";
+
+  wrapper.style.boxSizing = "border-box";
+  wrapper.style.width = "100%";
+  wrapper.style.height = "100%";
+  wrapper.style.paddingTop = `${ptToPx(EQUATION_DISPLAY_MARGIN_TOP_PT)}px`;
+  wrapper.style.paddingBottom = `${ptToPx(EQUATION_DISPLAY_MARGIN_BOTTOM_PT)}px`;
+  wrapper.style.overflow = "hidden";
+
+  const sourceDisplay = getEquationDisplayElement(segment.element);
+
+  if (!sourceDisplay) {
+    return wrapper;
+  }
+
+  const displayClone = sourceDisplay.cloneNode(true);
+
+  // 핵심:
+  // 원본 .katex-display에는 margin-top/bottom이 이미 있을 수 있으므로
+  // 반드시 제거해야 한다. 안 그러면 12pt + 원본 margin이 중복됨.
+  displayClone.style.setProperty("margin", "0", "important");
+  displayClone.style.setProperty("margin-top", "0", "important");
+  displayClone.style.setProperty("margin-bottom", "0", "important");
+  displayClone.style.setProperty("padding", "0", "important");
+  displayClone.style.setProperty("width", "100%", "important");
+  displayClone.style.setProperty("max-width", "none", "important");
+  displayClone.style.setProperty("box-sizing", "border-box", "important");
+
+  wrapper.append(displayClone);
+  return wrapper;
+}
 
 function createRenderedPdfPreviewSegment(segment) {
   const segmentElement = document.createElement("div");
@@ -2130,15 +2142,20 @@ function createRenderedPdfPreviewSegment(segment) {
 
   const clone = segment.type === "table"
     ? createRenderedTablePreview(segment)
-    : isSyntheticTextSegment(segment.type) || segment.type === "code"
-      ? createSyntheticTextPreview(segment)
-      : prepareCloneForMeasurement(segment.element.cloneNode(true), segment.type);
+    : segment.type === "equation"
+      ? createRenderedEquationPreview(segment)
+      : isSyntheticTextSegment(segment.type) || segment.type === "code"
+        ? createSyntheticTextPreview(segment)
+        : prepareCloneForMeasurement(segment.element.cloneNode(true), segment.type);
   clone.classList.add("notion-pdf-preview-rendered-clone");
 
-  const clipOffset = Number(segment.clipOffset) || 0;
+  const clipOffset = segment.type === "equation"
+    ? 0
+    : Number(segment.clipOffset) || 0;
+
   if (clipOffset > 0) {
     clone.style.transform = `translateY(-${clipOffset}px)`;
-  }
+}
 
   segmentElement.append(clone);
   return segmentElement;
