@@ -253,6 +253,8 @@ function isDefaultPairwiseGapCell(row, col) {
 
 // pairwise gap matrix overrides
 // format: setPairwiseGap(prevType, nextType, gapPt);
+// pairwise gap matrix overrides
+// format: setPairwiseGap(prevType, nextType, gapPt);
 
 // pageTitle -> *
 setPairwiseGap(T.PAGETITLE, T.PAGETITLE, 6.6);
@@ -270,7 +272,7 @@ setPairwiseGap(T.PAGETITLE, T.MEDIA, 6.6);
 setPairwiseGap(T.PAGETITLE, T.COLUMNS, 6.6);
 setPairwiseGap(T.PAGETITLE, T.DIVIDER, 6.6);
 setPairwiseGap(T.PAGETITLE, T.BLANK, 6.6);
-setPairwiseGap(T.PAGETITLE, T.PAGEMETADATA, 13.2);
+setPairwiseGap(T.PAGETITLE, T.PAGEMETADATA, 20.0);
 
 // paragraph -> *
 setPairwiseGap(T.PARAGRAPH, T.PAGETITLE, 6.6);
@@ -525,24 +527,22 @@ setPairwiseGap(T.BLANK, T.BLANK, 6.6);
 setPairwiseGap(T.BLANK, T.PAGEMETADATA, 6.6);
 
 // pageMetadata -> *
-
-
-// metadata row 사이 간격.
-// 3pt ≈ 4px 정도.
-setPairwiseGap(T.PAGEMETADATA, T.PAGEMETADATA, 3.0);
-
-// 마지막 metadata 이후 본문과의 간격.
-setPairwiseGap(T.PAGEMETADATA, T.PARAGRAPH, 3.0);
-setPairwiseGap(T.PAGEMETADATA, T.LIST, 3.0);
-setPairwiseGap(T.PAGEMETADATA, T.H2, 5.0);
-setPairwiseGap(T.PAGEMETADATA, T.H3, 4.0);
-setPairwiseGap(T.PAGEMETADATA, T.H4, 4.0);
-setPairwiseGap(T.PAGEMETADATA, T.COLUMNS, 3.0);
+setPairwiseGap(T.PAGEMETADATA, T.PAGETITLE, 6.6);
+setPairwiseGap(T.PAGEMETADATA, T.PARAGRAPH, 6.6);
+setPairwiseGap(T.PAGEMETADATA, T.LIST, 6.6);
+setPairwiseGap(T.PAGEMETADATA, T.H2, 6.6);
+setPairwiseGap(T.PAGEMETADATA, T.H3, 6.6);
+setPairwiseGap(T.PAGEMETADATA, T.H4, 6.6);
+setPairwiseGap(T.PAGEMETADATA, T.EQUATION, 6.6);
+setPairwiseGap(T.PAGEMETADATA, T.TABLE, 6.6);
+setPairwiseGap(T.PAGEMETADATA, T.CODE, 6.6);
+setPairwiseGap(T.PAGEMETADATA, T.QUOTE, 6.6);
+setPairwiseGap(T.PAGEMETADATA, T.CALLOUT, 6.6);
 setPairwiseGap(T.PAGEMETADATA, T.MEDIA, 3.0);
-setPairwiseGap(T.PAGEMETADATA, T.TABLE, 3.0);
-setPairwiseGap(T.PAGEMETADATA, T.CODE, 3.0);
-setPairwiseGap(T.PAGEMETADATA, T.EQUATION, 3.0);
+setPairwiseGap(T.PAGEMETADATA, T.COLUMNS, 3.0);
+setPairwiseGap(T.PAGEMETADATA, T.DIVIDER, 6.6);
 setPairwiseGap(T.PAGEMETADATA, T.BLANK, 3.0);
+setPairwiseGap(T.PAGEMETADATA, T.PAGEMETADATA, 6.6);
 
 captureDefaultPairwiseGapMatrix();
 loadPairwiseGapOverrides();
