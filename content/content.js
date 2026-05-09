@@ -162,6 +162,7 @@ setPairwiseGap(T.H3, T.H2, 18.2);
 setPairwiseGap(T.H3, T.H3, 13.7);
 setPairwiseGap(T.H3, T.H4, 12.0);
 setPairwiseGap(T.H3, T.EQUATION, 10.0);
+setPairwiseGap(T.H3, T.QUOTE, 7)
 setPairwiseGap(T.H3, T.TABLE, 10.6);
 setPairwiseGap(T.H3, T.CODE, 10.0);
 
