@@ -64,8 +64,9 @@ const BlockType = Object.freeze({
   QUOTE: 9,
   CALLOUT: 10,
   MEDIA: 11,
-  DIVIDER: 12,
-  BLANK: 13,
+  COLUMNS: 12,
+  DIVIDER: 13,
+  BLANK: 14,
 });
 
 const T = BlockType;
@@ -85,6 +86,7 @@ const BLOCK_TYPE_INDEX = Object.freeze({
   quote: T.QUOTE,
   callout: T.CALLOUT,
   media: T.MEDIA,
+  columns: T.COLUMNS,
   divider: T.DIVIDER,
   blank: T.BLANK,
 });
@@ -109,6 +111,7 @@ const BLOCK_TYPE_LABELS = Object.freeze([
   "quote",
   "callout",
   "media",
+  "columns",
   "divider",
   "blank",
 ]);
@@ -243,6 +246,17 @@ function isDefaultPairwiseGapCell(row, col) {
 // format: setPairwiseGap(prevType, nextType, gapPt);
 
 // pageTitle -> *
+
+setPairwiseGap(T.PARAGRAPH, T.COLUMNS, 6.6);
+setPairwiseGap(T.COLUMNS, T.PARAGRAPH, 6.6);
+setPairwiseGap(T.COLUMNS, T.LIST, 6.6);
+setPairwiseGap(T.COLUMNS, T.TABLE, 6.6);
+setPairwiseGap(T.COLUMNS, T.CODE, 6.6);
+setPairwiseGap(T.COLUMNS, T.MEDIA, 6.6);
+setPairwiseGap(T.COLUMNS, T.EQUATION, 10.0);
+setPairwiseGap(T.COLUMNS, T.COLUMNS, 6.6);
+
+
 setPairwiseGap(T.PAGETITLE, T.PAGETITLE, 6.6);
 setPairwiseGap(T.PAGETITLE, T.PARAGRAPH, 8.5);
 setPairwiseGap(T.PAGETITLE, T.LIST, 8.5);
@@ -937,6 +951,82 @@ function getSubstantialMediaElement(block) {
     return rect && rect.width >= 80 && rect.height >= 60;
   }) || null;
 }
+function getClassNameText(element) {
+  return String(element?.className || "").toLowerCase();
+}
+
+function isNotionColumnListBlock(element) {
+  const className = getClassNameText(element);
+
+  return (
+    className.includes("notion-column_list-block") ||
+    className.includes("notion-column-list-block") ||
+    className.includes("column_list")
+  );
+}
+
+function isNotionColumnBlock(element) {
+  return getClassNameText(element).includes("notion-column-block");
+}
+
+function getDirectColumnBlocks(columnListBlock) {
+  if (!columnListBlock) {
+    return [];
+  }
+
+  const columns = Array.from(
+    columnListBlock.querySelectorAll("[data-block-id].notion-column-block")
+  )
+    .filter((column) => getVisibleRect(column))
+    .filter((column) => {
+      const nearestColumnList = column.closest(
+        ".notion-column_list-block, .notion-column-list-block"
+      );
+
+      return nearestColumnList === columnListBlock;
+    });
+
+  return sortBlocksByPagePosition(columns);
+}
+
+function isColumnsLikeBlock(block) {
+  if (!block) {
+    return false;
+  }
+
+  if (isNotionColumnListBlock(block)) {
+    return getDirectColumnBlocks(block).length >= 2;
+  }
+
+  return false;
+}
+
+function getColumnOuterRect(columnBlock) {
+  const columnRect = getVisibleRect(columnBlock);
+  const parentRect = getVisibleRect(columnBlock?.parentElement);
+
+  if (parentRect && columnRect && parentRect.width >= columnRect.width) {
+    return parentRect;
+  }
+
+  return columnRect;
+}
+
+function getColumnInnerContentBlocks(columnBlock) {
+  if (!columnBlock) {
+    return [];
+  }
+
+  const blocks = Array.from(columnBlock.querySelectorAll("[data-block-id]"))
+    .filter((block) => block !== columnBlock)
+    .filter((block) => getVisibleRect(block))
+    .filter((block) => {
+      const parentBlock = block.parentElement?.closest("[data-block-id]");
+      return parentBlock === columnBlock;
+    });
+
+  return sortBlocksByPagePosition(blocks);
+}
 
 function isMediaLikeBlock(block, tagName, blockInfo) {
   if (tagName === "img" || tagName === "figure") {
@@ -960,6 +1050,10 @@ function classifyBlock(block, headingFontLevels = null) {
 
   if (tagName === "hr" || block.querySelector("hr, [role='separator']") || blockInfo.includes("separator")) {
     return "divider";
+  }
+
+  if (isColumnsLikeBlock(block)) {
+    return "columns";
   }
 
   if (isMediaLikeBlock(block, tagName, blockInfo)) {
@@ -1040,7 +1134,115 @@ function classifyBlock(block, headingFontLevels = null) {
 
   return "paragraph";
 }
+function estimateStackHeight(measuredBlocks) {
+  let total = 0;
+  let prevType = null;
 
+  for (const block of measuredBlocks) {
+    const gapBeforePx = prevType === null
+      ? 0
+      : ptToPx(getPairwiseGapPt(prevType, block.type));
+
+    total += gapBeforePx + Math.max(1, Number(block.height) || 0);
+    prevType = block.type;
+  }
+
+  return total;
+}
+
+function measureBlockElement(element, layoutWidth, headingFontLevels = null) {
+  const type = classifyBlock(element, headingFontLevels);
+  const text = type === "code"
+    ? getCodeRawTextForEstimate(element)
+    : getVisibleTextForEstimate(element, ptToPx(12));
+
+  const measuredBlock = {
+    element,
+    type,
+    text,
+    layoutWidth,
+    height: 0
+  };
+
+  if (type === "columns") {
+    const columnsInfo = measureColumnsBlock(element, layoutWidth, headingFontLevels);
+    measuredBlock.columns = columnsInfo.columns;
+    measuredBlock.columnGapPx = columnsInfo.columnGapPx;
+    measuredBlock.height = columnsInfo.height;
+    return measuredBlock;
+  }
+
+  measuredBlock.height = estimateBlockHeight(element, layoutWidth, type);
+
+  if (type === "table") {
+    measuredBlock.tableRowHeights = estimateTableRowHeights(element, layoutWidth);
+    measuredBlock.tableRepeatsHeader = tableRepeatsHeader(element);
+  }
+
+  return measuredBlock;
+}
+function getColumnLayoutInfo(columnListBlock, columnBlocks, layoutWidth) {
+  const listRect = getVisibleRect(columnListBlock);
+  const safeColumnCount = Math.max(1, columnBlocks.length);
+
+  if (!listRect || listRect.width <= 0) {
+    const equalWidth = Math.max(120, layoutWidth / safeColumnCount);
+    return {
+      widths: columnBlocks.map(() => equalWidth),
+      columnGapPx: 0
+    };
+  }
+
+  const widths = columnBlocks.map((columnBlock) => {
+    const outerRect = getColumnOuterRect(columnBlock);
+
+    if (!outerRect || outerRect.width <= 0) {
+      return Math.max(120, layoutWidth / safeColumnCount);
+    }
+
+    const ratio = Math.max(0.05, Math.min(1, outerRect.width / listRect.width));
+    return Math.max(120, layoutWidth * ratio);
+  });
+
+  const usedWidth = widths.reduce((sum, width) => sum + width, 0);
+  const columnGapPx = Math.max(0, layoutWidth - usedWidth);
+
+  return {
+    widths,
+    columnGapPx
+  };
+}
+
+function measureColumnsBlock(columnListBlock, layoutWidth, headingFontLevels = null) {
+  const columnBlocks = getDirectColumnBlocks(columnListBlock);
+  const { widths, columnGapPx } = getColumnLayoutInfo(
+    columnListBlock,
+    columnBlocks,
+    layoutWidth
+  );
+
+  const columns = columnBlocks.map((columnBlock, index) => {
+    const columnWidth = widths[index] || Math.max(120, layoutWidth / Math.max(1, columnBlocks.length));
+    const childElements = getColumnInnerContentBlocks(columnBlock);
+
+    const blocks = childElements.map((childElement) => {
+      return measureBlockElement(childElement, columnWidth, headingFontLevels);
+    });
+
+    return {
+      element: columnBlock,
+      width: columnWidth,
+      blocks,
+      height: estimateStackHeight(blocks)
+    };
+  });
+
+  return {
+    columns,
+    columnGapPx,
+    height: Math.max(1, ...columns.map((column) => Number(column.height) || 0))
+  };
+}
 function getHeadingFontLevels(blocks) {
   const fontSizes = blocks
     .map((block) => {
@@ -1803,25 +2005,7 @@ function createListTextRows({
 }
 
 function measureChildBlockForList(childBlock, layoutWidth) {
-  const type = classifyBlock(childBlock);
-  const text = type === "code"
-    ? getCodeRawTextForEstimate(childBlock)
-    : getVisibleTextForEstimate(childBlock, ptToPx(12));
-
-  const measured = {
-    type,
-    element: childBlock,
-    text,
-    layoutWidth,
-    height: estimateBlockHeight(childBlock, layoutWidth, type)
-  };
-
-  if (type === "table") {
-    measured.tableRowHeights = estimateTableRowHeights(childBlock, layoutWidth);
-    measured.tableRepeatsHeader = tableRepeatsHeader(childBlock);
-  }
-
-  return measured;
+  return measureBlockElement(childBlock, layoutWidth, null);
 }
 
 function createListEmbeddedRow(measuredBlock, depth) {
@@ -2030,6 +2214,10 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
 
     case "list": {
       return estimateListHeight(block, layoutWidth);
+    }
+
+    case "columns": {
+      return measureColumnsBlock(block, layoutWidth).height;
     }
 
     case "quote": {
@@ -2682,22 +2870,7 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
   const blocks = getContentBlocks(contentRoot).filter((element) => element !== pageTitleElement);
   const headingFontLevels = getHeadingFontLevels(blocks);
   const measuredBlocks = blocks.map((element) => {
-    const type = classifyBlock(element, headingFontLevels);
-    const text = type === "code" ? getCodeRawTextForEstimate(element) : getVisibleTextForEstimate(element);
-    const measuredBlock = {
-      element,
-      type,
-      text,
-      layoutWidth,
-      height: estimateBlockHeight(element, layoutWidth, type)
-    };
-
-    if (type === "table") {
-      measuredBlock.tableRowHeights = estimateTableRowHeights(element, layoutWidth);
-      measuredBlock.tableRepeatsHeader = tableRepeatsHeader(element);
-    }
-
-    return measuredBlock;
+    return measureBlockElement(element, layoutWidth, headingFontLevels);
   });
   if (pageTitleElement) {
     const titleText = getVisibleTextForEstimate(pageTitleElement);
@@ -3036,7 +3209,94 @@ function appendSyntheticLineContent(lineElement, line, segment) {
     lineElement.textContent = " ";
   }
 }
+function createRenderedMeasuredBlockStack(blocks, stackWidth) {
+  const stack = document.createElement("div");
+  stack.className = "notion-pdf-preview-rendered-stack";
+  stack.style.width = `${stackWidth}px`;
+  stack.style.boxSizing = "border-box";
+  stack.style.overflow = "hidden";
+
+  let prevType = null;
+
+  for (const block of blocks) {
+    const gapBeforePx = prevType === null
+      ? 0
+      : ptToPx(getPairwiseGapPt(prevType, block.type));
+
+    const segment = {
+      ...block,
+      gapBeforePx,
+      contentHeight: block.height,
+      segmentHeight: gapBeforePx + block.height,
+      clipOffset: 0,
+      continued: false,
+      splitAfter: false
+    };
+
+    stack.append(createRenderedPdfPreviewSegment(segment));
+    prevType = block.type;
+  }
+
+  return stack;
+}
+
+function createRenderedColumnsPreview(segment) {
+  const measured = Array.isArray(segment.columns)
+    ? {
+        columns: segment.columns,
+        columnGapPx: Number(segment.columnGapPx) || 0,
+        height: segment.height
+      }
+    : measureColumnsBlock(
+        segment.element,
+        segment.layoutWidth || PAGE_BODY_WIDTH_PX,
+        null
+      );
+
+  const columns = measured.columns || [];
+  const columnGapPx = Math.max(0, Number(measured.columnGapPx) || 0);
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "notion-pdf-preview-rendered-columns";
+  wrapper.style.display = "flex";
+  wrapper.style.alignItems = "flex-start";
+  wrapper.style.width = `${segment.layoutWidth || PAGE_BODY_WIDTH_PX}px`;
+  wrapper.style.height = `${Math.max(1, Number(segment.height) || Number(measured.height) || 1)}px`;
+  wrapper.style.boxSizing = "border-box";
+  wrapper.style.overflow = "hidden";
+
+  if (columns.length > 1) {
+    wrapper.style.columnGap = `${columnGapPx / Math.max(1, columns.length - 1)}px`;
+    wrapper.style.gap = `${columnGapPx / Math.max(1, columns.length - 1)}px`;
+  }
+
+  for (const column of columns) {
+    const columnElement = document.createElement("div");
+    columnElement.className = "notion-pdf-preview-rendered-column";
+    columnElement.style.width = `${Math.max(1, Number(column.width) || 1)}px`;
+    columnElement.style.flex = `0 0 ${Math.max(1, Number(column.width) || 1)}px`;
+    columnElement.style.minWidth = "0";
+    columnElement.style.boxSizing = "border-box";
+    columnElement.style.overflow = "hidden";
+
+    columnElement.append(
+      createRenderedMeasuredBlockStack(
+        column.blocks || [],
+        Math.max(1, Number(column.width) || 1)
+      )
+    );
+
+    wrapper.append(columnElement);
+  }
+
+  return wrapper;
+}
+
 function createRenderedPreviewForGenericSegment(segment) {
+  if (segment.type === "columns") {
+    return createRenderedColumnsPreview(segment);
+  }
+
   if (segment.type === "table") {
     return createRenderedTablePreview(segment);
   }
@@ -3054,7 +3314,6 @@ function createRenderedPreviewForGenericSegment(segment) {
     segment.type
   );
 }
-
 function createEmbeddedListBlockPreview(row, parentSegment) {
   const embedded = document.createElement("div");
   embedded.className = "notion-pdf-preview-synthetic-list-embedded-block";
@@ -3260,13 +3519,7 @@ function createRenderedPdfPreviewSegment(segment) {
     segmentElement.classList.add("notion-pdf-preview-rendered-segment-equation");
   }
 
-  const clone = segment.type === "table"
-    ? createRenderedTablePreview(segment)
-    : segment.type === "equation"
-      ? createRenderedEquationPreview(segment)
-      : isSyntheticTextSegment(segment.type) || segment.type === "code"
-        ? createSyntheticTextPreview(segment)
-        : prepareCloneForMeasurement(segment.element.cloneNode(true), segment.type);
+  const clone = createRenderedPreviewForGenericSegment(segment);
 
   clone.classList.add("notion-pdf-preview-rendered-clone");
 
