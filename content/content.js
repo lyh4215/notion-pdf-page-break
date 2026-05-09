@@ -245,18 +245,10 @@ function isDefaultPairwiseGapCell(row, col) {
 // pairwise gap matrix overrides
 // format: setPairwiseGap(prevType, nextType, gapPt);
 
+// pairwise gap matrix overrides
+// format: setPairwiseGap(prevType, nextType, gapPt);
+
 // pageTitle -> *
-
-setPairwiseGap(T.PARAGRAPH, T.COLUMNS, 6.6);
-setPairwiseGap(T.COLUMNS, T.PARAGRAPH, 6.6);
-setPairwiseGap(T.COLUMNS, T.LIST, 6.6);
-setPairwiseGap(T.COLUMNS, T.TABLE, 6.6);
-setPairwiseGap(T.COLUMNS, T.CODE, 6.6);
-setPairwiseGap(T.COLUMNS, T.MEDIA, 6.6);
-setPairwiseGap(T.COLUMNS, T.EQUATION, 10.0);
-setPairwiseGap(T.COLUMNS, T.COLUMNS, 6.6);
-
-
 setPairwiseGap(T.PAGETITLE, T.PAGETITLE, 6.6);
 setPairwiseGap(T.PAGETITLE, T.PARAGRAPH, 8.5);
 setPairwiseGap(T.PAGETITLE, T.LIST, 8.5);
@@ -269,6 +261,7 @@ setPairwiseGap(T.PAGETITLE, T.CODE, 4.0);
 setPairwiseGap(T.PAGETITLE, T.QUOTE, 6.6);
 setPairwiseGap(T.PAGETITLE, T.CALLOUT, 6.6);
 setPairwiseGap(T.PAGETITLE, T.MEDIA, 6.6);
+setPairwiseGap(T.PAGETITLE, T.COLUMNS, 6.6);
 setPairwiseGap(T.PAGETITLE, T.DIVIDER, 6.6);
 setPairwiseGap(T.PAGETITLE, T.BLANK, 6.6);
 
@@ -285,13 +278,14 @@ setPairwiseGap(T.PARAGRAPH, T.CODE, 4.0);
 setPairwiseGap(T.PARAGRAPH, T.QUOTE, 10.0);
 setPairwiseGap(T.PARAGRAPH, T.CALLOUT, 10.0);
 setPairwiseGap(T.PARAGRAPH, T.MEDIA, 6.6);
+setPairwiseGap(T.PARAGRAPH, T.COLUMNS, 6.6);
 setPairwiseGap(T.PARAGRAPH, T.DIVIDER, 6.6);
 setPairwiseGap(T.PARAGRAPH, T.BLANK, 6.6);
 
 // list -> *
 setPairwiseGap(T.LIST, T.PAGETITLE, 6.6);
 setPairwiseGap(T.LIST, T.PARAGRAPH, 7.8);
-setPairwiseGap(T.LIST, T.LIST, 7.8);
+setPairwiseGap(T.LIST, T.LIST, 7.4);
 setPairwiseGap(T.LIST, T.H2, 19.2);
 setPairwiseGap(T.LIST, T.H3, 15.6);
 setPairwiseGap(T.LIST, T.H4, 12.9);
@@ -301,13 +295,14 @@ setPairwiseGap(T.LIST, T.CODE, 4.0);
 setPairwiseGap(T.LIST, T.QUOTE, 6.6);
 setPairwiseGap(T.LIST, T.CALLOUT, 6.6);
 setPairwiseGap(T.LIST, T.MEDIA, 6.6);
+setPairwiseGap(T.LIST, T.COLUMNS, 6.6);
 setPairwiseGap(T.LIST, T.DIVIDER, 6.6);
 setPairwiseGap(T.LIST, T.BLANK, 6.6);
 
 // h2 -> *
 setPairwiseGap(T.H2, T.PAGETITLE, 6.6);
 setPairwiseGap(T.H2, T.PARAGRAPH, 3.7);
-setPairwiseGap(T.H2, T.LIST, 4.4);
+setPairwiseGap(T.H2, T.LIST, 3.4);
 setPairwiseGap(T.H2, T.H2, 16.9);
 setPairwiseGap(T.H2, T.H3, 12.4);
 setPairwiseGap(T.H2, T.H4, 10.6);
@@ -317,6 +312,7 @@ setPairwiseGap(T.H2, T.CODE, 4.0);
 setPairwiseGap(T.H2, T.QUOTE, 6.6);
 setPairwiseGap(T.H2, T.CALLOUT, 6.6);
 setPairwiseGap(T.H2, T.MEDIA, 6.6);
+setPairwiseGap(T.H2, T.COLUMNS, 6.6);
 setPairwiseGap(T.H2, T.DIVIDER, 6.6);
 setPairwiseGap(T.H2, T.BLANK, 6.6);
 
@@ -333,6 +329,7 @@ setPairwiseGap(T.H3, T.CODE, 4.0);
 setPairwiseGap(T.H3, T.QUOTE, 7.8);
 setPairwiseGap(T.H3, T.CALLOUT, 6.6);
 setPairwiseGap(T.H3, T.MEDIA, 6.6);
+setPairwiseGap(T.H3, T.COLUMNS, 6.6);
 setPairwiseGap(T.H3, T.DIVIDER, 6.6);
 setPairwiseGap(T.H3, T.BLANK, 6.6);
 
@@ -349,6 +346,7 @@ setPairwiseGap(T.H4, T.CODE, 4.0);
 setPairwiseGap(T.H4, T.QUOTE, 6.6);
 setPairwiseGap(T.H4, T.CALLOUT, 6.6);
 setPairwiseGap(T.H4, T.MEDIA, 6.6);
+setPairwiseGap(T.H4, T.COLUMNS, 6.6);
 setPairwiseGap(T.H4, T.DIVIDER, 6.6);
 setPairwiseGap(T.H4, T.BLANK, 6.6);
 
@@ -365,6 +363,7 @@ setPairwiseGap(T.EQUATION, T.CODE, 6.6);
 setPairwiseGap(T.EQUATION, T.QUOTE, 12.0);
 setPairwiseGap(T.EQUATION, T.CALLOUT, 6.6);
 setPairwiseGap(T.EQUATION, T.MEDIA, 6.6);
+setPairwiseGap(T.EQUATION, T.COLUMNS, 6.6);
 setPairwiseGap(T.EQUATION, T.DIVIDER, 6.6);
 setPairwiseGap(T.EQUATION, T.BLANK, 6.6);
 
@@ -381,6 +380,7 @@ setPairwiseGap(T.TABLE, T.CODE, 6.6);
 setPairwiseGap(T.TABLE, T.QUOTE, 6.6);
 setPairwiseGap(T.TABLE, T.CALLOUT, 6.6);
 setPairwiseGap(T.TABLE, T.MEDIA, 6.6);
+setPairwiseGap(T.TABLE, T.COLUMNS, 6.6);
 setPairwiseGap(T.TABLE, T.DIVIDER, 6.6);
 setPairwiseGap(T.TABLE, T.BLANK, 6.6);
 
@@ -388,7 +388,7 @@ setPairwiseGap(T.TABLE, T.BLANK, 6.6);
 setPairwiseGap(T.CODE, T.PAGETITLE, 6.6);
 setPairwiseGap(T.CODE, T.PARAGRAPH, 5.5);
 setPairwiseGap(T.CODE, T.LIST, 5.5);
-setPairwiseGap(T.CODE, T.H2, 14.0);
+setPairwiseGap(T.CODE, T.H2, 18.5);
 setPairwiseGap(T.CODE, T.H3, 13.5);
 setPairwiseGap(T.CODE, T.H4, 13.0);
 setPairwiseGap(T.CODE, T.EQUATION, 10.0);
@@ -397,6 +397,7 @@ setPairwiseGap(T.CODE, T.CODE, 8.0);
 setPairwiseGap(T.CODE, T.QUOTE, 6.6);
 setPairwiseGap(T.CODE, T.CALLOUT, 6.6);
 setPairwiseGap(T.CODE, T.MEDIA, 6.6);
+setPairwiseGap(T.CODE, T.COLUMNS, 6.6);
 setPairwiseGap(T.CODE, T.DIVIDER, 6.6);
 setPairwiseGap(T.CODE, T.BLANK, 6.6);
 
@@ -413,6 +414,7 @@ setPairwiseGap(T.QUOTE, T.CODE, 6.6);
 setPairwiseGap(T.QUOTE, T.QUOTE, 6.6);
 setPairwiseGap(T.QUOTE, T.CALLOUT, 6.6);
 setPairwiseGap(T.QUOTE, T.MEDIA, 6.6);
+setPairwiseGap(T.QUOTE, T.COLUMNS, 6.6);
 setPairwiseGap(T.QUOTE, T.DIVIDER, 6.6);
 setPairwiseGap(T.QUOTE, T.BLANK, 6.6);
 
@@ -429,6 +431,7 @@ setPairwiseGap(T.CALLOUT, T.CODE, 6.6);
 setPairwiseGap(T.CALLOUT, T.QUOTE, 6.6);
 setPairwiseGap(T.CALLOUT, T.CALLOUT, 6.6);
 setPairwiseGap(T.CALLOUT, T.MEDIA, 6.6);
+setPairwiseGap(T.CALLOUT, T.COLUMNS, 6.6);
 setPairwiseGap(T.CALLOUT, T.DIVIDER, 6.6);
 setPairwiseGap(T.CALLOUT, T.BLANK, 6.6);
 
@@ -445,8 +448,26 @@ setPairwiseGap(T.MEDIA, T.CODE, 6.6);
 setPairwiseGap(T.MEDIA, T.QUOTE, 6.6);
 setPairwiseGap(T.MEDIA, T.CALLOUT, 6.6);
 setPairwiseGap(T.MEDIA, T.MEDIA, 6.6);
+setPairwiseGap(T.MEDIA, T.COLUMNS, 6.6);
 setPairwiseGap(T.MEDIA, T.DIVIDER, 6.6);
 setPairwiseGap(T.MEDIA, T.BLANK, 6.6);
+
+// columns -> *
+setPairwiseGap(T.COLUMNS, T.PAGETITLE, 6.6);
+setPairwiseGap(T.COLUMNS, T.PARAGRAPH, 6.6);
+setPairwiseGap(T.COLUMNS, T.LIST, 6.6);
+setPairwiseGap(T.COLUMNS, T.H2, 6.6);
+setPairwiseGap(T.COLUMNS, T.H3, 6.6);
+setPairwiseGap(T.COLUMNS, T.H4, 6.6);
+setPairwiseGap(T.COLUMNS, T.EQUATION, 10.0);
+setPairwiseGap(T.COLUMNS, T.TABLE, 6.6);
+setPairwiseGap(T.COLUMNS, T.CODE, 6.6);
+setPairwiseGap(T.COLUMNS, T.QUOTE, 6.6);
+setPairwiseGap(T.COLUMNS, T.CALLOUT, 6.6);
+setPairwiseGap(T.COLUMNS, T.MEDIA, 6.6);
+setPairwiseGap(T.COLUMNS, T.COLUMNS, 6.6);
+setPairwiseGap(T.COLUMNS, T.DIVIDER, 6.6);
+setPairwiseGap(T.COLUMNS, T.BLANK, 6.6);
 
 // divider -> *
 setPairwiseGap(T.DIVIDER, T.PAGETITLE, 6.6);
@@ -461,6 +482,7 @@ setPairwiseGap(T.DIVIDER, T.CODE, 6.6);
 setPairwiseGap(T.DIVIDER, T.QUOTE, 6.6);
 setPairwiseGap(T.DIVIDER, T.CALLOUT, 6.6);
 setPairwiseGap(T.DIVIDER, T.MEDIA, 6.6);
+setPairwiseGap(T.DIVIDER, T.COLUMNS, 6.6);
 setPairwiseGap(T.DIVIDER, T.DIVIDER, 6.6);
 setPairwiseGap(T.DIVIDER, T.BLANK, 6.6);
 
@@ -477,6 +499,7 @@ setPairwiseGap(T.BLANK, T.CODE, 6.6);
 setPairwiseGap(T.BLANK, T.QUOTE, 6.6);
 setPairwiseGap(T.BLANK, T.CALLOUT, 6.6);
 setPairwiseGap(T.BLANK, T.MEDIA, 6.6);
+setPairwiseGap(T.BLANK, T.COLUMNS, 6.6);
 setPairwiseGap(T.BLANK, T.DIVIDER, 6.6);
 setPairwiseGap(T.BLANK, T.BLANK, 6.6);
 
@@ -1012,6 +1035,70 @@ function getColumnOuterRect(columnBlock) {
   return columnRect;
 }
 
+function isImmediateContentChildOfContainer(block, container) {
+  let node = block.parentElement;
+
+  while (node && node !== container) {
+    if (node.hasAttribute?.("data-block-id")) {
+      return false;
+    }
+
+    node = node.parentElement;
+  }
+
+  return node === container;
+}
+function createRenderedMediaPreview(segment) {
+  const layoutWidth = segment.layoutWidth || PAGE_BODY_WIDTH_PX;
+  const targetWidth = getPrintMediaTargetWidth(segment.element, layoutWidth);
+  const targetHeight = Math.max(
+    1,
+    Number(segment.contentHeight ?? segment.height) ||
+      estimateMediaHeight(segment.element, layoutWidth)
+  );
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "notion-pdf-preview-rendered-media";
+  wrapper.style.width = `${targetWidth}px`;
+  wrapper.style.height = `${targetHeight}px`;
+  wrapper.style.maxWidth = "100%";
+  wrapper.style.boxSizing = "border-box";
+  wrapper.style.overflow = "hidden";
+
+  const blockStyle = window.getComputedStyle(segment.element);
+
+  if (
+    blockStyle.alignSelf === "center" ||
+    segment.element.style.alignSelf === "center"
+  ) {
+    wrapper.style.marginLeft = "auto";
+    wrapper.style.marginRight = "auto";
+  }
+
+  const sourceMedia =
+    segment.element.matches("img, video, canvas, iframe")
+      ? segment.element
+      : getSubstantialMediaElement(segment.element) ||
+        segment.element.querySelector("img, video, canvas, iframe");
+
+  if (!sourceMedia) {
+    return wrapper;
+  }
+
+  const clone = sourceMedia.cloneNode(true);
+
+  clone.removeAttribute("loading");
+  clone.style.display = "block";
+  clone.style.width = "100%";
+  clone.style.height = "100%";
+  clone.style.maxWidth = "100%";
+  clone.style.maxHeight = "100%";
+  clone.style.objectFit = "contain";
+  clone.style.margin = "0";
+
+  wrapper.append(clone);
+  return wrapper;
+}
 function getColumnInnerContentBlocks(columnBlock) {
   if (!columnBlock) {
     return [];
@@ -1020,10 +1107,7 @@ function getColumnInnerContentBlocks(columnBlock) {
   const blocks = Array.from(columnBlock.querySelectorAll("[data-block-id]"))
     .filter((block) => block !== columnBlock)
     .filter((block) => getVisibleRect(block))
-    .filter((block) => {
-      const parentBlock = block.parentElement?.closest("[data-block-id]");
-      return parentBlock === columnBlock;
-    });
+    .filter((block) => isImmediateContentChildOfContainer(block, columnBlock));
 
   return sortBlocksByPagePosition(blocks);
 }
@@ -1650,33 +1734,7 @@ function findNotionColumnAncestor(block) {
 }
 
 function getPrintMediaContainerWidth(block, layoutWidth) {
-  const safeLayoutWidth = Math.max(1, Number(layoutWidth) || PAGE_BODY_WIDTH_PX);
-
-  const column = findNotionColumnAncestor(block);
-
-  if (!column) {
-    return safeLayoutWidth;
-  }
-
-  const columnRect = getVisibleRect(column);
-  const root = getMediaPrintReferenceRoot(block);
-  const rootRect = root?.getBoundingClientRect?.();
-
-  if (
-    columnRect &&
-    rootRect &&
-    columnRect.width > 0 &&
-    rootRect.width > 0
-  ) {
-    const columnRatio = Math.max(
-      0.05,
-      Math.min(1, columnRect.width / rootRect.width)
-    );
-
-    return safeLayoutWidth * columnRatio;
-  }
-
-  return safeLayoutWidth;
+  return Math.max(1, Number(layoutWidth) || PAGE_BODY_WIDTH_PX);
 }
 
 function getPrintMediaTargetWidth(block, layoutWidth) {
@@ -1701,19 +1759,63 @@ function getPrintMediaTargetWidth(block, layoutWidth) {
   return Math.max(1, targetWidth);
 }
 
-function estimateMediaHeight(block, layoutWidth) {
-  const image =
-    block.matches("img")
-      ? block
-      : getSubstantialMediaElement(block) || block.querySelector("img");
+function getMediaAspectRatio(mediaElement) {
+  if (!mediaElement) {
+    return null;
+  }
 
-  const targetWidth = getPrintMediaTargetWidth(block, layoutWidth);
-
-  const naturalWidth = image?.naturalWidth || 0;
-  const naturalHeight = image?.naturalHeight || 0;
+  const naturalWidth = Number(mediaElement.naturalWidth) || 0;
+  const naturalHeight = Number(mediaElement.naturalHeight) || 0;
 
   if (naturalWidth > 0 && naturalHeight > 0) {
-    return targetWidth * (naturalHeight / naturalWidth);
+    return naturalHeight / naturalWidth;
+  }
+
+  const rect = getVisibleRect(mediaElement);
+
+  if (rect && rect.width > 0 && rect.height > 0) {
+    return rect.height / rect.width;
+  }
+
+  const styleHeight = parseCssLengthToPx(
+    readInlineStyleValue(mediaElement, "height"),
+    0
+  );
+
+  const styleWidth = parseCssLengthToPx(
+    readInlineStyleValue(mediaElement, "width"),
+    0
+  );
+
+  if (
+    Number.isFinite(styleWidth) &&
+    styleWidth > 0 &&
+    Number.isFinite(styleHeight) &&
+    styleHeight > 0
+  ) {
+    return styleHeight / styleWidth;
+  }
+
+  return null;
+}
+
+function estimateMediaHeight(block, layoutWidth) {
+  const mediaElement =
+    block.matches("img, video, canvas, iframe, figure")
+      ? block
+      : getSubstantialMediaElement(block) || block.querySelector("img, video, canvas, iframe");
+
+  const targetWidth = getPrintMediaTargetWidth(block, layoutWidth);
+  const aspectRatio = getMediaAspectRatio(mediaElement);
+
+  if (Number.isFinite(aspectRatio) && aspectRatio > 0) {
+    return Math.max(1, targetWidth * aspectRatio);
+  }
+
+  const mediaRect = getVisibleRect(mediaElement);
+
+  if (mediaRect && mediaRect.height > 0) {
+    return mediaRect.height;
   }
 
   const blockRect = getVisibleRect(block);
@@ -1724,6 +1826,7 @@ function estimateMediaHeight(block, layoutWidth) {
 
   return 220;
 }
+
 function hasMathElement(block) {
   return Boolean(block.querySelector(".katex, .katex-display"));
 }
@@ -2467,7 +2570,7 @@ function prepareCloneForMeasurement(clone, type = "paragraph") {
 }
 
 function shouldUseRenderedHeight(type) {
-  return type === "media";
+  return false;
 }
 
 function getMarginBottom(element) {
@@ -3498,6 +3601,10 @@ function createRenderedPreviewForGenericSegment(segment) {
 
   if (segment.type === "columns") {
     return createRenderedColumnsPreview(segment);
+  }
+
+  if (segment.type === "media") {
+    return createRenderedMediaPreview(segment);
   }
 
   if (segment.type === "table") {
