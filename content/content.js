@@ -127,7 +127,7 @@ setPairwiseGap(T.PAGE_TITLE, T.CODE, 10.0);
 setPairwiseGap(T.PARAGRAPH, T.PARAGRAPH, 6.6);
 setPairwiseGap(T.PARAGRAPH, T.LIST, 6.6);
 setPairwiseGap(T.PARAGRAPH, T.H2, 19.2);
-setPairwiseGap(T.PARAGRAPH, T.H3, 14.6);
+setPairwiseGap(T.PARAGRAPH, T.H3, 15.0);
 setPairwiseGap(T.PARAGRAPH, T.H4, 12.9);
 setPairwiseGap(T.PARAGRAPH, T.EQUATION, 13.2);
 setPairwiseGap(T.PARAGRAPH, T.TABLE, 10.6);
