@@ -525,22 +525,24 @@ setPairwiseGap(T.BLANK, T.BLANK, 6.6);
 setPairwiseGap(T.BLANK, T.PAGEMETADATA, 6.6);
 
 // pageMetadata -> *
-setPairwiseGap(T.PAGEMETADATA, T.PAGETITLE, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.PARAGRAPH, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.LIST, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.H2, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.H3, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.H4, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.EQUATION, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.TABLE, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.CODE, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.QUOTE, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.CALLOUT, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.MEDIA, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.COLUMNS, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.DIVIDER, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.BLANK, 0.0);
-setPairwiseGap(T.PAGEMETADATA, T.PAGEMETADATA, 6.6);
+
+
+// metadata row 사이 간격.
+// 3pt ≈ 4px 정도.
+setPairwiseGap(T.PAGEMETADATA, T.PAGEMETADATA, 3.0);
+
+// 마지막 metadata 이후 본문과의 간격.
+setPairwiseGap(T.PAGEMETADATA, T.PARAGRAPH, 3.0);
+setPairwiseGap(T.PAGEMETADATA, T.LIST, 3.0);
+setPairwiseGap(T.PAGEMETADATA, T.H2, 5.0);
+setPairwiseGap(T.PAGEMETADATA, T.H3, 4.0);
+setPairwiseGap(T.PAGEMETADATA, T.H4, 4.0);
+setPairwiseGap(T.PAGEMETADATA, T.COLUMNS, 3.0);
+setPairwiseGap(T.PAGEMETADATA, T.MEDIA, 3.0);
+setPairwiseGap(T.PAGEMETADATA, T.TABLE, 3.0);
+setPairwiseGap(T.PAGEMETADATA, T.CODE, 3.0);
+setPairwiseGap(T.PAGEMETADATA, T.EQUATION, 3.0);
+setPairwiseGap(T.PAGEMETADATA, T.BLANK, 3.0);
 
 captureDefaultPairwiseGapMatrix();
 loadPairwiseGapOverrides();
@@ -959,6 +961,31 @@ function isInsidePageMetadata(element) {
   return Boolean(
     element?.closest?.("[role='table'][aria-label='페이지 속성']")
   );
+}
+
+function estimatePageMetadataRowBlockHeight(row, layoutWidth) {
+  return PAGE_METADATA_ROW_HEIGHT_PX;
+}
+
+function measurePageMetadataBlocks(metadataElement, layoutWidth) {
+  const rows = getPageMetadataRows(metadataElement);
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const labelWidth = getPageMetadataLabelWidth(rows);
+
+  return rows.map((row, index) => ({
+    element: metadataElement,
+    type: "pageMetadata",
+    text: `${row.label} ${row.value}`,
+    layoutWidth,
+    height: estimatePageMetadataRowBlockHeight(row, layoutWidth),
+    metadataRow: row,
+    metadataRowIndex: index,
+    metadataLabelWidth: labelWidth
+  }));
 }
 function getPageMetadataTableWidth(layoutWidth) {
   const safeLayoutWidth = Math.max(1, Number(layoutWidth) || PAGE_BODY_WIDTH_PX);
@@ -2580,10 +2607,9 @@ function estimateListHeight(block, layoutWidth, compact = false) {
 const PAGE_METADATA_FONT_SIZE_PX = 14;
 const PAGE_METADATA_ROW_HEIGHT_PX = 22;
 const PAGE_METADATA_LINE_HEIGHT_PX = 20;
-const PAGE_METADATA_LABEL_MIN_WIDTH_PX = 52;
-const PAGE_METADATA_LABEL_MAX_WIDTH_PX = 96;
+const PAGE_METADATA_LABEL_MIN_WIDTH_PX = 42;
+const PAGE_METADATA_LABEL_MAX_WIDTH_PX = 88;
 const PAGE_METADATA_LABEL_RIGHT_GAP_PX = 10;
-const PAGE_METADATA_BOTTOM_GAP_PX = 8;
 
 const PAGE_METADATA_LABEL_COLOR = "rgba(55, 53, 47, 0.55)";
 const PAGE_METADATA_VALUE_COLOR = "rgb(55, 53, 47)";
@@ -2646,7 +2672,7 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
     }
 
     case "pageMetadata": {
-      return estimatePageMetadataHeight(block, layoutWidth);
+      return PAGE_METADATA_ROW_HEIGHT_PX;
     }
 
     case "h2": {
@@ -3344,18 +3370,27 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
     return measureBlockElement(element, layoutWidth, headingFontLevels);
   });
 
-  const measuredBlocks = [];
+const measuredBlocks = [];
 
-  if (pageTitleElement) {
-    const titleText = getVisibleTextForEstimate(pageTitleElement);
+    if (pageTitleElement) {
+      const titleText = getVisibleTextForEstimate(pageTitleElement);
 
-    measuredBlocks.push({
-      element: pageTitleElement,
-      type: "pageTitle",
-      text: titleText,
-      layoutWidth,
-      height: estimateBlockHeight(pageTitleElement, layoutWidth, "pageTitle")
-    });
+      measuredBlocks.push({
+        element: pageTitleElement,
+        type: "pageTitle",
+        text: titleText,
+        layoutWidth,
+        height: estimateBlockHeight(pageTitleElement, layoutWidth, "pageTitle")
+      });
+    }
+
+    if (pageMetadataElement) {
+      measuredBlocks.push(
+        ...measurePageMetadataBlocks(pageMetadataElement, layoutWidth)
+      );
+    }
+
+    measuredBlocks.push(...bodyMeasuredBlocks);
   }
 
   if (pageMetadataElement) {
@@ -3838,64 +3873,58 @@ function createRenderedTextContainerPreview(segment) {
 }
 
 function createRenderedPageMetadataPreview(segment) {
-  const rows = Array.isArray(segment.metadataRows)
-    ? segment.metadataRows
-    : getPageMetadataRows(segment.element);
+  const row =
+    segment.metadataRow ||
+    segment.metadataRows?.[0] ||
+    getPageMetadataRows(segment.element)[0];
 
   const layoutWidth = segment.layoutWidth || PAGE_BODY_WIDTH_PX;
-  const labelWidth = getPageMetadataLabelWidth(rows);
+  const labelWidth = Number(segment.metadataLabelWidth) ||
+    getPageMetadataLabelWidth(row ? [row] : []);
 
   const wrapper = document.createElement("div");
-  wrapper.className = "notion-pdf-preview-page-metadata";
+  wrapper.className = "notion-pdf-preview-page-metadata-row-block";
   wrapper.style.width = `${layoutWidth}px`;
-  wrapper.style.height = `${Math.max(1, Number(segment.height) || 1)}px`;
+  wrapper.style.height = `${PAGE_METADATA_ROW_HEIGHT_PX}px`;
+  wrapper.style.lineHeight = `${PAGE_METADATA_LINE_HEIGHT_PX}px`;
   wrapper.style.boxSizing = "border-box";
   wrapper.style.overflow = "hidden";
+  wrapper.style.display = "flex";
+  wrapper.style.alignItems = "center";
   wrapper.style.fontSize = `${PAGE_METADATA_FONT_SIZE_PX}px`;
   wrapper.style.color = PAGE_METADATA_VALUE_COLOR;
-  wrapper.style.paddingBottom = `${PAGE_METADATA_BOTTOM_GAP_PX}px`;
 
-  for (const row of rows) {
-    const rowElement = document.createElement("div");
-    rowElement.className = "notion-pdf-preview-page-metadata-row";
-    rowElement.style.display = "flex";
-    rowElement.style.alignItems = "center";
-    rowElement.style.width = "100%";
-    rowElement.style.height = `${PAGE_METADATA_ROW_HEIGHT_PX}px`;
-    rowElement.style.lineHeight = `${PAGE_METADATA_LINE_HEIGHT_PX}px`;
-    rowElement.style.boxSizing = "border-box";
-    rowElement.style.overflow = "hidden";
-
-    const label = document.createElement("div");
-    label.className = "notion-pdf-preview-page-metadata-label";
-    label.textContent = row.label;
-    label.style.flex = `0 0 ${labelWidth}px`;
-    label.style.width = `${labelWidth}px`;
-    label.style.maxWidth = `${labelWidth}px`;
-    label.style.minWidth = "0";
-    label.style.boxSizing = "border-box";
-    label.style.color = PAGE_METADATA_LABEL_COLOR;
-    label.style.whiteSpace = "nowrap";
-    label.style.overflow = "hidden";
-    label.style.textOverflow = "ellipsis";
-    label.style.paddingRight = `${PAGE_METADATA_LABEL_RIGHT_GAP_PX}px`;
-
-    const value = document.createElement("div");
-    value.className = "notion-pdf-preview-page-metadata-value";
-    value.textContent = row.value;
-    value.style.flex = "1 1 auto";
-    value.style.minWidth = "0";
-    value.style.boxSizing = "border-box";
-    value.style.color = PAGE_METADATA_VALUE_COLOR;
-    value.style.whiteSpace = "nowrap";
-    value.style.overflow = "hidden";
-    value.style.textOverflow = "clip";
-    value.style.lineHeight = `${PAGE_METADATA_LINE_HEIGHT_PX}px`;
-
-    rowElement.append(label, value);
-    wrapper.append(rowElement);
+  if (!row) {
+    return wrapper;
   }
 
+  const label = document.createElement("div");
+  label.className = "notion-pdf-preview-page-metadata-label";
+  label.textContent = row.label;
+  label.style.flex = `0 0 ${labelWidth}px`;
+  label.style.width = `${labelWidth}px`;
+  label.style.maxWidth = `${labelWidth}px`;
+  label.style.minWidth = "0";
+  label.style.boxSizing = "border-box";
+  label.style.color = PAGE_METADATA_LABEL_COLOR;
+  label.style.whiteSpace = "nowrap";
+  label.style.overflow = "hidden";
+  label.style.textOverflow = "ellipsis";
+  label.style.paddingRight = `${PAGE_METADATA_LABEL_RIGHT_GAP_PX}px`;
+
+  const value = document.createElement("div");
+  value.className = "notion-pdf-preview-page-metadata-value";
+  value.textContent = row.value;
+  value.style.flex = "1 1 auto";
+  value.style.minWidth = "0";
+  value.style.boxSizing = "border-box";
+  value.style.color = PAGE_METADATA_VALUE_COLOR;
+  value.style.whiteSpace = "nowrap";
+  value.style.overflow = "hidden";
+  value.style.textOverflow = "clip";
+  value.style.lineHeight = `${PAGE_METADATA_LINE_HEIGHT_PX}px`;
+
+  wrapper.append(label, value);
   return wrapper;
 }
 
