@@ -1693,7 +1693,7 @@ function buildRawListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0
         element: childBlock,
         depth,
         text: codeText,
-        height: estimateCodeHeight(childBlock, childLayoutWidth),
+        height: estimateBlockHeight(childBlock, childLayoutWidth, "code"),
         layoutWidth: childLayoutWidth
       });
 
@@ -1708,7 +1708,7 @@ function buildRawListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0
         element: childBlock,
         depth,
         text: "",
-        height: estimateEquationHeight(childBlock, childLayoutWidth),
+        height: estimateBlockHeight(childBlock, childLayoutWidth, "equation"),
         layoutWidth: childLayoutWidth
       });
 
