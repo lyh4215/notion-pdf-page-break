@@ -129,7 +129,7 @@ setPairwiseGap(T.PARAGRAPH, T.LIST, 6.6);
 setPairwiseGap(T.PARAGRAPH, T.H2, 19.2);
 setPairwiseGap(T.PARAGRAPH, T.H3, 15.5);
 setPairwiseGap(T.PARAGRAPH, T.H4, 12.9);
-setPairwiseGap(T.PARAGRAPH, T.EQUATION, 13.2);
+setPairwiseGap(T.PARAGRAPH, T.EQUATION, 13.6);
 setPairwiseGap(T.PARAGRAPH, T.TABLE, 10.6);
 setPairwiseGap(T.PARAGRAPH, T.CODE, 10.0);
 setPairwiseGap(T.PARAGRAPH, T.QUOTE, 10.0);
@@ -156,7 +156,7 @@ setPairwiseGap(T.H2, T.TABLE, 10.6);
 setPairwiseGap(T.H2, T.CODE, 10.0);
 
 // h3, Notion markdown ##
-setPairwiseGap(T.H3, T.PARAGRAPH, 5);
+setPairwiseGap(T.H3, T.PARAGRAPH, 4.7);
 setPairwiseGap(T.H3, T.LIST, 5.7);
 setPairwiseGap(T.H3, T.H2, 18.2);
 setPairwiseGap(T.H3, T.H3, 13.7);
@@ -176,7 +176,7 @@ setPairwiseGap(T.H4, T.TABLE, 10.6);
 setPairwiseGap(T.H4, T.CODE, 10.0);
 
 // equation -> *
-setPairwiseGap(T.EQUATION, T.PARAGRAPH, 12.0);
+setPairwiseGap(T.EQUATION, T.PARAGRAPH, 12.1);
 setPairwiseGap(T.EQUATION, T.LIST, 12.0);
 setPairwiseGap(T.EQUATION, T.H2, 14.0);
 setPairwiseGap(T.EQUATION, T.H3, 13.5);
