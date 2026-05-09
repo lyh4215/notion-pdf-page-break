@@ -2578,38 +2578,50 @@ function estimateListHeight(block, layoutWidth, compact = false) {
   return estimateInlineMathAwareHeight(block, height);
 }
 const PAGE_METADATA_FONT_SIZE_PX = 14;
-const PAGE_METADATA_ROW_HEIGHT_PX = 34;
-const PAGE_METADATA_LABEL_WIDTH_PX = 154;
-const PAGE_METADATA_ICON_WIDTH_PX = 22;
-const PAGE_METADATA_CELL_GAP_PX = 0;
-const PAGE_METADATA_BORDER_COLOR = "rgba(55, 53, 47, 0.16)";
+const PAGE_METADATA_ROW_HEIGHT_PX = 22;
+const PAGE_METADATA_LINE_HEIGHT_PX = 20;
+const PAGE_METADATA_LABEL_MIN_WIDTH_PX = 52;
+const PAGE_METADATA_LABEL_MAX_WIDTH_PX = 96;
+const PAGE_METADATA_LABEL_RIGHT_GAP_PX = 10;
+const PAGE_METADATA_BOTTOM_GAP_PX = 8;
+
 const PAGE_METADATA_LABEL_COLOR = "rgba(55, 53, 47, 0.55)";
 const PAGE_METADATA_VALUE_COLOR = "rgb(55, 53, 47)";
-const PAGE_METADATA_TABLE_WIDTH_RATIO = 0.66;
-const PAGE_METADATA_TABLE_MIN_WIDTH_PX = 420;
-const PAGE_METADATA_TABLE_MAX_WIDTH_PX = 620;
-const PAGE_METADATA_BOTTOM_GAP_PX = 14;
+function measureMetadataTextWidth(text, fontSizePx = PAGE_METADATA_FONT_SIZE_PX) {
+  if (!measureMetadataTextWidth.canvas) {
+    measureMetadataTextWidth.canvas = document.createElement("canvas");
+  }
 
+  const context = measureMetadataTextWidth.canvas.getContext("2d");
+
+  if (!context) {
+    return String(text || "").length * fontSizePx * 0.55;
+  }
+
+  context.font = `${fontSizePx}px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+
+  return context.measureText(String(text || "")).width;
+}
+
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function getPageMetadataLabelWidth(rows) {
+  const maxLabelWidth = rows.reduce((max, row) => {
+    return Math.max(max, measureMetadataTextWidth(row.label || ""));
+  }, 0);
+
+  return Math.ceil(
+    clampNumber(
+      maxLabelWidth + PAGE_METADATA_LABEL_RIGHT_GAP_PX,
+      PAGE_METADATA_LABEL_MIN_WIDTH_PX,
+      PAGE_METADATA_LABEL_MAX_WIDTH_PX
+    )
+  );
+}
 function estimatePageMetadataRowHeight(row, layoutWidth) {
-  const tableWidth = getPageMetadataTableWidth(layoutWidth);
-
-  const valueWidth = Math.max(
-    80,
-    tableWidth - PAGE_METADATA_LABEL_WIDTH_PX
-  );
-
-  const lines = estimateWrappedLines(
-    row.value || " ",
-    PAGE_METADATA_FONT_SIZE_PX,
-    valueWidth - 12,
-    0,
-    "body"
-  );
-
-  return Math.max(
-    PAGE_METADATA_ROW_HEIGHT_PX,
-    lines * 21 + 12
-  );
+  return PAGE_METADATA_ROW_HEIGHT_PX;
 }
 
 function estimatePageMetadataHeight(metadataElement, layoutWidth) {
@@ -2619,11 +2631,7 @@ function estimatePageMetadataHeight(metadataElement, layoutWidth) {
     return 0;
   }
 
-  const rowsHeight = rows.reduce((sum, row) => {
-    return sum + estimatePageMetadataRowHeight(row, layoutWidth);
-  }, 0);
-
-  return rowsHeight + PAGE_METADATA_BOTTOM_GAP_PX;
+  return rows.length * PAGE_METADATA_ROW_HEIGHT_PX + PAGE_METADATA_BOTTOM_GAP_PX;
 }
 
 function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
@@ -3835,7 +3843,7 @@ function createRenderedPageMetadataPreview(segment) {
     : getPageMetadataRows(segment.element);
 
   const layoutWidth = segment.layoutWidth || PAGE_BODY_WIDTH_PX;
-  const tableWidth = getPageMetadataTableWidth(layoutWidth);
+  const labelWidth = getPageMetadataLabelWidth(rows);
 
   const wrapper = document.createElement("div");
   wrapper.className = "notion-pdf-preview-page-metadata";
@@ -3845,63 +3853,32 @@ function createRenderedPageMetadataPreview(segment) {
   wrapper.style.overflow = "hidden";
   wrapper.style.fontSize = `${PAGE_METADATA_FONT_SIZE_PX}px`;
   wrapper.style.color = PAGE_METADATA_VALUE_COLOR;
-
-  const table = document.createElement("div");
-  table.className = "notion-pdf-preview-page-metadata-table";
-  table.style.width = `${tableWidth}px`;
-  table.style.boxSizing = "border-box";
-  table.style.border = `1px solid ${PAGE_METADATA_BORDER_COLOR}`;
-  table.style.borderBottom = "0";
-  table.style.background = "#ffffff";
+  wrapper.style.paddingBottom = `${PAGE_METADATA_BOTTOM_GAP_PX}px`;
 
   for (const row of rows) {
-    const rowHeight = estimatePageMetadataRowHeight(row, layoutWidth);
-
     const rowElement = document.createElement("div");
     rowElement.className = "notion-pdf-preview-page-metadata-row";
     rowElement.style.display = "flex";
+    rowElement.style.alignItems = "center";
     rowElement.style.width = "100%";
-    rowElement.style.minHeight = `${rowHeight}px`;
+    rowElement.style.height = `${PAGE_METADATA_ROW_HEIGHT_PX}px`;
+    rowElement.style.lineHeight = `${PAGE_METADATA_LINE_HEIGHT_PX}px`;
     rowElement.style.boxSizing = "border-box";
-    rowElement.style.borderBottom = `1px solid ${PAGE_METADATA_BORDER_COLOR}`;
+    rowElement.style.overflow = "hidden";
 
     const label = document.createElement("div");
     label.className = "notion-pdf-preview-page-metadata-label";
-    label.style.display = "flex";
-    label.style.alignItems = "center";
-    label.style.width = `${PAGE_METADATA_LABEL_WIDTH_PX}px`;
-    label.style.flex = `0 0 ${PAGE_METADATA_LABEL_WIDTH_PX}px`;
+    label.textContent = row.label;
+    label.style.flex = `0 0 ${labelWidth}px`;
+    label.style.width = `${labelWidth}px`;
+    label.style.maxWidth = `${labelWidth}px`;
     label.style.minWidth = "0";
     label.style.boxSizing = "border-box";
-    label.style.borderRight = `1px solid ${PAGE_METADATA_BORDER_COLOR}`;
-    label.style.padding = "0 8px";
     label.style.color = PAGE_METADATA_LABEL_COLOR;
+    label.style.whiteSpace = "nowrap";
     label.style.overflow = "hidden";
-
-    const icon = document.createElement("span");
-    icon.className = "notion-pdf-preview-page-metadata-icon";
-    icon.textContent = "≡";
-    icon.style.display = "inline-flex";
-    icon.style.alignItems = "center";
-    icon.style.justifyContent = "center";
-    icon.style.width = `${PAGE_METADATA_ICON_WIDTH_PX}px`;
-    icon.style.flex = `0 0 ${PAGE_METADATA_ICON_WIDTH_PX}px`;
-    icon.style.marginRight = "6px";
-    icon.style.fontSize = "18px";
-    icon.style.lineHeight = "1";
-    icon.style.color = PAGE_METADATA_LABEL_COLOR;
-    icon.style.transform = "translateY(-1px)";
-
-    const labelText = document.createElement("span");
-    labelText.textContent = row.label;
-    labelText.style.display = "block";
-    labelText.style.minWidth = "0";
-    labelText.style.whiteSpace = "nowrap";
-    labelText.style.overflow = "hidden";
-    labelText.style.textOverflow = "ellipsis";
-    labelText.style.lineHeight = "20px";
-
-    label.append(icon, labelText);
+    label.style.textOverflow = "ellipsis";
+    label.style.paddingRight = `${PAGE_METADATA_LABEL_RIGHT_GAP_PX}px`;
 
     const value = document.createElement("div");
     value.className = "notion-pdf-preview-page-metadata-value";
@@ -3909,18 +3886,16 @@ function createRenderedPageMetadataPreview(segment) {
     value.style.flex = "1 1 auto";
     value.style.minWidth = "0";
     value.style.boxSizing = "border-box";
-    value.style.padding = "6px 10px";
     value.style.color = PAGE_METADATA_VALUE_COLOR;
-    value.style.lineHeight = "21px";
-    value.style.whiteSpace = "pre-wrap";
-    value.style.wordBreak = "break-word";
+    value.style.whiteSpace = "nowrap";
     value.style.overflow = "hidden";
+    value.style.textOverflow = "clip";
+    value.style.lineHeight = `${PAGE_METADATA_LINE_HEIGHT_PX}px`;
 
     rowElement.append(label, value);
-    table.append(rowElement);
+    wrapper.append(rowElement);
   }
 
-  wrapper.append(table);
   return wrapper;
 }
 
