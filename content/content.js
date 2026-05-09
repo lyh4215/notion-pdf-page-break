@@ -1511,11 +1511,53 @@ function isImmediateNestedChildBlock(parentBlock, candidateBlock) {
 }
 
 function getImmediateNestedContentBlocks(block) {
-  return sortBlocksByPagePosition(
-    Array.from(block.querySelectorAll("[data-block-id]"))
-      .filter((nestedBlock) => getVisibleRect(nestedBlock))
-      .filter((nestedBlock) => isImmediateNestedChildBlock(block, nestedBlock))
-  );
+  const candidates = Array.from(block.querySelectorAll("[data-block-id]"))
+    .filter((nestedBlock) => nestedBlock !== block)
+    .filter((nestedBlock) => getVisibleRect(nestedBlock))
+    .filter((nestedBlock) => isImmediateNestedChildBlock(block, nestedBlock));
+
+  // Notion table은 같은 data-block-id를 가진 wrapper가 여러 겹 중첩된다.
+  // 이걸 그대로 받으면 같은 table이 2~3번 preview에 찍힌다.
+  // 같은 data-block-id끼리는 가장 바깥쪽 wrapper만 남긴다.
+  const outermostOnly = candidates.filter((candidate) => {
+    const candidateId = candidate.getAttribute("data-block-id");
+
+    if (!candidateId) {
+      return true;
+    }
+
+    return !candidates.some((other) => {
+      if (other === candidate) {
+        return false;
+      }
+
+      if (other.getAttribute("data-block-id") !== candidateId) {
+        return false;
+      }
+
+      return other.contains(candidate);
+    });
+  });
+
+  // 같은 id가 남아도 마지막 안전장치로 1개만 유지
+  const seenIds = new Set();
+  const unique = [];
+
+  for (const candidate of outermostOnly) {
+    const id = candidate.getAttribute("data-block-id");
+
+    if (id && seenIds.has(id)) {
+      continue;
+    }
+
+    if (id) {
+      seenIds.add(id);
+    }
+
+    unique.push(candidate);
+  }
+
+  return sortBlocksByPagePosition(unique);
 }
 
 function getTextFlowLineHeightForElement(element, line, ownOnly = false) {
@@ -1542,6 +1584,10 @@ function shouldApplyInternalListGap(row, rowIndex) {
     return row.firstLine === true;
   }
 
+  if (row.kind === "textLine") {
+    return row.firstLine === true;
+  }
+
   return row.kind === "embeddedBlock";
 }
 
@@ -1557,6 +1603,10 @@ function applyInternalListGaps(rows) {
 function getListRowBaseHeight(row) {
   if (row.kind === "embeddedBlock") {
     return Math.max(1, Number(row.height) || 0);
+  }
+
+  if (row.kind === "textLine") {
+    return getTextFlowLineHeightForElement(row.element, row.text, false);
   }
 
   return getTextFlowLineHeightForElement(row.element, row.text, true);
@@ -1600,6 +1650,7 @@ function buildRawListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0
   childBlocks.forEach((childBlock, index) => {
     const childType = classifyBlock(childBlock);
 
+    // 1. nested list
     if (childType === "list") {
       rows.push(
         ...buildRawListPreviewRows(
@@ -1612,17 +1663,18 @@ function buildRawListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0
       return;
     }
 
-    if (childType === "table") {
-      const childLayoutWidth = Math.max(
-        120,
-        layoutWidth - ptToPx((depth + 1) * LIST_NESTED_INDENT_PT)
-      );
+    const childLayoutWidth = Math.max(
+      120,
+      layoutWidth - ptToPx(LIST_MARKER_RESERVED_PT + depth * LIST_NESTED_INDENT_PT)
+    );
 
+    // 2. list 안 table
+    if (childType === "table") {
       rows.push({
         kind: "embeddedBlock",
         blockType: "table",
         element: childBlock,
-        depth: depth + 1,
+        depth,
         text: "",
         height: estimateTableHeight(childBlock, childLayoutWidth),
         layoutWidth: childLayoutWidth
@@ -1631,7 +1683,80 @@ function buildRawListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0
       return;
     }
 
-    // 나중에 equation/code/callout도 여기서 추가 가능
+    // 3. list 안 code
+    if (childType === "code") {
+      const codeText = getVisibleTextForEstimate(childBlock, 0);
+
+      rows.push({
+        kind: "embeddedBlock",
+        blockType: "code",
+        element: childBlock,
+        depth,
+        text: codeText,
+        height: estimateCodeHeight(childBlock, childLayoutWidth),
+        layoutWidth: childLayoutWidth
+      });
+
+      return;
+    }
+
+    // 4. list 안 equation
+    if (childType === "equation") {
+      rows.push({
+        kind: "embeddedBlock",
+        blockType: "equation",
+        element: childBlock,
+        depth,
+        text: "",
+        height: estimateEquationHeight(childBlock, childLayoutWidth),
+        layoutWidth: childLayoutWidth
+      });
+
+      return;
+    }
+
+    // 5. list 안 paragraph / heading / quote / callout 등 일반 텍스트
+    if (isSyntheticTextSegment(childType)) {
+      const childText =
+        getOwnVisibleTextForEstimate(childBlock) ||
+        getVisibleTextForEstimate(childBlock, ptToPx(12)) ||
+        " ";
+
+      const { fontSize, reservedWidth, fontKind } = getSegmentWrapSettings({
+        type: childType,
+        element: childBlock,
+        text: childText,
+        layoutWidth: childLayoutWidth
+      });
+
+      const inlineCodeFragments = getInlineCodeFragmentsForPreview(childBlock, false);
+      const inlineMathFragments = getInlineMathFragmentsForPreview(childBlock, false);
+
+      const wrappedLines = wrapTextLinesForPreview(
+        childText,
+        fontSize,
+        childLayoutWidth,
+        reservedWidth,
+        inlineCodeFragments,
+        fontKind,
+        inlineMathFragments
+      );
+
+      wrappedLines.forEach((line, lineIndex) => {
+        rows.push({
+          kind: "textLine",
+          blockType: childType,
+          text: line || " ",
+          element: childBlock,
+          depth,
+          lineIndex,
+          firstLine: lineIndex === 0,
+          marker: ""
+        });
+      });
+
+      return;
+    }
   });
 
   return rows;
@@ -2808,7 +2933,7 @@ function createSyntheticTextPreview(segment) {
 
         embedded.style.setProperty(
           "--notion-pdf-preview-list-depth-indent",
-          `${ptToPx(row.depth * LIST_NESTED_INDENT_PT)}px`
+          `${ptToPx(row.depth * LIST_NESTED_INDENT_PT + LIST_MARKER_RESERVED_PT)}px`
         );
 
         embedded.style.height = `${Math.max(1, Number(row.height) || 0)}px`;
@@ -2824,6 +2949,56 @@ function createSyntheticTextPreview(segment) {
         };
 
         embedded.append(createRenderedTablePreview(tableSegment));
+        text.append(embedded);
+        continue;
+      }
+      if (row.kind === "embeddedBlock" && row.blockType === "code") {
+        const embedded = document.createElement("div");
+        embedded.className = "notion-pdf-preview-synthetic-list-embedded-block";
+
+        embedded.style.setProperty(
+          "--notion-pdf-preview-list-depth-indent",
+          `${ptToPx(row.depth * LIST_NESTED_INDENT_PT + LIST_MARKER_RESERVED_PT)}px`
+        );
+
+        embedded.style.height = `${Math.max(1, Number(row.height) || 0)}px`;
+
+        const codePreview = createSyntheticTextPreview({
+          ...segment,
+          type: "code",
+          element: row.element,
+          text: row.text || getVisibleTextForEstimate(row.element, 0),
+          layoutWidth: row.layoutWidth,
+          contentHeight: row.height,
+          segmentHeight: row.height
+        });
+
+        embedded.append(codePreview);
+        text.append(embedded);
+        continue;
+      }
+
+      if (row.kind === "embeddedBlock" && row.blockType === "equation") {
+        const embedded = document.createElement("div");
+        embedded.className = "notion-pdf-preview-synthetic-list-embedded-block";
+
+        embedded.style.setProperty(
+          "--notion-pdf-preview-list-depth-indent",
+          `${ptToPx(row.depth * LIST_NESTED_INDENT_PT + LIST_MARKER_RESERVED_PT)}px`
+        );
+
+        embedded.style.height = `${Math.max(1, Number(row.height) || 0)}px`;
+
+        const equationPreview = createRenderedEquationPreview({
+          ...segment,
+          type: "equation",
+          element: row.element,
+          layoutWidth: row.layoutWidth,
+          contentHeight: row.height,
+          segmentHeight: row.height
+        });
+
+        embedded.append(equationPreview);
         text.append(embedded);
         continue;
       }
@@ -2849,7 +3024,10 @@ function createSyntheticTextPreview(segment) {
 
       const marker = document.createElement("span");
       marker.className = "notion-pdf-preview-synthetic-list-marker";
-      marker.textContent = row.firstLine ? row.marker : "";
+      marker.textContent =
+        row.kind === "line" && row.firstLine
+          ? row.marker
+          : "";
 
       const content = document.createElement("span");
       content.className = "notion-pdf-preview-synthetic-list-content";
