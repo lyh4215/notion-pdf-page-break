@@ -1152,6 +1152,7 @@ function estimateStackHeight(measuredBlocks) {
 
 function measureBlockElement(element, layoutWidth, headingFontLevels = null) {
   const type = classifyBlock(element, headingFontLevels);
+
   const text = type === "code"
     ? getCodeRawTextForEstimate(element)
     : getVisibleTextForEstimate(element, ptToPx(12));
@@ -1166,9 +1167,31 @@ function measureBlockElement(element, layoutWidth, headingFontLevels = null) {
 
   if (type === "columns") {
     const columnsInfo = measureColumnsBlock(element, layoutWidth, headingFontLevels);
+
     measuredBlock.columns = columnsInfo.columns;
     measuredBlock.columnGapPx = columnsInfo.columnGapPx;
     measuredBlock.height = columnsInfo.height;
+
+    return measuredBlock;
+  }
+
+  if (
+    isContainerCapableTextBlock(type) &&
+    hasImmediateNestedContentBlocks(element)
+  ) {
+    const containerInfo = measureTextContainerBlock(
+      element,
+      layoutWidth,
+      type,
+      headingFontLevels
+    );
+
+    measuredBlock.text = containerInfo.ownText;
+    measuredBlock.ownHeight = containerInfo.ownHeight;
+    measuredBlock.childBlocks = containerInfo.childBlocks;
+    measuredBlock.childrenHeight = containerInfo.childrenHeight;
+    measuredBlock.height = containerInfo.height;
+
     return measuredBlock;
   }
 
@@ -1181,6 +1204,7 @@ function measureBlockElement(element, layoutWidth, headingFontLevels = null) {
 
   return measuredBlock;
 }
+
 function getColumnLayoutInfo(columnListBlock, columnBlocks, layoutWidth) {
   const listRect = getVisibleRect(columnListBlock);
   const safeColumnCount = Math.max(1, columnBlocks.length);
@@ -1470,7 +1494,30 @@ function getTableRowElements(block) {
 function getTableRowCount(block) {
   return getTableRows(block).length;
 }
+function measureTextContainerBlock(element, layoutWidth, type, headingFontLevels = null) {
+  const ownText = getOwnVisibleTextForEstimate(element) || " ";
+  const ownHeight = estimateLeafBlockHeight(element, layoutWidth, type, ownText);
 
+  const childElements = getImmediateNestedContentBlocks(element);
+
+  const childBlocks = childElements.map((childElement) => {
+    return measureBlockElement(childElement, layoutWidth, headingFontLevels);
+  });
+
+  const childrenHeight = estimateStackHeight(childBlocks);
+
+  const gapBetweenOwnTextAndChildrenPx = childBlocks.length > 0
+    ? ptToPx(getPairwiseGapPt(type, childBlocks[0].type))
+    : 0;
+
+  return {
+    ownText,
+    ownHeight,
+    childBlocks,
+    childrenHeight,
+    height: ownHeight + gapBetweenOwnTextAndChildrenPx + childrenHeight
+  };
+}
 function tableRepeatsHeader(block) {
   const firstRow = block.querySelector("tr, [role='row']");
 
@@ -1837,7 +1884,86 @@ function isImmediateNestedChildBlock(parentBlock, candidateBlock) {
 
   return parent === parentBlock;
 }
+function estimateLeafBlockHeight(block, layoutWidth, type, textOverride = null) {
+  const text = textOverride != null
+    ? textOverride
+    : getVisibleTextForEstimate(block, ptToPx(12));
 
+  switch (type) {
+    case "pageTitle": {
+      const lines = estimateWrappedLines(
+        text,
+        ptToPx(PAGE_TITLE_FONT_SIZE_PT),
+        layoutWidth,
+        0,
+        "title"
+      );
+      return blockHeightFromPt(lines, 43.5, 2.25, 0);
+    }
+
+    case "h2": {
+      const lines = estimateWrappedLines(
+        text,
+        ptToPx(H2_FONT_SIZE_PT),
+        layoutWidth,
+        0,
+        "heading"
+      );
+      return blockHeightFromPt(lines, 27, 5.58, 0);
+    }
+
+    case "h3": {
+      const lines = estimateWrappedLines(
+        text,
+        ptToPx(H3_FONT_SIZE_PT),
+        layoutWidth,
+        0,
+        "heading"
+      );
+      return blockHeightFromPt(lines, 21.75, 4.31, 0);
+    }
+
+    case "h4": {
+      const lines = estimateWrappedLines(
+        text,
+        ptToPx(H4_FONT_SIZE_PT),
+        layoutWidth,
+        0,
+        "heading"
+      );
+      return blockHeightFromPt(lines, 18, 3.72, 0);
+    }
+
+    case "quote": {
+      const baseHeight = estimateTextFlowHeight(block, text, layoutWidth, ptToPx(14.25), 0);
+      return estimateInlineMathAwareHeight(block, baseHeight);
+    }
+
+    case "callout": {
+      const baseHeight = estimateTextFlowHeight(block, text, layoutWidth, ptToPx(40), 0);
+      return estimateInlineMathAwareHeight(block, baseHeight);
+    }
+
+    default: {
+      const baseHeight = estimateTextFlowHeight(block, text, layoutWidth, 0, 0);
+      return estimateInlineMathAwareHeight(block, baseHeight);
+    }
+  }
+}
+function hasImmediateNestedContentBlocks(block) {
+  return getImmediateNestedContentBlocks(block).length > 0;
+}
+
+function isContainerCapableTextBlock(type) {
+  return (
+    type === "paragraph" ||
+    type === "quote" ||
+    type === "callout" ||
+    type === "h2" ||
+    type === "h3" ||
+    type === "h4"
+  );
+}
 function getImmediateNestedContentBlocks(block) {
   const candidates = Array.from(block.querySelectorAll("[data-block-id]"))
     .filter((nestedBlock) => nestedBlock !== block)
@@ -2149,7 +2275,29 @@ function isLogicalChildBlock(block, nestedBlock) {
 
   return parent === block;
 }
+function getOwnVisibleTextForEstimate(block) {
+  if (!block) {
+    return "";
+  }
 
+  const ownTextParts = [];
+
+  const textLeaves = Array.from(
+    block.querySelectorAll("[data-content-editable-leaf='true']")
+  );
+
+  for (const leaf of textLeaves) {
+    const ownerBlock = leaf.closest("[data-block-id]");
+
+    if (ownerBlock !== block) {
+      continue;
+    }
+
+    ownTextParts.push(getElementText(leaf));
+  }
+
+  return ownTextParts.join("\n").trim();
+}
 function getNestedContentBlocks(block) {
   return sortBlocksByPagePosition(
     Array.from(block.querySelectorAll("[data-block-id]"))
@@ -3292,7 +3440,62 @@ function createRenderedColumnsPreview(segment) {
   return wrapper;
 }
 
+function createRenderedTextContainerPreview(segment) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "notion-pdf-preview-rendered-text-container";
+  wrapper.style.width = `${segment.layoutWidth || PAGE_BODY_WIDTH_PX}px`;
+  wrapper.style.height = `${Math.max(1, Number(segment.height) || 1)}px`;
+  wrapper.style.boxSizing = "border-box";
+  wrapper.style.overflow = "hidden";
+
+  const ownSegment = {
+    ...segment,
+    text: segment.text || " ",
+    childBlocks: undefined,
+    height: segment.ownHeight || estimateLeafBlockHeight(
+      segment.element,
+      segment.layoutWidth || PAGE_BODY_WIDTH_PX,
+      segment.type,
+      segment.text || " "
+    ),
+    contentHeight: segment.ownHeight,
+    segmentHeight: segment.ownHeight,
+    gapBeforePx: 0,
+    clipOffset: 0,
+    continued: false,
+    splitAfter: false
+  };
+
+  wrapper.append(createSyntheticTextPreview(ownSegment));
+
+  let prevType = segment.type;
+
+  for (const childBlock of segment.childBlocks || []) {
+    const gapBeforePx = ptToPx(getPairwiseGapPt(prevType, childBlock.type));
+
+    const childSegment = {
+      ...childBlock,
+      gapBeforePx,
+      contentHeight: childBlock.height,
+      segmentHeight: gapBeforePx + childBlock.height,
+      clipOffset: 0,
+      continued: false,
+      splitAfter: false
+    };
+
+    wrapper.append(createRenderedPdfPreviewSegment(childSegment));
+    prevType = childBlock.type;
+  }
+
+  return wrapper;
+}
+
+
 function createRenderedPreviewForGenericSegment(segment) {
+  if (Array.isArray(segment.childBlocks)) {
+    return createRenderedTextContainerPreview(segment);
+  }
+
   if (segment.type === "columns") {
     return createRenderedColumnsPreview(segment);
   }
