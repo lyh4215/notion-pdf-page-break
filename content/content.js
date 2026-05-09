@@ -268,6 +268,8 @@ function isDefaultPairwiseGapCell(row, col) {
 // format: setPairwiseGap(prevType, nextType, gapPt);
 // pairwise gap matrix overrides
 // format: setPairwiseGap(prevType, nextType, gapPt);
+// pairwise gap matrix overrides
+// format: setPairwiseGap(prevType, nextType, gapPt);
 
 // pageTitle -> *
 setPairwiseGap(T.PAGETITLE, T.PAGETITLE, 6.6);
@@ -407,8 +409,8 @@ setPairwiseGap(T.TABLE, T.PAGETITLE, 6.6);
 setPairwiseGap(T.TABLE, T.PARAGRAPH, 6.6);
 setPairwiseGap(T.TABLE, T.LIST, 6.6);
 setPairwiseGap(T.TABLE, T.H2, 14.0);
-setPairwiseGap(T.TABLE, T.H3, 13.5);
-setPairwiseGap(T.TABLE, T.H4, 13.0);
+setPairwiseGap(T.TABLE, T.H3, 13.6);
+setPairwiseGap(T.TABLE, T.H4, 13.3);
 setPairwiseGap(T.TABLE, T.EQUATION, 13.6);
 setPairwiseGap(T.TABLE, T.TABLE, 8.0);
 setPairwiseGap(T.TABLE, T.CODE, 6.6);
