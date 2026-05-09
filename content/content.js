@@ -264,6 +264,8 @@ function isDefaultPairwiseGapCell(row, col) {
 // format: setPairwiseGap(prevType, nextType, gapPt);
 // pairwise gap matrix overrides
 // format: setPairwiseGap(prevType, nextType, gapPt);
+// pairwise gap matrix overrides
+// format: setPairwiseGap(prevType, nextType, gapPt);
 
 // pageTitle -> *
 setPairwiseGap(T.PAGETITLE, T.PAGETITLE, 6.6);
@@ -278,10 +280,11 @@ setPairwiseGap(T.PAGETITLE, T.CODE, 4.0);
 setPairwiseGap(T.PAGETITLE, T.QUOTE, 6.6);
 setPairwiseGap(T.PAGETITLE, T.CALLOUT, 6.6);
 setPairwiseGap(T.PAGETITLE, T.MEDIA, 6.6);
-setPairwiseGap(T.PAGETITLE, T.COLUMNS, 6.6);
+setPairwiseGap(T.PAGETITLE, T.COLUMNS, 12.0);
 setPairwiseGap(T.PAGETITLE, T.DIVIDER, 6.6);
 setPairwiseGap(T.PAGETITLE, T.BLANK, 6.6);
 setPairwiseGap(T.PAGETITLE, T.PAGEMETADATA, 23.0);
+setPairwiseGap(T.PAGETITLE, T.COLUMNSTART, 6.6);
 
 // paragraph -> *
 setPairwiseGap(T.PARAGRAPH, T.PAGETITLE, 6.6);
@@ -296,10 +299,11 @@ setPairwiseGap(T.PARAGRAPH, T.CODE, 4.0);
 setPairwiseGap(T.PARAGRAPH, T.QUOTE, 10.0);
 setPairwiseGap(T.PARAGRAPH, T.CALLOUT, 10.0);
 setPairwiseGap(T.PARAGRAPH, T.MEDIA, 6.6);
-setPairwiseGap(T.PARAGRAPH, T.COLUMNS, 6.6);
+setPairwiseGap(T.PARAGRAPH, T.COLUMNS, 12.0);
 setPairwiseGap(T.PARAGRAPH, T.DIVIDER, 6.6);
 setPairwiseGap(T.PARAGRAPH, T.BLANK, 6.6);
 setPairwiseGap(T.PARAGRAPH, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.PARAGRAPH, T.COLUMNSTART, 6.6);
 
 // list -> *
 setPairwiseGap(T.LIST, T.PAGETITLE, 6.6);
@@ -314,10 +318,11 @@ setPairwiseGap(T.LIST, T.CODE, 4.0);
 setPairwiseGap(T.LIST, T.QUOTE, 6.6);
 setPairwiseGap(T.LIST, T.CALLOUT, 6.6);
 setPairwiseGap(T.LIST, T.MEDIA, 6.6);
-setPairwiseGap(T.LIST, T.COLUMNS, 6.6);
+setPairwiseGap(T.LIST, T.COLUMNS, 12.0);
 setPairwiseGap(T.LIST, T.DIVIDER, 6.6);
 setPairwiseGap(T.LIST, T.BLANK, 6.6);
 setPairwiseGap(T.LIST, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.LIST, T.COLUMNSTART, 6.6);
 
 // h2 -> *
 setPairwiseGap(T.H2, T.PAGETITLE, 6.6);
@@ -332,10 +337,11 @@ setPairwiseGap(T.H2, T.CODE, 4.0);
 setPairwiseGap(T.H2, T.QUOTE, 6.6);
 setPairwiseGap(T.H2, T.CALLOUT, 6.6);
 setPairwiseGap(T.H2, T.MEDIA, 6.6);
-setPairwiseGap(T.H2, T.COLUMNS, 6.6);
+setPairwiseGap(T.H2, T.COLUMNS, 12.0);
 setPairwiseGap(T.H2, T.DIVIDER, 6.6);
 setPairwiseGap(T.H2, T.BLANK, 6.6);
 setPairwiseGap(T.H2, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.H2, T.COLUMNSTART, 6.6);
 
 // h3 -> *
 setPairwiseGap(T.H3, T.PAGETITLE, 6.6);
@@ -350,10 +356,11 @@ setPairwiseGap(T.H3, T.CODE, 4.0);
 setPairwiseGap(T.H3, T.QUOTE, 7.8);
 setPairwiseGap(T.H3, T.CALLOUT, 6.6);
 setPairwiseGap(T.H3, T.MEDIA, 6.6);
-setPairwiseGap(T.H3, T.COLUMNS, 6.6);
+setPairwiseGap(T.H3, T.COLUMNS, 12.0);
 setPairwiseGap(T.H3, T.DIVIDER, 6.6);
 setPairwiseGap(T.H3, T.BLANK, 6.6);
 setPairwiseGap(T.H3, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.H3, T.COLUMNSTART, 6.6);
 
 // h4 -> *
 setPairwiseGap(T.H4, T.PAGETITLE, 6.6);
@@ -368,10 +375,11 @@ setPairwiseGap(T.H4, T.CODE, 4.0);
 setPairwiseGap(T.H4, T.QUOTE, 6.6);
 setPairwiseGap(T.H4, T.CALLOUT, 6.6);
 setPairwiseGap(T.H4, T.MEDIA, 6.6);
-setPairwiseGap(T.H4, T.COLUMNS, 6.6);
+setPairwiseGap(T.H4, T.COLUMNS, 12.0);
 setPairwiseGap(T.H4, T.DIVIDER, 6.6);
 setPairwiseGap(T.H4, T.BLANK, 6.6);
 setPairwiseGap(T.H4, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.H4, T.COLUMNSTART, 6.6);
 
 // equation -> *
 setPairwiseGap(T.EQUATION, T.PAGETITLE, 6.6);
@@ -386,10 +394,11 @@ setPairwiseGap(T.EQUATION, T.CODE, 6.6);
 setPairwiseGap(T.EQUATION, T.QUOTE, 12.0);
 setPairwiseGap(T.EQUATION, T.CALLOUT, 6.6);
 setPairwiseGap(T.EQUATION, T.MEDIA, 6.6);
-setPairwiseGap(T.EQUATION, T.COLUMNS, 6.6);
+setPairwiseGap(T.EQUATION, T.COLUMNS, 12.0);
 setPairwiseGap(T.EQUATION, T.DIVIDER, 6.6);
 setPairwiseGap(T.EQUATION, T.BLANK, 6.6);
 setPairwiseGap(T.EQUATION, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.EQUATION, T.COLUMNSTART, 6.6);
 
 // table -> *
 setPairwiseGap(T.TABLE, T.PAGETITLE, 6.6);
@@ -404,10 +413,11 @@ setPairwiseGap(T.TABLE, T.CODE, 6.6);
 setPairwiseGap(T.TABLE, T.QUOTE, 6.6);
 setPairwiseGap(T.TABLE, T.CALLOUT, 6.6);
 setPairwiseGap(T.TABLE, T.MEDIA, 6.6);
-setPairwiseGap(T.TABLE, T.COLUMNS, 6.6);
+setPairwiseGap(T.TABLE, T.COLUMNS, 12.0);
 setPairwiseGap(T.TABLE, T.DIVIDER, 6.6);
 setPairwiseGap(T.TABLE, T.BLANK, 6.6);
 setPairwiseGap(T.TABLE, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.TABLE, T.COLUMNSTART, 6.6);
 
 // code -> *
 setPairwiseGap(T.CODE, T.PAGETITLE, 6.6);
@@ -422,10 +432,11 @@ setPairwiseGap(T.CODE, T.CODE, 8.0);
 setPairwiseGap(T.CODE, T.QUOTE, 6.6);
 setPairwiseGap(T.CODE, T.CALLOUT, 6.6);
 setPairwiseGap(T.CODE, T.MEDIA, 6.6);
-setPairwiseGap(T.CODE, T.COLUMNS, 6.6);
+setPairwiseGap(T.CODE, T.COLUMNS, 12.0);
 setPairwiseGap(T.CODE, T.DIVIDER, 6.6);
 setPairwiseGap(T.CODE, T.BLANK, 6.6);
 setPairwiseGap(T.CODE, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.CODE, T.COLUMNSTART, 6.6);
 
 // quote -> *
 setPairwiseGap(T.QUOTE, T.PAGETITLE, 6.6);
@@ -440,10 +451,11 @@ setPairwiseGap(T.QUOTE, T.CODE, 6.6);
 setPairwiseGap(T.QUOTE, T.QUOTE, 6.6);
 setPairwiseGap(T.QUOTE, T.CALLOUT, 6.6);
 setPairwiseGap(T.QUOTE, T.MEDIA, 6.6);
-setPairwiseGap(T.QUOTE, T.COLUMNS, 6.6);
+setPairwiseGap(T.QUOTE, T.COLUMNS, 12.0);
 setPairwiseGap(T.QUOTE, T.DIVIDER, 6.6);
 setPairwiseGap(T.QUOTE, T.BLANK, 6.6);
 setPairwiseGap(T.QUOTE, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.QUOTE, T.COLUMNSTART, 6.6);
 
 // callout -> *
 setPairwiseGap(T.CALLOUT, T.PAGETITLE, 6.6);
@@ -458,10 +470,11 @@ setPairwiseGap(T.CALLOUT, T.CODE, 6.6);
 setPairwiseGap(T.CALLOUT, T.QUOTE, 6.6);
 setPairwiseGap(T.CALLOUT, T.CALLOUT, 6.6);
 setPairwiseGap(T.CALLOUT, T.MEDIA, 6.6);
-setPairwiseGap(T.CALLOUT, T.COLUMNS, 6.6);
+setPairwiseGap(T.CALLOUT, T.COLUMNS, 12.0);
 setPairwiseGap(T.CALLOUT, T.DIVIDER, 6.6);
 setPairwiseGap(T.CALLOUT, T.BLANK, 6.6);
 setPairwiseGap(T.CALLOUT, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.CALLOUT, T.COLUMNSTART, 6.6);
 
 // media -> *
 setPairwiseGap(T.MEDIA, T.PAGETITLE, 6.6);
@@ -476,28 +489,30 @@ setPairwiseGap(T.MEDIA, T.CODE, 6.6);
 setPairwiseGap(T.MEDIA, T.QUOTE, 6.6);
 setPairwiseGap(T.MEDIA, T.CALLOUT, 6.6);
 setPairwiseGap(T.MEDIA, T.MEDIA, 6.6);
-setPairwiseGap(T.MEDIA, T.COLUMNS, 6.6);
+setPairwiseGap(T.MEDIA, T.COLUMNS, 12.0);
 setPairwiseGap(T.MEDIA, T.DIVIDER, 6.6);
 setPairwiseGap(T.MEDIA, T.BLANK, 6.6);
 setPairwiseGap(T.MEDIA, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.MEDIA, T.COLUMNSTART, 6.6);
 
 // columns -> *
-setPairwiseGap(T.COLUMNS, T.PAGETITLE, 6.6);
-setPairwiseGap(T.COLUMNS, T.PARAGRAPH, 6.6);
-setPairwiseGap(T.COLUMNS, T.LIST, 6.6);
-setPairwiseGap(T.COLUMNS, T.H2, 6.6);
-setPairwiseGap(T.COLUMNS, T.H3, 6.6);
-setPairwiseGap(T.COLUMNS, T.H4, 6.6);
+setPairwiseGap(T.COLUMNS, T.PAGETITLE, 25.0);
+setPairwiseGap(T.COLUMNS, T.PARAGRAPH, 25.0);
+setPairwiseGap(T.COLUMNS, T.LIST, 25.0);
+setPairwiseGap(T.COLUMNS, T.H2, 25.0);
+setPairwiseGap(T.COLUMNS, T.H3, 25.0);
+setPairwiseGap(T.COLUMNS, T.H4, 25.0);
 setPairwiseGap(T.COLUMNS, T.EQUATION, 10.0);
-setPairwiseGap(T.COLUMNS, T.TABLE, 6.6);
-setPairwiseGap(T.COLUMNS, T.CODE, 6.6);
-setPairwiseGap(T.COLUMNS, T.QUOTE, 6.6);
-setPairwiseGap(T.COLUMNS, T.CALLOUT, 6.6);
-setPairwiseGap(T.COLUMNS, T.MEDIA, 6.6);
-setPairwiseGap(T.COLUMNS, T.COLUMNS, 6.6);
-setPairwiseGap(T.COLUMNS, T.DIVIDER, 6.6);
-setPairwiseGap(T.COLUMNS, T.BLANK, 6.6);
-setPairwiseGap(T.COLUMNS, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.COLUMNS, T.TABLE, 25.0);
+setPairwiseGap(T.COLUMNS, T.CODE, 25.0);
+setPairwiseGap(T.COLUMNS, T.QUOTE, 25.0);
+setPairwiseGap(T.COLUMNS, T.CALLOUT, 25.0);
+setPairwiseGap(T.COLUMNS, T.MEDIA, 25.0);
+setPairwiseGap(T.COLUMNS, T.COLUMNS, 12.0);
+setPairwiseGap(T.COLUMNS, T.DIVIDER, 25.0);
+setPairwiseGap(T.COLUMNS, T.BLANK, 25.0);
+setPairwiseGap(T.COLUMNS, T.PAGEMETADATA, 25.0);
+setPairwiseGap(T.COLUMNS, T.COLUMNSTART, 25.0);
 
 // divider -> *
 setPairwiseGap(T.DIVIDER, T.PAGETITLE, 6.6);
@@ -512,10 +527,11 @@ setPairwiseGap(T.DIVIDER, T.CODE, 6.6);
 setPairwiseGap(T.DIVIDER, T.QUOTE, 6.6);
 setPairwiseGap(T.DIVIDER, T.CALLOUT, 6.6);
 setPairwiseGap(T.DIVIDER, T.MEDIA, 6.6);
-setPairwiseGap(T.DIVIDER, T.COLUMNS, 6.6);
+setPairwiseGap(T.DIVIDER, T.COLUMNS, 12.0);
 setPairwiseGap(T.DIVIDER, T.DIVIDER, 6.6);
 setPairwiseGap(T.DIVIDER, T.BLANK, 6.6);
 setPairwiseGap(T.DIVIDER, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.DIVIDER, T.COLUMNSTART, 6.6);
 
 // blank -> *
 setPairwiseGap(T.BLANK, T.PAGETITLE, 6.6);
@@ -530,10 +546,11 @@ setPairwiseGap(T.BLANK, T.CODE, 6.6);
 setPairwiseGap(T.BLANK, T.QUOTE, 6.6);
 setPairwiseGap(T.BLANK, T.CALLOUT, 6.6);
 setPairwiseGap(T.BLANK, T.MEDIA, 6.6);
-setPairwiseGap(T.BLANK, T.COLUMNS, 6.6);
+setPairwiseGap(T.BLANK, T.COLUMNS, 12.0);
 setPairwiseGap(T.BLANK, T.DIVIDER, 6.6);
 setPairwiseGap(T.BLANK, T.BLANK, 6.6);
 setPairwiseGap(T.BLANK, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.BLANK, T.COLUMNSTART, 6.6);
 
 // pageMetadata -> *
 setPairwiseGap(T.PAGEMETADATA, T.PAGETITLE, 12.0);
@@ -552,6 +569,26 @@ setPairwiseGap(T.PAGEMETADATA, T.COLUMNS, 12.0);
 setPairwiseGap(T.PAGEMETADATA, T.DIVIDER, 12.0);
 setPairwiseGap(T.PAGEMETADATA, T.BLANK, 12.0);
 setPairwiseGap(T.PAGEMETADATA, T.PAGEMETADATA, 8.0);
+setPairwiseGap(T.PAGEMETADATA, T.COLUMNSTART, 6.6);
+
+// columnStart -> *
+setPairwiseGap(T.COLUMNSTART, T.PAGETITLE, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.PARAGRAPH, 0.0);
+setPairwiseGap(T.COLUMNSTART, T.LIST, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.H2, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.H3, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.H4, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.EQUATION, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.TABLE, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.CODE, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.QUOTE, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.CALLOUT, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.MEDIA, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.COLUMNS, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.DIVIDER, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.BLANK, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.COLUMNSTART, 6.6);
 
 captureDefaultPairwiseGapMatrix();
 loadPairwiseGapOverrides();
