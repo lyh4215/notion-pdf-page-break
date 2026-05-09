@@ -48,8 +48,8 @@ const TABLE_TEXT_FONT_SIZE_PT = 10.5;
 // 이전 문단 afterGap 6.6pt + TABLE_TOP_GAP_PT 5.0pt ≈ 실제 표 앞 시각 gap 11.6pt
 const TABLE_TOP_GAP_PT = 5.0;
 
-const EQUATION_DISPLAY_MARGIN_TOP_PT = 8;
-const EQUATION_DISPLAY_MARGIN_BOTTOM_PT = 8;
+const EQUATION_DISPLAY_MARGIN_TOP_PT = 7;
+const EQUATION_DISPLAY_MARGIN_BOTTOM_PT = 7;
 
 // 연속 equation 사이의 최소 visual gap 참고값.
 // 실제 pushEquationBlock에서는 top gap 중복을 제거한다.
