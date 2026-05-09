@@ -1530,7 +1530,7 @@ function getTextFlowLineHeightForElement(element, line, ownOnly = false) {
   return ptToPx(18);
 }
 function getListToListGapPx() {
-  return ptToPx(getPairwiseGapPt(T.LIST, T.LIST));
+  return ptToPx(getPairwiseGapPt("list", "list"));
 }
 
 function shouldApplyInternalListGap(row, rowIndex) {
@@ -1538,13 +1538,10 @@ function shouldApplyInternalListGap(row, rowIndex) {
     return false;
   }
 
-  // 새 list item이 시작될 때만 list -> list gap 적용.
-  // 긴 list item이 줄바꿈된 continuation line에는 gap을 넣지 않는다.
   if (row.kind === "line") {
     return row.firstLine === true;
   }
 
-  // list 안 table/equation/code 같은 embedded block 앞에도 list 흐름 gap을 준다.
   return row.kind === "embeddedBlock";
 }
 
@@ -2796,6 +2793,15 @@ function createSyntheticTextPreview(segment) {
         );
 
     for (const row of rows) {
+      const gapBeforePx = Math.max(0, Number(row.gapBeforePx) || 0);
+
+      if (gapBeforePx > 0) {
+        const spacer = document.createElement("div");
+        spacer.className = "notion-pdf-preview-synthetic-list-spacer";
+        spacer.style.height = `${gapBeforePx}px`;
+        text.append(spacer);
+      }
+
       if (row.kind === "embeddedBlock" && row.blockType === "table") {
         const embedded = document.createElement("div");
         embedded.className = "notion-pdf-preview-synthetic-list-embedded-block";
@@ -2805,10 +2811,7 @@ function createSyntheticTextPreview(segment) {
           `${ptToPx(row.depth * LIST_NESTED_INDENT_PT)}px`
         );
 
-        embedded.style.setProperty(
-          "--notion-pdf-preview-list-gap-before",
-          `${Number(row.gapBeforePx) || 0}px`
-        );
+        embedded.style.height = `${Math.max(1, Number(row.height) || 0)}px`;
 
         const tableSegment = {
           ...segment,
@@ -2825,6 +2828,8 @@ function createSyntheticTextPreview(segment) {
         continue;
       }
 
+      const baseHeightPx = getListRowBaseHeight(row);
+
       const lineElement = document.createElement("div");
       lineElement.className =
         "notion-pdf-preview-synthetic-line notion-pdf-preview-synthetic-list-line";
@@ -2839,10 +2844,8 @@ function createSyntheticTextPreview(segment) {
         `${ptToPx(LIST_MARKER_RESERVED_PT)}px`
       );
 
-      lineElement.style.setProperty(
-        "--notion-pdf-preview-list-gap-before",
-        `${Number(row.gapBeforePx) || 0}px`
-      );
+      lineElement.style.height = `${baseHeightPx}px`;
+      lineElement.style.lineHeight = `${baseHeightPx}px`;
 
       const marker = document.createElement("span");
       marker.className = "notion-pdf-preview-synthetic-list-marker";
@@ -2862,7 +2865,6 @@ function createSyntheticTextPreview(segment) {
 
     return text;
   }
-
   const lines = formatSegmentTextForPreview(segment).split("\n");
 
   for (const line of lines) {

@@ -287,17 +287,6 @@
   line-height: 24px;
 }
 
-.notion-pdf-preview-synthetic-text[data-type="list"] {
-  padding: 0;
-  font-size: var(--notion-pdf-preview-body-font-size, 15px);
-  line-height: 24px;
-}
-
-.notion-pdf-preview-synthetic-text[data-type="list"]::before {
-  content: none !important;
-  display: none !important;
-}
-
 .notion-pdf-preview-synthetic-line-inline-code-only {
   line-height: var(--notion-pdf-preview-inline-code-only-line-height, 16.5px);
 }
@@ -572,36 +561,112 @@
   box-sizing: border-box;
 }
 
+/* =========================================================
+   Synthetic list preview
+   - marker는 JS에서만 렌더링
+   - CSS ::before bullet 금지
+   - gap은 spacer div로만 렌더링
+   - 줄바꿈은 JS 계산 결과만 사용하고 브라우저 자동 wrap 금지
+   ========================================================= */
+
+.notion-pdf-preview-synthetic-text[data-type="list"] {
+  padding: 0 !important;
+  margin: 0 !important;
+  font-size: var(--notion-pdf-preview-body-font-size, 15px);
+  line-height: 24px;
+  white-space: normal;
+  overflow: hidden;
+}
+
+.notion-pdf-preview-synthetic-text[data-type="list"]::before,
+.notion-pdf-preview-synthetic-text[data-type="list"]::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* row 사이 gap 전용. JS에서 height를 직접 넣음 */
+.notion-pdf-preview-synthetic-list-spacer {
+  display: block;
+  width: 100%;
+  height: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+}
+
+/* list 한 줄. JS에서 이미 줄바꿈 계산했으므로 자동 wrap 금지 */
 .notion-pdf-preview-synthetic-list-line {
   display: flex;
   align-items: baseline;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding-top: 0;
+  padding-right: 0;
+  padding-bottom: 0;
   padding-left: var(--notion-pdf-preview-list-depth-indent, 0px);
   box-sizing: border-box;
+  overflow: hidden;
+  white-space: nowrap !important;
 }
 
+/* bullet / number marker */
 .notion-pdf-preview-synthetic-list-marker {
+  display: inline-block;
   flex: 0 0 var(--notion-pdf-preview-list-marker-width, 28.8px);
   width: var(--notion-pdf-preview-list-marker-width, 28.8px);
   min-width: var(--notion-pdf-preview-list-marker-width, 28.8px);
   max-width: var(--notion-pdf-preview-list-marker-width, 28.8px);
+  margin: 0;
+  padding: 0;
   text-align: center;
-  white-space: pre;
+  white-space: nowrap !important;
+  overflow: hidden;
   box-sizing: border-box;
 }
 
+/* list 내용. 브라우저 자동 줄바꿈 절대 금지 */
 .notion-pdf-preview-synthetic-list-content {
+  display: inline-block;
   flex: 1 1 auto;
   min-width: 0;
-  white-space: pre-wrap;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: clip;
+  box-sizing: border-box;
 }
 
+.notion-pdf-preview-synthetic-list-content *,
+.notion-pdf-preview-synthetic-list-marker * {
+  white-space: nowrap !important;
+}
+
+/* list 안에 들어간 table/equation/code 같은 embedded block */
 .notion-pdf-preview-synthetic-list-embedded-block {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding-top: 0;
+  padding-right: 0;
+  padding-bottom: 0;
   padding-left: var(--notion-pdf-preview-list-depth-indent, 0px);
   box-sizing: border-box;
-  width: 100%;
+  overflow: hidden;
 }
 
+/* list 내부 table */
 .notion-pdf-preview-synthetic-list-embedded-block .notion-pdf-preview-synthetic-table {
-  margin: 0;
   width: 100%;
+  max-width: 100%;
+  margin: 0 !important;
+  box-sizing: border-box;
 }
