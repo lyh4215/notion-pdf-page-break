@@ -2317,16 +2317,35 @@ function createRenderedEquationPreview(segment) {
 
 function createRenderedPdfPreviewSegment(segment) {
   const segmentElement = document.createElement("div");
+
   const segmentHeight = Math.max(1, segment.segmentHeight ?? segment.height);
   const gapBeforePx = Math.max(0, Number(segment.gapBeforePx) || 0);
-  const contentHeight = Math.max(1, Number(segment.contentHeight ?? segment.height) || 0);
-  const debugLabel = `${segment.type} | ${Math.round(segmentHeight)}px | gap ${Math.round(gapBeforePx || 0)}px | content ${Math.round(contentHeight || segmentHeight)}px${segment.continued ? " | continued" : ""}${segment.splitAfter ? " | splits" : ""}`;
+  const contentHeight = Math.max(
+    1,
+    Number(segment.contentHeight ?? segment.height ?? segmentHeight - gapBeforePx) || 0
+  );
+
+  const debugLabel =
+    `${segment.type} | ${Math.round(segmentHeight)}px` +
+    ` | gap ${Math.round(gapBeforePx)}px` +
+    ` | content ${Math.round(contentHeight)}px` +
+    `${segment.continued ? " | continued" : ""}` +
+    `${segment.splitAfter ? " | splits" : ""}`;
 
   segmentElement.className = "notion-pdf-preview-rendered-segment";
   segmentElement.dataset.type = segment.type;
   segmentElement.dataset.debugLabel = debugLabel;
   segmentElement.dataset.copyText = segment.text || "(empty block)";
+
+  // 핵심:
+  // segmentHeight는 이미 gapBeforePx + contentHeight를 포함한다.
+  // 따라서 gap을 margin으로 주면 preview DOM flow에서 간격이 이중으로 보일 수 있다.
+  segmentElement.style.position = "relative";
+  segmentElement.style.boxSizing = "border-box";
+  segmentElement.style.width = "100%";
   segmentElement.style.height = `${segmentHeight}px`;
+  segmentElement.style.overflow = "hidden";
+  
 
   if (segment.continued || segment.splitAfter) {
     segmentElement.classList.add("notion-pdf-preview-rendered-segment-clipped");
@@ -2334,10 +2353,6 @@ function createRenderedPdfPreviewSegment(segment) {
 
   if (segment.type === "equation") {
     segmentElement.classList.add("notion-pdf-preview-rendered-segment-equation");
-
-    // outer .notion-equation-block clone은 그대로 두되,
-    // 내부 button 영역만 보이게 자른다.
-    segmentElement.style.overflow = "hidden";
   }
 
   const clone = segment.type === "table"
@@ -2347,17 +2362,39 @@ function createRenderedPdfPreviewSegment(segment) {
       : isSyntheticTextSegment(segment.type) || segment.type === "code"
         ? createSyntheticTextPreview(segment)
         : prepareCloneForMeasurement(segment.element.cloneNode(true), segment.type);
+
   clone.classList.add("notion-pdf-preview-rendered-clone");
-  if (gapBeforePx > 0) {
-    clone.style.marginTop = `${gapBeforePx}px`;
-  }
+
+  // 핵심:
+  // marginTop 금지.
+  // gap은 normal flow가 아니라 absolute top offset으로만 표현한다.
+  clone.style.position = "absolute";
+  clone.style.left = "0";
+  clone.style.right = "0";
+  clone.style.top = `${gapBeforePx}px`;
+  clone.style.width = "100%";
+  clone.style.maxWidth = "100%";
+  clone.style.marginTop = "0";
+  clone.style.marginBottom = "0";
+  clone.style.boxSizing = "border-box";
+
+  clone.style.setProperty("--notion-pdf-preview-gap-before", `${gapBeforePx}px`);
+  clone.style.height = `${contentHeight}px`;
+  clone.style.overflow = "hidden";
+    
+
+  // clone 자체가 content 영역 높이만 차지하도록 제한.
+  // synthetic/equation은 내부가 100%를 쓰는 경우가 있어서 이게 중요함.
+  clone.style.height = `${contentHeight}px`;
+  clone.style.overflow = "hidden";
+
   const clipOffset = segment.type === "equation"
     ? 0
     : Number(segment.clipOffset) || 0;
 
   if (clipOffset > 0) {
     clone.style.transform = `translateY(-${clipOffset}px)`;
-}
+  }
 
   segmentElement.append(clone);
   return segmentElement;
