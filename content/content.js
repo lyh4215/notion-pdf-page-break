@@ -67,6 +67,7 @@ const BlockType = Object.freeze({
   COLUMNS: 12,
   DIVIDER: 13,
   BLANK: 14,
+  PAGEMETADATA: 15,
 });
 
 const T = BlockType;
@@ -89,6 +90,7 @@ const BLOCK_TYPE_INDEX = Object.freeze({
   columns: T.COLUMNS,
   divider: T.DIVIDER,
   blank: T.BLANK,
+  pageMetadata: T.PAGEMETADATA,
 });
 
 const PAIRWISE_GAP_PT = Array.from(
@@ -114,6 +116,7 @@ const BLOCK_TYPE_LABELS = Object.freeze([
   "columns",
   "divider",
   "blank",
+  "pageMetadata",
 ]);
 
 let PAIRWISE_GAP_DEFAULT_PT = null;
@@ -247,6 +250,23 @@ function isDefaultPairwiseGapCell(row, col) {
 
 // pairwise gap matrix overrides
 // format: setPairwiseGap(prevType, nextType, gapPt);
+
+setPairwiseGap(T.PAGETITLE, T.PAGEMETADATA, 0.0);
+
+setPairwiseGap(T.PAGEMETADATA, T.PARAGRAPH, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.LIST, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.H2, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.H3, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.H4, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.EQUATION, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.TABLE, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.CODE, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.QUOTE, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.CALLOUT, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.MEDIA, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.COLUMNS, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.DIVIDER, 0.0);
+setPairwiseGap(T.PAGEMETADATA, T.BLANK, 0.0);
 
 // pageTitle -> *
 setPairwiseGap(T.PAGETITLE, T.PAGETITLE, 6.6);
@@ -876,6 +896,7 @@ function sortBlocksByPagePosition(blocks) {
 function getContentBlocks(contentRoot) {
   const notionBlocks = Array.from(contentRoot.querySelectorAll("[data-block-id]"));
   const visibleBlocks = notionBlocks
+    .filter((block) => !isInsidePageMetadata(block))
     .filter((block) => getVisibleRect(block))
     .filter((block) => !isNestedBlock(block, notionBlocks));
   const separatorBlocks = getSeparatorBlocks(contentRoot, visibleBlocks);
@@ -890,6 +911,93 @@ function getContentBlocks(contentRoot) {
     .filter((block) => getVisibleRect(block));
 
   return sortBlocksByPagePosition(fallbackBlocks);
+}
+function findPageMetadataElement(root) {
+  const candidates = Array.from(
+    document.querySelectorAll("[role='table'][aria-label='페이지 속성']")
+  );
+
+  const table = candidates.find((candidate) => {
+    if (!candidate) return false;
+
+    // content root 주변에 있는 metadata만 사용.
+    if (root && root.parentElement && root.parentElement.contains(candidate)) {
+      return true;
+    }
+
+    // Notion 구조상 title 근처에 있으면 document 기준으로도 잡히게 fallback.
+    return true;
+  });
+
+  if (!table) {
+    return null;
+  }
+
+  return table.closest(".layout-content") || table;
+}
+
+function isInsidePageMetadata(element) {
+  return Boolean(
+    element?.closest?.("[role='table'][aria-label='페이지 속성']")
+  );
+}
+
+function getPageMetadataTable(metadataElement) {
+  if (!metadataElement) {
+    return null;
+  }
+
+  if (
+    metadataElement.matches?.("[role='table'][aria-label='페이지 속성']")
+  ) {
+    return metadataElement;
+  }
+
+  return metadataElement.querySelector("[role='table'][aria-label='페이지 속성']");
+}
+
+function getPageMetadataRows(metadataElement) {
+  const table = getPageMetadataTable(metadataElement);
+
+  if (!table) {
+    return [];
+  }
+
+  const rows = Array.from(table.querySelectorAll("[role='row']"))
+    .filter((row) => row.closest("[role='table'][aria-label='페이지 속성']") === table)
+    .map((row) => {
+      const labelId = row.getAttribute("aria-labelledby");
+      const labelCell = labelId ? document.getElementById(labelId) : null;
+      const valueElement = row.querySelector("[data-testid='property-value']");
+
+      const label = getElementText(labelCell || row)
+        .replace(/\s+/g, " ")
+        .trim();
+
+      const value = getElementText(valueElement)
+        .replace(/\s+/g, " ")
+        .trim();
+
+      return {
+        label,
+        value,
+        element: row
+      };
+    })
+    .filter((row) => {
+      if (!row.label || !row.value) {
+        return false;
+      }
+
+      // Notion UI의 빈 property placeholder는 PDF metadata에서 제외.
+      if (row.value === "비어 있음" || row.value.toLowerCase() === "empty") {
+        return false;
+      }
+
+      return true;
+    });
+
+  return rows;
 }
 
 function findPageTitleBlock(contentRoot) {
@@ -1234,12 +1342,14 @@ function estimateStackHeight(measuredBlocks) {
   return total;
 }
 
-function measureBlockElement(element, layoutWidth, headingFontLevels = null) {
-  const type = classifyBlock(element, headingFontLevels);
+function measureBlockElement(element, layoutWidth, headingFontLevels = null, forcedType = null) {
+  const type = forcedType || classifyBlock(element, headingFontLevels);
 
   const text = type === "code"
     ? getCodeRawTextForEstimate(element)
-    : getVisibleTextForEstimate(element, ptToPx(12));
+    : type === "pageMetadata"
+      ? getPageMetadataRows(element).map((row) => `${row.label}: ${row.value}`).join("\n")
+      : getVisibleTextForEstimate(element, ptToPx(12));
 
   const measuredBlock = {
     element,
@@ -1248,6 +1358,12 @@ function measureBlockElement(element, layoutWidth, headingFontLevels = null) {
     layoutWidth,
     height: 0
   };
+
+  if (type === "pageMetadata") {
+    measuredBlock.metadataRows = getPageMetadataRows(element);
+    measuredBlock.height = estimatePageMetadataHeight(element, layoutWidth);
+    return measuredBlock;
+  }
 
   if (type === "columns") {
     const columnsInfo = measureColumnsBlock(element, layoutWidth, headingFontLevels);
@@ -2071,6 +2187,7 @@ function getImmediateNestedContentBlocks(block) {
   const candidates = Array.from(block.querySelectorAll("[data-block-id]"))
     .filter((nestedBlock) => nestedBlock !== block)
     .filter((nestedBlock) => getVisibleRect(nestedBlock))
+    .filter((block) => !isInsidePageMetadata(block))
     .filter((nestedBlock) => isImmediateNestedChildBlock(block, nestedBlock));
 
   // Notion table은 같은 data-block-id를 가진 wrapper가 여러 겹 중첩된다.
@@ -2424,6 +2541,54 @@ function estimateListHeight(block, layoutWidth, compact = false) {
 
   return estimateInlineMathAwareHeight(block, height);
 }
+const PAGE_METADATA_FONT_SIZE_PX = 14;
+const PAGE_METADATA_ROW_MIN_HEIGHT_PX = 34;
+const PAGE_METADATA_VALUE_LINE_HEIGHT_PX = 21;
+const PAGE_METADATA_VALUE_VERTICAL_PADDING_PX = 12;
+const PAGE_METADATA_LABEL_WIDTH_PX = 160;
+const PAGE_METADATA_CELL_GAP_PX = 4;
+const PAGE_METADATA_ROW_MARGIN_BOTTOM_PX = 4;
+const PAGE_METADATA_BOTTOM_EXTRA_PX = 20; // margin-bottom 12 + padding-bottom 8
+
+function estimatePageMetadataRowHeight(row, layoutWidth) {
+  const valueWidth = Math.max(
+    80,
+    layoutWidth -
+      PAGE_METADATA_LABEL_WIDTH_PX -
+      PAGE_METADATA_CELL_GAP_PX -
+      12
+  );
+
+  const lines = estimateWrappedLines(
+    row.value || " ",
+    PAGE_METADATA_FONT_SIZE_PX,
+    valueWidth,
+    0,
+    "body"
+  );
+
+  return Math.max(
+    PAGE_METADATA_ROW_MIN_HEIGHT_PX,
+    lines * PAGE_METADATA_VALUE_LINE_HEIGHT_PX +
+      PAGE_METADATA_VALUE_VERTICAL_PADDING_PX
+  );
+}
+
+function estimatePageMetadataHeight(metadataElement, layoutWidth) {
+  const rows = getPageMetadataRows(metadataElement);
+
+  if (rows.length === 0) {
+    return 0;
+  }
+
+  const rowsHeight = rows.reduce((sum, row) => {
+    return sum + estimatePageMetadataRowHeight(row, layoutWidth);
+  }, 0);
+
+  const rowGaps = Math.max(0, rows.length - 1) * PAGE_METADATA_ROW_MARGIN_BOTTOM_PX;
+
+  return rowsHeight + rowGaps + PAGE_METADATA_BOTTOM_EXTRA_PX;
+}
 
 function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
   const text = getVisibleTextForEstimate(block, ptToPx(12));
@@ -2434,6 +2599,10 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       // Measured formula: 43.5n + 16 pt.
       const lines = estimateWrappedLines(text, ptToPx(PAGE_TITLE_FONT_SIZE_PT), layoutWidth, 0, "title");
       return blockHeightFromPt(lines, 43.5, 2.25, 0);
+    }
+
+    case "pageMetadata": {
+      return estimatePageMetadataHeight(block, layoutWidth);
     }
 
     case "h2": {
@@ -3117,15 +3286,26 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
   const scaleFactor = scalePercent / 100;
   const layoutWidth = PAGE_BODY_WIDTH_PX / scaleFactor;
   const sourceStyle = getInheritedStyleSnapshot(contentRoot);
+
   const pageTitleElement = findPageTitleBlock(contentRoot);
-  const blocks = getContentBlocks(contentRoot).filter((element) => element !== pageTitleElement);
-  const headingFontLevels = getHeadingFontLevels(blocks);
-  const measuredBlocks = blocks.map((element) => {
+  const pageMetadataElement = findPageMetadataElement(contentRoot);
+
+  const bodyElements = getContentBlocks(contentRoot)
+    .filter((element) => element !== pageTitleElement)
+    .filter((element) => !isInsidePageMetadata(element));
+
+  const headingFontLevels = getHeadingFontLevels(bodyElements);
+
+  const bodyMeasuredBlocks = bodyElements.map((element) => {
     return measureBlockElement(element, layoutWidth, headingFontLevels);
   });
+
+  const measuredBlocks = [];
+
   if (pageTitleElement) {
     const titleText = getVisibleTextForEstimate(pageTitleElement);
-    measuredBlocks.unshift({
+
+    measuredBlocks.push({
       element: pageTitleElement,
       type: "pageTitle",
       text: titleText,
@@ -3133,10 +3313,30 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
       height: estimateBlockHeight(pageTitleElement, layoutWidth, "pageTitle")
     });
   }
+
+  if (pageMetadataElement) {
+    const metadataRows = getPageMetadataRows(pageMetadataElement);
+
+    if (metadataRows.length > 0) {
+      measuredBlocks.push(
+        measureBlockElement(
+          pageMetadataElement,
+          layoutWidth,
+          headingFontLevels,
+          "pageMetadata"
+        )
+      );
+    }
+  }
+
+  measuredBlocks.push(...bodyMeasuredBlocks);
+
   while (measuredBlocks.at(-1)?.type === "blank") {
     measuredBlocks.pop();
   }
+
   applyRenderedMeasurements(contentRoot, measuredBlocks, layoutWidth);
+
   const pageHeight = PAGE_BODY_HEIGHT_PX / scaleFactor;
   const pagination = paginateBlocks(measuredBlocks, pageHeight);
 
@@ -3592,9 +3792,70 @@ function createRenderedTextContainerPreview(segment) {
 
   return wrapper;
 }
+function createRenderedPageMetadataPreview(segment) {
+  const rows = Array.isArray(segment.metadataRows)
+    ? segment.metadataRows
+    : getPageMetadataRows(segment.element);
 
+  const wrapper = document.createElement("div");
+  wrapper.className = "notion-pdf-preview-page-metadata";
+  wrapper.style.width = `${segment.layoutWidth || PAGE_BODY_WIDTH_PX}px`;
+  wrapper.style.height = `${Math.max(1, Number(segment.height) || 1)}px`;
+  wrapper.style.boxSizing = "border-box";
+  wrapper.style.marginInlineStart = "-6px";
+  wrapper.style.paddingBottom = "8px";
+  wrapper.style.marginBottom = "12px";
+  wrapper.style.overflow = "hidden";
+  wrapper.style.fontSize = "14px";
+  wrapper.style.color = "rgb(55, 53, 47)";
+
+  for (const row of rows) {
+    const rowElement = document.createElement("div");
+    rowElement.className = "notion-pdf-preview-page-metadata-row";
+    rowElement.style.display = "flex";
+    rowElement.style.width = "100%";
+    rowElement.style.position = "relative";
+    rowElement.style.marginBottom = `${PAGE_METADATA_ROW_MARGIN_BOTTOM_PX}px`;
+    rowElement.style.minHeight = `${PAGE_METADATA_ROW_MIN_HEIGHT_PX}px`;
+
+    const label = document.createElement("div");
+    label.className = "notion-pdf-preview-page-metadata-label";
+    label.textContent = row.label;
+    label.style.display = "flex";
+    label.style.alignItems = "center";
+    label.style.width = `${PAGE_METADATA_LABEL_WIDTH_PX}px`;
+    label.style.maxWidth = `${PAGE_METADATA_LABEL_WIDTH_PX}px`;
+    label.style.height = `${PAGE_METADATA_ROW_MIN_HEIGHT_PX}px`;
+    label.style.padding = "0 6px";
+    label.style.boxSizing = "border-box";
+    label.style.color = "rgba(55, 53, 47, 0.65)";
+    label.style.whiteSpace = "nowrap";
+    label.style.overflow = "hidden";
+    label.style.textOverflow = "ellipsis";
+
+    const value = document.createElement("div");
+    value.className = "notion-pdf-preview-page-metadata-value";
+    value.textContent = row.value;
+    value.style.flex = "1 1 auto";
+    value.style.minWidth = "0";
+    value.style.marginInlineStart = `${PAGE_METADATA_CELL_GAP_PX}px`;
+    value.style.padding = "6px";
+    value.style.boxSizing = "border-box";
+    value.style.lineHeight = "1.5";
+    value.style.whiteSpace = "pre-wrap";
+    value.style.wordBreak = "break-word";
+
+    rowElement.append(label, value);
+    wrapper.append(rowElement);
+  }
+
+  return wrapper;
+}
 
 function createRenderedPreviewForGenericSegment(segment) {
+  if (segment.type === "pageMetadata") {
+    return createRenderedPageMetadataPreview(segment);
+  }
   if (Array.isArray(segment.childBlocks)) {
     return createRenderedTextContainerPreview(segment);
   }
