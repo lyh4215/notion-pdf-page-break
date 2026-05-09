@@ -50,86 +50,7 @@ const TABLE_TOP_GAP_PT = 5.0;
 
 // 연속 equation 사이의 최소 visual gap 참고값.
 // 실제 pushEquationBlock에서는 top gap 중복을 제거한다.
-const EQUATION_INTER_GAP_PT = 13;
 
-const EQUATION_METRIC_PRESETS = {
-  // Fallback only.
-  // KaTeX DOM rect가 있으면 preset height로 clamp하지 않고 DOM height를 그대로 사용한다.
-  short: {
-    glyphHeightPt: 19.13,
-    topGapPt: 13.6,
-    bottomGapPt: 15.0
-  },
-
-  fraction: {
-    glyphHeightPt: 36.56,
-    topGapPt: 14.0,
-    bottomGapPt: 12.5
-  },
-
-  sigma: {
-    glyphHeightPt: 45.81,
-    topGapPt: 14.0,
-    bottomGapPt: 12.8
-  },
-
-  integral: {
-    glyphHeightPt: 41.94,
-    topGapPt: 13.0,
-    bottomGapPt: 12.0
-  },
-
-  matrix2: {
-    glyphHeightPt: 35.91,
-    topGapPt: 15.0,
-    bottomGapPt: 15.0
-  },
-
-  matrix3: {
-    glyphHeightPt: 51.56,
-    topGapPt: 15.0,
-    bottomGapPt: 15.9
-  },
-
-  cases2: {
-    glyphHeightPt: 43.56,
-    topGapPt: 16.1,
-    bottomGapPt: 14.4
-  },
-
-  cases3: {
-    glyphHeightPt: 78.06,
-    topGapPt: 14.5,
-    bottomGapPt: 10.7,
-    pageTopHeightPt: 88.8
-  },
-
-  aligned3: {
-    glyphHeightPt: 63.38,
-    topGapPt: 13.6,
-    bottomGapPt: 20.4
-  },
-
-  // 예:
-  // \begin{aligned}
-  // ...
-  // \frac{...}{...}
-  // \end{aligned}
-  // 처럼 fraction은 있지만 sum/prod/int 같은 큰 연산자는 없는 경우
-  alignedFraction3: {
-    glyphHeightPt: 79.31,
-    topGapPt: 14.9,
-    bottomGapPt: 18.9
-  },
-
-  // likelihood처럼 \prod, \sum, 큰 연산자, 큰 fraction이 여러 줄에 있는 경우
-  alignedLargeOps: {
-    glyphHeightPt: 139.56,
-    topGapPt: 14.3,
-    bottomGapPt: 16.1,
-    pageTopHeightPt: 155.7
-  }
-};
 const BODY_TEXT_FONT_SIZE_PX = BODY_TEXT_FONT_SIZE_PT * PT_TO_CSS_PX;
 const CODE_BLOCK_FONT_SIZE_PX = CODE_BLOCK_FONT_SIZE_PT * PT_TO_CSS_PX;
 const BODY_CJK_ADVANCE_RATIO = 0.92;
@@ -1026,56 +947,54 @@ function getUnionRect(elements) {
     height: bottom - top
   };
 }
-function getVisualMathElements(block) {
-  // display equation은 .katex-display wrapper를 우선 사용한다.
-  // inline math fallback에서는 nested katex를 제외한 최상위 .katex만 사용한다.
-  const displayElements = Array.from(block.querySelectorAll(".katex-display"));
+function isVisibleEquationElement(element) {
+  if (!element || element.closest(".katex-mathml")) {
+    return false;
+  }
 
-  const candidates = displayElements.length
-    ? displayElements
-    : Array.from(block.querySelectorAll(".katex")).filter((element) => {
-        return !element.parentElement?.closest(".katex");
-      });
+  const rect = element.getBoundingClientRect();
 
-  return candidates.filter((element) => {
-    if (element.closest(".katex-mathml")) {
-      return false;
-    }
+  if (!rect || rect.width <= 0 || rect.height <= 0) {
+    return false;
+  }
 
-    const rect = element.getBoundingClientRect();
+  const style = window.getComputedStyle(element);
 
-    if (!rect || rect.width <= 0 || rect.height <= 0) {
-      return false;
-    }
+  if (style.display === "none" || style.visibility === "hidden") {
+    return false;
+  }
 
-    // wrapper 오탐 방지
-    if (rect.height > 300) {
-      return false;
-    }
-
-    const style = window.getComputedStyle(element);
-
-    if (style.display === "none" || style.visibility === "hidden") {
-      return false;
-    }
-
-    return true;
-  });
+  return true;
 }
 
-function getVisualMathRects(block) {
-  return getVisualMathElements(block).map((element) => element.getBoundingClientRect());
+function getEquationMeasureElements(block) {
+  // display equation이면 .katex-display를 그대로 믿는다.
+  // Notion PDF도 결국 KaTeX display DOM을 Chromium print가 찍는 구조에 가깝기 때문.
+  const displayElements = Array.from(block.querySelectorAll(".katex-display"))
+    .filter(isVisibleEquationElement);
+
+  if (displayElements.length) {
+    return displayElements;
+  }
+
+  // 혹시 .katex-display가 없으면 top-level .katex만 사용.
+  // fallback preset은 쓰지 않는다. DOM이 없으면 height는 0으로 간다.
+  return Array.from(block.querySelectorAll(".katex"))
+    .filter((element) => !element.parentElement?.closest(".katex"))
+    .filter(isVisibleEquationElement);
 }
 
 function getUnionRectFromRects(rects) {
-  if (!rects.length) {
+  const validRects = rects.filter((rect) => rect && rect.width > 0 && rect.height > 0);
+
+  if (!validRects.length) {
     return null;
   }
 
-  const left = Math.min(...rects.map((rect) => rect.left));
-  const top = Math.min(...rects.map((rect) => rect.top));
-  const right = Math.max(...rects.map((rect) => rect.right));
-  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+  const left = Math.min(...validRects.map((rect) => rect.left));
+  const top = Math.min(...validRects.map((rect) => rect.top));
+  const right = Math.max(...validRects.map((rect) => rect.right));
+  const bottom = Math.max(...validRects.map((rect) => rect.bottom));
 
   return {
     left,
@@ -1087,10 +1006,6 @@ function getUnionRectFromRects(rects) {
   };
 }
 
-function estimateEquationHeight(block) {
-  return ptToPx(getEquationMetrics(block).samePageHeightPt);
-}
-
 function getCssMarginPt(element, propertyName) {
   if (!element) {
     return 0;
@@ -1099,110 +1014,61 @@ function getCssMarginPt(element, propertyName) {
   const style = window.getComputedStyle(element);
   const valuePx = Number.parseFloat(style?.[propertyName]) || 0;
 
-  return valuePx > 0 ? valuePx / PT_TO_CSS_PX : 0;
+  return valuePx / PT_TO_CSS_PX;
 }
 
-function getEquationDomMetrics(block) {
-  const mathElements = getVisualMathElements(block);
-  const mathUnionRect = getUnionRectFromRects(
-    mathElements.map((element) => element.getBoundingClientRect())
-  );
-
-  const primaryElement = mathElements[0] || null;
-
-  return {
-    domHeightPt: mathUnionRect ? mathUnionRect.height / PT_TO_CSS_PX : 0,
-    cssMarginTopPt: primaryElement ? getCssMarginPt(primaryElement, "marginTop") : 0,
-    cssMarginBottomPt: primaryElement ? getCssMarginPt(primaryElement, "marginBottom") : 0
-  };
+function estimateEquationHeight(block) {
+  return ptToPx(getEquationMetrics(block).samePageHeightPt);
 }
 
 function getEquationMetrics(block) {
-  const domMetrics = getEquationDomMetrics(block);
-  const presetName = classifyEquationPreset(block, domMetrics.domHeightPt);
-  const preset = EQUATION_METRIC_PRESETS[presetName] || EQUATION_METRIC_PRESETS.short;
+  const equationElements = getEquationMeasureElements(block);
+  const rects = equationElements.map((element) => element.getBoundingClientRect());
+  const unionRect = getUnionRectFromRects(rects);
+
+  if (!unionRect) {
+    console.warn("[notion-pdf-preview] Equation DOM was not measurable.", block);
+
+    return {
+      preset: "dom-only-missing",
+      measurement: "dom-only-missing",
+
+      glyphHeightPt: 0,
+      topGapPt: 0,
+      bottomGapPt: 0,
+
+      samePageHeightPt: 0,
+      pageTopHeightPt: 0
+    };
+  }
+
+  const firstElement = equationElements[0];
+  const lastElement = equationElements[equationElements.length - 1];
 
   // 핵심:
-  // DOM에서 KaTeX가 실제로 렌더링되어 있으면 preset으로 clamp하지 않는다.
-  // 수식 종류별 preset은 DOM 측정 실패 시 fallback으로만 사용한다.
-  const glyphHeightPt = domMetrics.domHeightPt > 0
-    ? domMetrics.domHeightPt
-    : preset.glyphHeightPt;
+  // glyphHeight는 preset이 아니라 실제 KaTeX DOM rect height를 그대로 사용.
+  const glyphHeightPt = unionRect.height / PT_TO_CSS_PX;
 
-  // CSS margin이 실제로 잡혀 있으면 우선 사용한다.
-  // 없으면 PDF에서 측정한 보정값을 fallback으로 쓴다.
-  const topGapPt = domMetrics.cssMarginTopPt || preset.topGapPt;
-  const bottomGapPt = domMetrics.cssMarginBottomPt || preset.bottomGapPt;
+  // margin도 preset이 아니라 실제 DOM CSS margin을 사용.
+  // .katex-display에 margin이 있으면 이 값이 들어가고,
+  // 없으면 그냥 0이다. fallback 보정값은 넣지 않는다.
+  const topGapPt = getCssMarginPt(firstElement, "marginTop");
+  const bottomGapPt = getCssMarginPt(lastElement, "marginBottom");
 
   return {
-    preset: presetName,
+    preset: "dom-only",
+    measurement: "dom",
+
     glyphHeightPt,
     topGapPt,
     bottomGapPt,
 
-    // 일반적으로 같은 페이지에서 이전 블록 다음에 붙을 때
+    // 같은 페이지에서 일반 블록 뒤에 올 때
     samePageHeightPt: topGapPt + glyphHeightPt + bottomGapPt,
 
-    // 페이지 맨 위로 넘어가면 top gap은 버려지는 것처럼 보인다.
-    pageTopHeightPt: domMetrics.domHeightPt > 0
-      ? glyphHeightPt + bottomGapPt
-      : preset.pageTopHeightPt || glyphHeightPt + bottomGapPt,
-
-    measurement: domMetrics.domHeightPt > 0 ? "dom" : "preset"
+    // 페이지 맨 위에서 시작하면 top margin은 보통 사라지는 쪽에 가깝게 처리
+    pageTopHeightPt: glyphHeightPt + bottomGapPt
   };
-}
-
-function getEquationSourceText(block) {
-  return Array.from(block.querySelectorAll(".katex"))
-    .map(getKatexSourceText)
-    .filter(Boolean)
-    .join(" ");
-}
-
-function classifyEquationPreset(block, domHeightPt = 0) {
-  const source = getEquationSourceText(block);
-  const rowBreakCount = (source.match(/\\\\/g) || []).length;
-
-  if (/aligned|align|gather|multline/i.test(source)) {
-    const hasLargeOps = /prod|sum|\\sum|\\prod|\\int|∑|∏|∫/i.test(source);
-    const hasFraction = /\\frac|\\dfrac|\\tfrac/i.test(source);
-
-    if (hasLargeOps || domHeightPt > 110) {
-      return "alignedLargeOps";
-    }
-
-    if (hasFraction || domHeightPt > 70) {
-      return "alignedFraction3";
-    }
-
-    return "aligned3";
-  }
-
-  if (/cases/i.test(source)) {
-    return rowBreakCount >= 2 || domHeightPt > 60
-      ? "cases3"
-      : "cases2";
-  }
-
-  if (/matrix|pmatrix|bmatrix|vmatrix|array/i.test(source)) {
-    return rowBreakCount >= 2 || domHeightPt > 44
-      ? "matrix3"
-      : "matrix2";
-  }
-
-  if (/\\int|∫/.test(source)) {
-    return "integral";
-  }
-
-  if (/\\sum|\\prod|∑|∏/.test(source)) {
-    return "sigma";
-  }
-
-  if (/\\frac|\\dfrac|\\tfrac|\/.+\//.test(source) || domHeightPt >= 30) {
-    return "fraction";
-  }
-
-  return "short";
 }
 
 function estimateInlineMathAwareHeight(block, baseHeight) {
@@ -1806,20 +1672,11 @@ function paginateBlocks(blocks, pageHeight) {
     const previousSegment = currentPage().at(-1);
     const followsEquation = previousSegment?.type === "equation";
 
-    // 같은 페이지에서의 equation layout:
-    //
-    // 1. 일반 텍스트 뒤 equation:
-    //    topGap + glyphHeight + bottomGap
-    //
-    // 2. equation 바로 뒤 equation:
-    //    다음 equation의 topGap을 또 더하지 않는다.
-    //    이전 equation의 bottomGap이 이미 inter-equation gap처럼 보이기 때문이다.
-    //
-    // 3. 페이지 맨 위 equation:
-    //    topGap은 버린다.
+    // 수식이 연속될 때는 다음 수식의 top margin을 또 더하지 않는다.
+    // 일반 CSS vertical margin collapse와 비슷하게 보려는 처리.
     const samePageHeightPt = followsEquation
       ? metrics.glyphHeightPt + metrics.bottomGapPt
-      : metrics.topGapPt + metrics.glyphHeightPt + metrics.bottomGapPt;
+      : metrics.samePageHeightPt;
 
     if (usedHeight > 0 && usedHeight + ptToPx(samePageHeightPt) > pageHeight) {
       startNewPage({
