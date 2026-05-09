@@ -1452,8 +1452,18 @@ function measureBlockElement(element, layoutWidth, headingFontLevels = null, for
     const columnsInfo = measureColumnsBlock(element, layoutWidth, headingFontLevels);
 
     measuredBlock.columns = columnsInfo.columns;
-    measuredBlock.columnGapPx = columnsInfo.columnGapPx;
     measuredBlock.height = columnsInfo.height;
+
+    measuredBlock.text = columnsInfo.columns
+      .map((column, index) => {
+        const columnText = (column.blocks || [])
+          .map((block) => block.text || "")
+          .join(" ")
+          .trim();
+
+        return `[Column ${index + 1}] ${columnText}`;
+      })
+      .join("\n");
 
     return measuredBlock;
   }
@@ -1490,46 +1500,67 @@ function measureBlockElement(element, layoutWidth, headingFontLevels = null, for
 
 function getColumnLayoutInfo(columnListBlock, columnBlocks, layoutWidth) {
   const listRect = getVisibleRect(columnListBlock);
+  const safeLayoutWidth = Math.max(1, Number(layoutWidth) || PAGE_BODY_WIDTH_PX);
   const safeColumnCount = Math.max(1, columnBlocks.length);
 
   if (!listRect || listRect.width <= 0) {
-    const equalWidth = Math.max(120, layoutWidth / safeColumnCount);
+    const equalWidth = safeLayoutWidth / safeColumnCount;
+
     return {
-      widths: columnBlocks.map(() => equalWidth),
-      columnGapPx: 0
+      columns: columnBlocks.map((columnBlock, index) => ({
+        element: columnBlock,
+        left: index * equalWidth,
+        width: equalWidth
+      }))
     };
   }
 
-  const widths = columnBlocks.map((columnBlock) => {
+  const columns = columnBlocks.map((columnBlock, index) => {
     const outerRect = getColumnOuterRect(columnBlock);
+    const fallbackWidth = safeLayoutWidth / safeColumnCount;
 
     if (!outerRect || outerRect.width <= 0) {
-      return Math.max(120, layoutWidth / safeColumnCount);
+      return {
+        element: columnBlock,
+        left: index * fallbackWidth,
+        width: fallbackWidth
+      };
     }
 
-    const ratio = Math.max(0.05, Math.min(1, outerRect.width / listRect.width));
-    return Math.max(120, layoutWidth * ratio);
+    const leftRatio = Math.max(
+      0,
+      (outerRect.left - listRect.left) / listRect.width
+    );
+
+    const widthRatio = Math.max(
+      0.03,
+      Math.min(1, outerRect.width / listRect.width)
+    );
+
+    return {
+      element: columnBlock,
+      left: safeLayoutWidth * leftRatio,
+      width: safeLayoutWidth * widthRatio
+    };
   });
 
-  const usedWidth = widths.reduce((sum, width) => sum + width, 0);
-  const columnGapPx = Math.max(0, layoutWidth - usedWidth);
+  // 혹시 DOM x좌표가 이상하게 들어와도 왼쪽 → 오른쪽 순서 보장
+  columns.sort((a, b) => a.left - b.left);
 
-  return {
-    widths,
-    columnGapPx
-  };
+  return { columns };
 }
 
 function measureColumnsBlock(columnListBlock, layoutWidth, headingFontLevels = null) {
   const columnBlocks = getDirectColumnBlocks(columnListBlock);
-  const { widths, columnGapPx } = getColumnLayoutInfo(
+  const layoutInfo = getColumnLayoutInfo(
     columnListBlock,
     columnBlocks,
     layoutWidth
   );
 
-  const columns = columnBlocks.map((columnBlock, index) => {
-    const columnWidth = widths[index] || Math.max(120, layoutWidth / Math.max(1, columnBlocks.length));
+  const columns = layoutInfo.columns.map((columnInfo) => {
+    const columnBlock = columnInfo.element;
+    const columnWidth = Math.max(1, Number(columnInfo.width) || 1);
     const childElements = getColumnInnerContentBlocks(columnBlock);
 
     const blocks = childElements.map((childElement) => {
@@ -1538,6 +1569,7 @@ function measureColumnsBlock(columnListBlock, layoutWidth, headingFontLevels = n
 
     return {
       element: columnBlock,
+      left: Math.max(0, Number(columnInfo.left) || 0),
       width: columnWidth,
       blocks,
       height: estimateStackHeight(blocks, {
@@ -1549,10 +1581,10 @@ function measureColumnsBlock(columnListBlock, layoutWidth, headingFontLevels = n
 
   return {
     columns,
-    columnGapPx,
     height: Math.max(1, ...columns.map((column) => Number(column.height) || 0))
   };
 }
+
 function getHeadingFontLevels(blocks) {
   const fontSizes = blocks
     .map((block) => {
@@ -3793,7 +3825,6 @@ function createRenderedColumnsPreview(segment) {
   const measured = Array.isArray(segment.columns)
     ? {
         columns: segment.columns,
-        columnGapPx: Number(segment.columnGapPx) || 0,
         height: segment.height
       }
     : measureColumnsBlock(
@@ -3803,35 +3834,39 @@ function createRenderedColumnsPreview(segment) {
       );
 
   const columns = measured.columns || [];
-  const columnGapPx = Math.max(0, Number(measured.columnGapPx) || 0);
+  const layoutWidth = segment.layoutWidth || PAGE_BODY_WIDTH_PX;
+  const height = Math.max(
+    1,
+    Number(segment.height) || Number(measured.height) || 1
+  );
 
   const wrapper = document.createElement("div");
   wrapper.className = "notion-pdf-preview-rendered-columns";
-  wrapper.style.display = "flex";
-  wrapper.style.alignItems = "flex-start";
-  wrapper.style.width = `${segment.layoutWidth || PAGE_BODY_WIDTH_PX}px`;
-  wrapper.style.height = `${Math.max(1, Number(segment.height) || Number(measured.height) || 1)}px`;
+  wrapper.style.position = "relative";
+  wrapper.style.width = `${layoutWidth}px`;
+  wrapper.style.height = `${height}px`;
   wrapper.style.boxSizing = "border-box";
   wrapper.style.overflow = "hidden";
 
-  if (columns.length > 1) {
-    wrapper.style.columnGap = `${columnGapPx / Math.max(1, columns.length - 1)}px`;
-    wrapper.style.gap = `${columnGapPx / Math.max(1, columns.length - 1)}px`;
-  }
-
   for (const column of columns) {
+    const columnWidth = Math.max(1, Number(column.width) || 1);
+    const columnLeft = Math.max(0, Number(column.left) || 0);
+
     const columnElement = document.createElement("div");
     columnElement.className = "notion-pdf-preview-rendered-column";
-    columnElement.style.width = `${Math.max(1, Number(column.width) || 1)}px`;
-    columnElement.style.flex = `0 0 ${Math.max(1, Number(column.width) || 1)}px`;
-    columnElement.style.minWidth = "0";
+    columnElement.style.position = "absolute";
+    columnElement.style.left = `${columnLeft}px`;
+    columnElement.style.top = "0";
+    columnElement.style.width = `${columnWidth}px`;
+    columnElement.style.height = `${height}px`;
     columnElement.style.boxSizing = "border-box";
     columnElement.style.overflow = "hidden";
+    columnElement.style.minWidth = "0";
 
     columnElement.append(
       createRenderedMeasuredBlockStack(
         column.blocks || [],
-        Math.max(1, Number(column.width) || 1),
+        columnWidth,
         {
           initialPrevType: "columnStart",
           applyFirstGap: true
