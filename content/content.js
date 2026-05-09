@@ -266,6 +266,8 @@ function isDefaultPairwiseGapCell(row, col) {
 // format: setPairwiseGap(prevType, nextType, gapPt);
 // pairwise gap matrix overrides
 // format: setPairwiseGap(prevType, nextType, gapPt);
+// pairwise gap matrix overrides
+// format: setPairwiseGap(prevType, nextType, gapPt);
 
 // pageTitle -> *
 setPairwiseGap(T.PAGETITLE, T.PAGETITLE, 6.6);
@@ -292,13 +294,13 @@ setPairwiseGap(T.PARAGRAPH, T.PARAGRAPH, 6.6);
 setPairwiseGap(T.PARAGRAPH, T.LIST, 7.0);
 setPairwiseGap(T.PARAGRAPH, T.H2, 19.3);
 setPairwiseGap(T.PARAGRAPH, T.H3, 15.5);
-setPairwiseGap(T.PARAGRAPH, T.H4, 12.9);
+setPairwiseGap(T.PARAGRAPH, T.H4, 14.5);
 setPairwiseGap(T.PARAGRAPH, T.EQUATION, 14.0);
 setPairwiseGap(T.PARAGRAPH, T.TABLE, 10.6);
 setPairwiseGap(T.PARAGRAPH, T.CODE, 4.0);
 setPairwiseGap(T.PARAGRAPH, T.QUOTE, 10.0);
 setPairwiseGap(T.PARAGRAPH, T.CALLOUT, 10.0);
-setPairwiseGap(T.PARAGRAPH, T.MEDIA, 6.6);
+setPairwiseGap(T.PARAGRAPH, T.MEDIA, 18.2);
 setPairwiseGap(T.PARAGRAPH, T.COLUMNS, 12.0);
 setPairwiseGap(T.PARAGRAPH, T.DIVIDER, 6.6);
 setPairwiseGap(T.PARAGRAPH, T.BLANK, 6.6);
@@ -364,7 +366,7 @@ setPairwiseGap(T.H3, T.COLUMNSTART, 6.6);
 
 // h4 -> *
 setPairwiseGap(T.H4, T.PAGETITLE, 6.6);
-setPairwiseGap(T.H4, T.PARAGRAPH, 5.0);
+setPairwiseGap(T.H4, T.PARAGRAPH, 4.5);
 setPairwiseGap(T.H4, T.LIST, 5.0);
 setPairwiseGap(T.H4, T.H2, 17.6);
 setPairwiseGap(T.H4, T.H3, 13.0);
@@ -478,7 +480,7 @@ setPairwiseGap(T.CALLOUT, T.COLUMNSTART, 6.6);
 
 // media -> *
 setPairwiseGap(T.MEDIA, T.PAGETITLE, 6.6);
-setPairwiseGap(T.MEDIA, T.PARAGRAPH, 6.6);
+setPairwiseGap(T.MEDIA, T.PARAGRAPH, 18.2);
 setPairwiseGap(T.MEDIA, T.LIST, 6.6);
 setPairwiseGap(T.MEDIA, T.H2, 6.6);
 setPairwiseGap(T.MEDIA, T.H3, 6.6);
