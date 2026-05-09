@@ -3370,42 +3370,24 @@ function estimateDocumentLayout(contentRoot, scalePercent) {
     return measureBlockElement(element, layoutWidth, headingFontLevels);
   });
 
-const measuredBlocks = [];
+  const measuredBlocks = [];
 
-    if (pageTitleElement) {
-      const titleText = getVisibleTextForEstimate(pageTitleElement);
+  if (pageTitleElement) {
+    const titleText = getVisibleTextForEstimate(pageTitleElement);
 
-      measuredBlocks.push({
-        element: pageTitleElement,
-        type: "pageTitle",
-        text: titleText,
-        layoutWidth,
-        height: estimateBlockHeight(pageTitleElement, layoutWidth, "pageTitle")
-      });
-    }
-
-    if (pageMetadataElement) {
-      measuredBlocks.push(
-        ...measurePageMetadataBlocks(pageMetadataElement, layoutWidth)
-      );
-    }
-
-    measuredBlocks.push(...bodyMeasuredBlocks);
+    measuredBlocks.push({
+      element: pageTitleElement,
+      type: "pageTitle",
+      text: titleText,
+      layoutWidth,
+      height: estimateBlockHeight(pageTitleElement, layoutWidth, "pageTitle")
+    });
   }
 
   if (pageMetadataElement) {
-    const metadataRows = getPageMetadataRows(pageMetadataElement);
-
-    if (metadataRows.length > 0) {
-      measuredBlocks.push(
-        measureBlockElement(
-          pageMetadataElement,
-          layoutWidth,
-          headingFontLevels,
-          "pageMetadata"
-        )
-      );
-    }
+    measuredBlocks.push(
+      ...measurePageMetadataBlocks(pageMetadataElement, layoutWidth)
+    );
   }
 
   measuredBlocks.push(...bodyMeasuredBlocks);
