@@ -1741,148 +1741,169 @@ function getListRowBaseHeight(row) {
 function getListRowTotalHeight(row) {
   return (Number(row.gapBeforePx) || 0) + getListRowBaseHeight(row);
 }
-
-function buildRawListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0) {
-  const ownText = getListOwnText(block);
-  const reservedWidth = ptToPx(
-    LIST_MARKER_RESERVED_PT + depth * LIST_NESTED_INDENT_PT
+function getListChildLayoutWidth(layoutWidth, depth) {
+  return Math.max(
+    120,
+    layoutWidth - ptToPx(LIST_MARKER_RESERVED_PT + depth * LIST_NESTED_INDENT_PT)
   );
+}
 
-  const inlineCodeFragments = getInlineCodeFragmentsForPreview(block, true);
-  const inlineMathFragments = getInlineMathFragmentsForPreview(block, true);
+function createListTextRows({
+  block,
+  type,
+  text,
+  layoutWidth,
+  depth,
+  siblingIndex = 0,
+  ownOnly = false,
+  kind = "textLine",
+  marker = ""
+}) {
+  const reservedWidth = type === "list"
+    ? ptToPx(LIST_MARKER_RESERVED_PT + depth * LIST_NESTED_INDENT_PT)
+    : 0;
+
+  const settings = type === "list"
+    ? {
+        fontSize: BODY_TEXT_FONT_SIZE_PX,
+        reservedWidth,
+        fontKind: "body"
+      }
+    : getSegmentWrapSettings({
+        type,
+        element: block,
+        text,
+        layoutWidth
+      });
+
+  const inlineCodeFragments = getInlineCodeFragmentsForPreview(block, ownOnly);
+  const inlineMathFragments = getInlineMathFragmentsForPreview(block, ownOnly);
 
   const wrappedLines = wrapTextLinesForPreview(
-    ownText,
-    BODY_TEXT_FONT_SIZE_PX,
+    text || " ",
+    settings.fontSize,
     layoutWidth,
-    reservedWidth,
+    settings.reservedWidth,
     inlineCodeFragments,
-    "body",
+    settings.fontKind,
     inlineMathFragments
   );
 
-  const rows = wrappedLines.map((line, lineIndex) => ({
-    kind: "line",
+  return wrappedLines.map((line, lineIndex) => ({
+    kind,
+    blockType: type,
     text: line || " ",
     element: block,
     depth,
     lineIndex,
     firstLine: lineIndex === 0,
-    marker: lineIndex === 0 ? getListMarkerText(block, depth, siblingIndex) : ""
+    marker: lineIndex === 0 ? marker : "",
+    layoutWidth
   }));
+}
+
+function measureChildBlockForList(childBlock, layoutWidth) {
+  const type = classifyBlock(childBlock);
+  const text = type === "code"
+    ? getCodeRawTextForEstimate(childBlock)
+    : getVisibleTextForEstimate(childBlock, ptToPx(12));
+
+  const measured = {
+    type,
+    element: childBlock,
+    text,
+    layoutWidth,
+    height: estimateBlockHeight(childBlock, layoutWidth, type)
+  };
+
+  if (type === "table") {
+    measured.tableRowHeights = estimateTableRowHeights(childBlock, layoutWidth);
+    measured.tableRepeatsHeader = tableRepeatsHeader(childBlock);
+  }
+
+  return measured;
+}
+
+function createListEmbeddedRow(measuredBlock, depth) {
+  return {
+    kind: "embeddedBlock",
+    blockType: measuredBlock.type,
+    element: measuredBlock.element,
+    depth,
+    text: measuredBlock.text || "",
+    height: measuredBlock.height,
+    layoutWidth: measuredBlock.layoutWidth,
+    measuredBlock
+  };
+}
+
+function buildRowsForChildBlockInList(childBlock, parentLayoutWidth, depth, siblingIndex = 0) {
+  const childType = classifyBlock(childBlock);
+
+  // nested list만 재귀 진입.
+  if (childType === "list") {
+    return buildRawListPreviewRows(
+      childBlock,
+      parentLayoutWidth,
+      depth + 1,
+      siblingIndex
+    );
+  }
+
+  const childLayoutWidth = getListChildLayoutWidth(parentLayoutWidth, depth);
+  const measuredChild = measureChildBlockForList(childBlock, childLayoutWidth);
+
+  // paragraph / heading / quote / callout 등은 list row처럼 줄 단위로 풀어준다.
+  if (isSyntheticTextSegment(measuredChild.type)) {
+    const childText =
+      getOwnVisibleTextForEstimate(childBlock) ||
+      getVisibleTextForEstimate(childBlock, ptToPx(12)) ||
+      " ";
+
+    return createListTextRows({
+      block: childBlock,
+      type: measuredChild.type,
+      text: childText,
+      layoutWidth: childLayoutWidth,
+      depth,
+      ownOnly: false,
+      kind: "textLine",
+      marker: ""
+    });
+  }
+
+  // table / code / equation / media / divider / 나중의 columns 모두 여기로 온다.
+  return [
+    createListEmbeddedRow(measuredChild, depth)
+  ];
+}
+
+function buildRawListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0) {
+  const ownText = getListOwnText(block);
+
+  const rows = createListTextRows({
+    block,
+    type: "list",
+    text: ownText,
+    layoutWidth,
+    depth,
+    siblingIndex,
+    ownOnly: true,
+    kind: "line",
+    marker: getListMarkerText(block, depth, siblingIndex)
+  });
 
   const childBlocks = getImmediateNestedContentBlocks(block);
 
   childBlocks.forEach((childBlock, index) => {
-    const childType = classifyBlock(childBlock);
-
-    // 1. nested list
-    if (childType === "list") {
-      rows.push(
-        ...buildRawListPreviewRows(
-          childBlock,
-          layoutWidth,
-          depth + 1,
-          index
-        )
-      );
-      return;
-    }
-
-    const childLayoutWidth = Math.max(
-      120,
-      layoutWidth - ptToPx(LIST_MARKER_RESERVED_PT + depth * LIST_NESTED_INDENT_PT)
+    rows.push(
+      ...buildRowsForChildBlockInList(
+        childBlock,
+        layoutWidth,
+        depth,
+        index
+      )
     );
-
-    // 2. list 안 table
-    if (childType === "table") {
-      rows.push({
-        kind: "embeddedBlock",
-        blockType: "table",
-        element: childBlock,
-        depth,
-        text: "",
-        height: estimateTableHeight(childBlock, childLayoutWidth),
-        layoutWidth: childLayoutWidth
-      });
-
-      return;
-    }
-
-    // 3. list 안 code
-    if (childType === "code") {
-      const codeText = getVisibleTextForEstimate(childBlock, 0);
-
-      rows.push({
-        kind: "embeddedBlock",
-        blockType: "code",
-        element: childBlock,
-        depth,
-        text: codeText,
-        height: estimateBlockHeight(childBlock, childLayoutWidth, "code"),
-        layoutWidth: childLayoutWidth
-      });
-
-      return;
-    }
-
-    // 4. list 안 equation
-    if (childType === "equation") {
-      rows.push({
-        kind: "embeddedBlock",
-        blockType: "equation",
-        element: childBlock,
-        depth,
-        text: "",
-        height: estimateBlockHeight(childBlock, childLayoutWidth, "equation"),
-        layoutWidth: childLayoutWidth
-      });
-
-      return;
-    }
-
-    // 5. list 안 paragraph / heading / quote / callout 등 일반 텍스트
-    if (isSyntheticTextSegment(childType)) {
-      const childText =
-        getOwnVisibleTextForEstimate(childBlock) ||
-        getVisibleTextForEstimate(childBlock, ptToPx(12)) ||
-        " ";
-
-      const { fontSize, reservedWidth, fontKind } = getSegmentWrapSettings({
-        type: childType,
-        element: childBlock,
-        text: childText,
-        layoutWidth: childLayoutWidth
-      });
-
-      const inlineCodeFragments = getInlineCodeFragmentsForPreview(childBlock, false);
-      const inlineMathFragments = getInlineMathFragmentsForPreview(childBlock, false);
-
-      const wrappedLines = wrapTextLinesForPreview(
-        childText,
-        fontSize,
-        childLayoutWidth,
-        reservedWidth,
-        inlineCodeFragments,
-        fontKind,
-        inlineMathFragments
-      );
-
-      wrappedLines.forEach((line, lineIndex) => {
-        rows.push({
-          kind: "textLine",
-          blockType: childType,
-          text: line || " ",
-          element: childBlock,
-          depth,
-          lineIndex,
-          firstLine: lineIndex === 0,
-          marker: ""
-        });
-      });
-
-      return;
-    }
   });
 
   return rows;
@@ -3015,6 +3036,61 @@ function appendSyntheticLineContent(lineElement, line, segment) {
     lineElement.textContent = " ";
   }
 }
+function createRenderedPreviewForGenericSegment(segment) {
+  if (segment.type === "table") {
+    return createRenderedTablePreview(segment);
+  }
+
+  if (segment.type === "equation") {
+    return createRenderedEquationPreview(segment);
+  }
+
+  if (isSyntheticTextSegment(segment.type) || segment.type === "code") {
+    return createSyntheticTextPreview(segment);
+  }
+
+  return prepareCloneForMeasurement(
+    segment.element.cloneNode(true),
+    segment.type
+  );
+}
+
+function createEmbeddedListBlockPreview(row, parentSegment) {
+  const embedded = document.createElement("div");
+  embedded.className = "notion-pdf-preview-synthetic-list-embedded-block";
+
+  embedded.style.setProperty(
+    "--notion-pdf-preview-list-depth-indent",
+    `${ptToPx(row.depth * LIST_NESTED_INDENT_PT + LIST_MARKER_RESERVED_PT)}px`
+  );
+
+  embedded.style.height = `${Math.max(1, Number(row.height) || 0)}px`;
+  embedded.style.boxSizing = "border-box";
+  embedded.style.overflow = "hidden";
+
+  const measuredBlock = row.measuredBlock || {
+    type: row.blockType,
+    element: row.element,
+    text: row.text || getVisibleTextForEstimate(row.element, 0),
+    layoutWidth: row.layoutWidth,
+    height: row.height
+  };
+
+  const childSegment = {
+    ...measuredBlock,
+    gapBeforePx: 0,
+    contentHeight: measuredBlock.height,
+    segmentHeight: measuredBlock.height,
+    clipOffset: 0,
+    continued: false,
+    splitAfter: false
+  };
+
+  const preview = createRenderedPreviewForGenericSegment(childSegment);
+  embedded.append(preview);
+
+  return embedded;
+}
 
 function createSyntheticTextPreview(segment) {
   const text = document.createElement("div");
@@ -3053,79 +3129,8 @@ function createSyntheticTextPreview(segment) {
         text.append(spacer);
       }
 
-      if (row.kind === "embeddedBlock" && row.blockType === "table") {
-        const embedded = document.createElement("div");
-        embedded.className = "notion-pdf-preview-synthetic-list-embedded-block";
-
-        embedded.style.setProperty(
-          "--notion-pdf-preview-list-depth-indent",
-          `${ptToPx(row.depth * LIST_NESTED_INDENT_PT + LIST_MARKER_RESERVED_PT)}px`
-        );
-
-        embedded.style.height = `${Math.max(1, Number(row.height) || 0)}px`;
-
-        const tableSegment = {
-          ...segment,
-          type: "table",
-          element: row.element,
-          layoutWidth: row.layoutWidth,
-          gapBeforePx: 0,
-          contentHeight: row.height,
-          segmentHeight: row.height
-        };
-
-        embedded.append(createRenderedTablePreview(tableSegment));
-        text.append(embedded);
-        continue;
-      }
-      if (row.kind === "embeddedBlock" && row.blockType === "code") {
-        const embedded = document.createElement("div");
-        embedded.className = "notion-pdf-preview-synthetic-list-embedded-block";
-
-        embedded.style.setProperty(
-          "--notion-pdf-preview-list-depth-indent",
-          `${ptToPx(row.depth * LIST_NESTED_INDENT_PT + LIST_MARKER_RESERVED_PT)}px`
-        );
-
-        embedded.style.height = `${Math.max(1, Number(row.height) || 0)}px`;
-
-        const codePreview = createSyntheticTextPreview({
-          ...segment,
-          type: "code",
-          element: row.element,
-          text: row.text || getVisibleTextForEstimate(row.element, 0),
-          layoutWidth: row.layoutWidth,
-          contentHeight: row.height,
-          segmentHeight: row.height
-        });
-
-        embedded.append(codePreview);
-        text.append(embedded);
-        continue;
-      }
-
-      if (row.kind === "embeddedBlock" && row.blockType === "equation") {
-        const embedded = document.createElement("div");
-        embedded.className = "notion-pdf-preview-synthetic-list-embedded-block";
-
-        embedded.style.setProperty(
-          "--notion-pdf-preview-list-depth-indent",
-          `${ptToPx(row.depth * LIST_NESTED_INDENT_PT + LIST_MARKER_RESERVED_PT)}px`
-        );
-
-        embedded.style.height = `${Math.max(1, Number(row.height) || 0)}px`;
-
-        const equationPreview = createRenderedEquationPreview({
-          ...segment,
-          type: "equation",
-          element: row.element,
-          layoutWidth: row.layoutWidth,
-          contentHeight: row.height,
-          segmentHeight: row.height
-        });
-
-        embedded.append(equationPreview);
-        text.append(embedded);
+      if (row.kind === "embeddedBlock") {
+        text.append(createEmbeddedListBlockPreview(row, segment));
         continue;
       }
 
@@ -3160,6 +3165,7 @@ function createSyntheticTextPreview(segment) {
 
       appendSyntheticLineContent(content, row.text, {
         ...segment,
+        type: row.blockType || segment.type,
         element: row.element || segment.element
       });
 
