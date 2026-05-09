@@ -1529,8 +1529,47 @@ function getTextFlowLineHeightForElement(element, line, ownOnly = false) {
 
   return ptToPx(18);
 }
+function getListToListGapPx() {
+  return ptToPx(getPairwiseGapPt(T.LIST, T.LIST));
+}
 
-function buildListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0) {
+function shouldApplyInternalListGap(row, rowIndex) {
+  if (rowIndex <= 0) {
+    return false;
+  }
+
+  // 새 list item이 시작될 때만 list -> list gap 적용.
+  // 긴 list item이 줄바꿈된 continuation line에는 gap을 넣지 않는다.
+  if (row.kind === "line") {
+    return row.firstLine === true;
+  }
+
+  // list 안 table/equation/code 같은 embedded block 앞에도 list 흐름 gap을 준다.
+  return row.kind === "embeddedBlock";
+}
+
+function applyInternalListGaps(rows) {
+  return rows.map((row, rowIndex) => ({
+    ...row,
+    gapBeforePx: shouldApplyInternalListGap(row, rowIndex)
+      ? getListToListGapPx()
+      : 0
+  }));
+}
+
+function getListRowBaseHeight(row) {
+  if (row.kind === "embeddedBlock") {
+    return Math.max(1, Number(row.height) || 0);
+  }
+
+  return getTextFlowLineHeightForElement(row.element, row.text, true);
+}
+
+function getListRowTotalHeight(row) {
+  return (Number(row.gapBeforePx) || 0) + getListRowBaseHeight(row);
+}
+
+function buildRawListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0) {
   const ownText = getListOwnText(block);
   const reservedWidth = ptToPx(
     LIST_MARKER_RESERVED_PT + depth * LIST_NESTED_INDENT_PT
@@ -1566,7 +1605,7 @@ function buildListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0) {
 
     if (childType === "list") {
       rows.push(
-        ...buildListPreviewRows(
+        ...buildRawListPreviewRows(
           childBlock,
           layoutWidth,
           depth + 1,
@@ -1600,6 +1639,15 @@ function buildListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0) {
 
   return rows;
 }
+
+function buildListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0) {
+  // 외부에서는 항상 gap이 적용된 rows만 사용한다.
+  // recursive 내부에서는 gap을 적용하지 않아야 한다.
+  return applyInternalListGaps(
+    buildRawListPreviewRows(block, layoutWidth, depth, siblingIndex)
+  );
+}
+
 
 function getPreviewRowText(row) {
   return typeof row === "string" ? row : row.text;
@@ -1666,16 +1714,9 @@ function getEmbeddedTablesForList(block) {
 
 function estimateListHeight(block, layoutWidth, compact = false) {
   const rows = buildListPreviewRows(block, layoutWidth, 0, 0);
-
-  const lineHeights = rows.map((row) => {
-    if (row.kind === "embeddedBlock") {
-      return Math.max(1, Number(row.height) || 0);
-    }
-
-    return getTextFlowLineHeightForElement(row.element, row.text, true);
-  });
-
-  const height = sumHeights(lineHeights);
+  const height = rows.reduce((sum, row) => {
+    return sum + getListRowTotalHeight(row);
+  }, 0);
 
   return estimateInlineMathAwareHeight(block, height);
 }
@@ -2083,14 +2124,7 @@ function paginateBlocks(blocks, pageHeight) {
         0
       );
 
-      const lineHeights = rows.map((row) => {
-        if (row.kind === "embeddedBlock") {
-          return Math.max(1, Number(row.height) || 0);
-        }
-
-        return getTextFlowLineHeightForElement(row.element, row.text, true);
-      });
-
+      const lineHeights = rows.map((row) => getListRowTotalHeight(row));
       const trailingGap = Math.max(0, block.height - sumHeights(lineHeights));
 
       return {
@@ -2549,6 +2583,10 @@ function formatSegmentTextForPreview(segment) {
     );
 
     return rows.map((row) => {
+      if (row.kind === "embeddedBlock") {
+        return `${"  ".repeat(row.depth)}[${row.blockType}]`;
+      }
+
       const indent = "  ".repeat(row.depth);
       const marker = row.firstLine ? `${row.marker} ` : "  ";
       return `${indent}${marker}${row.text}`;
@@ -2747,8 +2785,17 @@ function createSyntheticTextPreview(segment) {
   text.style.setProperty("--notion-pdf-preview-code-padding-bottom", `${Number.isFinite(segment.codePaddingBottom) ? segment.codePaddingBottom : ptToPx(CODE_BLOCK_PADDING_BOTTOM_PT)}px`);
   text.style.setProperty("--notion-pdf-preview-code-padding-left", `${ptToPx(CODE_BLOCK_PADDING_LEFT_PT)}px`);
 
-  if (segment.type === "list" && Array.isArray(segment.listRows)) {
-    for (const row of segment.listRows) {
+  if (segment.type === "list") {
+    const rows = Array.isArray(segment.listRows)
+      ? segment.listRows
+      : buildListPreviewRows(
+          segment.element,
+          segment.layoutWidth || PAGE_BODY_WIDTH_PX,
+          0,
+          0
+        );
+
+    for (const row of rows) {
       if (row.kind === "embeddedBlock" && row.blockType === "table") {
         const embedded = document.createElement("div");
         embedded.className = "notion-pdf-preview-synthetic-list-embedded-block";
@@ -2756,6 +2803,11 @@ function createSyntheticTextPreview(segment) {
         embedded.style.setProperty(
           "--notion-pdf-preview-list-depth-indent",
           `${ptToPx(row.depth * LIST_NESTED_INDENT_PT)}px`
+        );
+
+        embedded.style.setProperty(
+          "--notion-pdf-preview-list-gap-before",
+          `${Number(row.gapBeforePx) || 0}px`
         );
 
         const tableSegment = {
@@ -2785,6 +2837,11 @@ function createSyntheticTextPreview(segment) {
       lineElement.style.setProperty(
         "--notion-pdf-preview-list-marker-width",
         `${ptToPx(LIST_MARKER_RESERVED_PT)}px`
+      );
+
+      lineElement.style.setProperty(
+        "--notion-pdf-preview-list-gap-before",
+        `${Number(row.gapBeforePx) || 0}px`
       );
 
       const marker = document.createElement("span");
