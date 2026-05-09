@@ -2144,9 +2144,15 @@ function createPdfPreviewBlock(segment, pageScale) {
 function createRenderedTablePreview(segment) {
   const table = document.createElement("table");
   table.className = "notion-pdf-preview-synthetic-table";
-  table.style.marginTop = `${tableTopGap}px`;
 
-  for (const row of getTableRows(segment.element)) {
+  // pairwise gap 방식에서는 table 자체 margin을 주지 않는다.
+  // table 앞 간격은 createRenderedPdfPreviewSegment()의 gapBeforePx가 담당한다.
+  table.style.margin = "0";
+  table.style.width = "100%";
+
+  const rows = getTableRows(segment.element);
+
+  for (const row of rows) {
     const tr = document.createElement("tr");
 
     for (const cellText of row) {
