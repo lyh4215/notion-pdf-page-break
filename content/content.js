@@ -3724,174 +3724,135 @@ function paginateBlocks(blocks, pageHeight) {
       return `[Column ${index + 1}] ${visibleText}`;
     }).join("\n");
   }
+  function buildColumnStackLayout(column) {
+    const sourceBlocks = column.blocks || [];
+    const stackItems = [];
 
-function getColumnBlockGapBeforePx(column, blockIndex) {
-  const blocks = column.blocks || [];
-  const block = blocks[blockIndex];
+    let offset = 0;
+    let prevType = "columnStart";
 
-  if (!block) {
-    return 0;
-  }
+    for (const block of sourceBlocks) {
+      const gapBeforePx = Number.isFinite(block.gapBeforePx)
+        ? block.gapBeforePx
+        : ptToPx(getPairwiseGapPt(prevType, block.type));
 
-  const prevType =
-    blockIndex > 0
-      ? blocks[blockIndex - 1]?.type
-      : "columnStart";
+      const contentHeight = Math.max(1, Number(block.height) || 1);
+      const top = offset;
+      const bottom = top + gapBeforePx + contentHeight;
 
-  if (!prevType) {
-    return 0;
-  }
+      stackItems.push({
+        block,
+        top,
+        bottom,
+        gapBeforePx,
+        contentHeight,
+        height: bottom - top
+      });
 
-  return ptToPx(getPairwiseGapPt(prevType, block.type));
-}
-
-function takeColumnBlocksForPage(column, startIndex, availableHeight, forceFirst = false) {
-  const sourceBlocks = column.blocks || [];
-  const selectedBlocks = [];
-
-  let index = startIndex;
-  let height = 0;
-
-  while (index < sourceBlocks.length) {
-    const sourceBlock = sourceBlocks[index];
-    const gapBeforePx = getColumnBlockGapBeforePx(column, index);
-    const blockHeight = Math.max(1, Number(sourceBlock.height) || 1);
-    const nextHeight = gapBeforePx + blockHeight;
-
-    if (selectedBlocks.length > 0 && height + nextHeight > availableHeight) {
-      break;
+      offset = bottom;
+      prevType = block.type;
     }
 
-    if (
-      selectedBlocks.length === 0 &&
-      height + nextHeight > availableHeight &&
-      !forceFirst
-    ) {
-      break;
-    }
-
-    selectedBlocks.push({
-      ...sourceBlock,
-      gapBeforePx
-    });
-
-    height += nextHeight;
-    index += 1;
+    return {
+      ...column,
+      stackItems,
+      stackHeight: Math.max(
+        Number(column.height) || 0,
+        offset
+      )
+    };
   }
 
-  return {
-    blocks: selectedBlocks,
-    consumed: selectedBlocks.length,
-    height
-  };
-}
+  function buildColumnsStackLayouts(columns) {
+    return (columns || []).map(buildColumnStackLayout);
+  }
 
-function hasRemainingColumnBlocks(columns, cursors) {
-  return columns.some((column, index) => {
-    return cursors[index] < (column.blocks || []).length;
-  });
-}
+  function getColumnsSliceText(layouts, startOffset, endOffset) {
+    return layouts.map((layout, index) => {
+      const text = (layout.stackItems || [])
+        .filter((item) => {
+          return item.bottom > startOffset && item.top < endOffset;
+        })
+        .map((item) => {
+          return item.block.text || `[${item.block.type}]`;
+        })
+        .join(" ")
+        .trim();
 
-function getColumnsSegmentText(columns) {
-  return columns.map((column, index) => {
-    const text = (column.blocks || [])
-      .map((block) => {
-        if (block.text) {
-          return block.text;
-        }
-
-        return `[${block.type}]`;
-      })
-      .join(" ")
-      .trim();
-
-    return `[Column ${index + 1}] ${text}`;
-  }).join("\n");
-}
+      return `[Column ${index + 1}] ${text}`;
+    }).join("\n");
+  }
 
   function paginateColumnsBlock(block) {
-    const sourceColumns = Array.isArray(block.columns) ? block.columns : [];
+    const sourceColumns = Array.isArray(block.columns)
+      ? block.columns
+      : [];
 
     if (!sourceColumns.length) {
       return false;
     }
 
-    const cursors = sourceColumns.map(() => 0);
+    const layouts = buildColumnsStackLayouts(sourceColumns);
+
+    const fullHeight = Math.max(
+      1,
+      Number(block.height) || 0,
+      ...layouts.map((layout) => Number(layout.stackHeight) || 0)
+    );
+
+    const EPS = 0.5;
+    let offset = 0;
     let segmentIndex = 0;
 
-    while (hasRemainingColumnBlocks(sourceColumns, cursors)) {
+    while (offset < fullHeight - EPS) {
       let availableHeight = getAvailableContentHeight(
         block,
         segmentIndex > 0
       );
 
-      if (availableHeight <= 0 && usedHeight > 0) {
+      if (availableHeight <= EPS && usedHeight > 0) {
         startNewPage({
           element: block.element,
-          offsetRatio: 0
+          offsetRatio: offset / fullHeight
         });
         continue;
       }
 
-      const forceFirst = usedHeight === 0;
-      const segmentColumns = [];
-      let segmentHeight = 0;
-      let consumedAny = false;
-
-      for (let columnIndex = 0; columnIndex < sourceColumns.length; columnIndex += 1) {
-        const sourceColumn = sourceColumns[columnIndex];
-
-        const taken = takeColumnBlocksForPage(
-          sourceColumn,
-          cursors[columnIndex],
-          availableHeight,
-          forceFirst
-        );
-
-        if (taken.consumed > 0) {
-          consumedAny = true;
-        }
-
-        cursors[columnIndex] += taken.consumed;
-        segmentHeight = Math.max(segmentHeight, taken.height);
-
-        segmentColumns.push({
-          ...sourceColumn,
-          blocks: taken.blocks,
-          height: taken.height
-        });
+      // 빈 페이지에서도 availableHeight가 너무 작으면 방어
+      if (availableHeight <= EPS) {
+        availableHeight = pageHeight;
       }
 
-      // 현재 페이지의 남은 공간에 어떤 column block도 못 넣으면 다음 페이지로 보냄.
-      if (!consumedAny) {
-        if (usedHeight > 0) {
-          startNewPage({
-            element: block.element,
-            offsetRatio: 0
-          });
-          continue;
-        }
+      const endOffset = Math.min(
+        fullHeight,
+        offset + availableHeight
+      );
 
-        // 빈 페이지에서도 못 넣는 경우 방어.
-        return false;
-      }
-
-      const splitAfter = hasRemainingColumnBlocks(sourceColumns, cursors);
+      const segmentContentHeight = Math.max(
+        1,
+        endOffset - offset
+      );
 
       pushPairwiseSegment(block, {
-        columns: segmentColumns,
+        columns: sourceColumns,
+
+        // 핵심:
+        // column별 cursor가 아니라 모든 column에 같은 y-offset을 적용.
+        columnClipOffset: offset,
+
         continued: segmentIndex > 0,
-        segmentHeight: Math.max(1, segmentHeight),
-        splitAfter,
-        text: getColumnsSegmentText(segmentColumns)
+        segmentHeight: segmentContentHeight,
+        splitAfter: endOffset < fullHeight - EPS,
+        text: getColumnsSliceText(layouts, offset, endOffset)
       });
 
+      offset = endOffset;
       segmentIndex += 1;
 
-      if (splitAfter) {
+      if (offset < fullHeight - EPS) {
         startNewPage({
           element: block.element,
-          offsetRatio: 0
+          offsetRatio: offset / fullHeight
         });
       }
     }
@@ -4771,10 +4732,15 @@ function createRenderedColumnsPreview(segment) {
   const height = Math.max(
     1,
     Number(segment.contentHeight) ||
-      Number(segment.segmentHeight) - Number(segment.gapBeforePx || 0) ||
+      (Number(segment.segmentHeight) - Number(segment.gapBeforePx || 0)) ||
       Number(measured.height) ||
       Number(segment.height) ||
       1
+  );
+
+  const columnClipOffset = Math.max(
+    0,
+    Number(segment.columnClipOffset) || 0
   );
 
   const wrapper = document.createElement("div");
@@ -4800,17 +4766,21 @@ function createRenderedColumnsPreview(segment) {
     columnElement.style.overflow = "hidden";
     columnElement.style.minWidth = "0";
 
-    columnElement.append(
-      createRenderedMeasuredBlockStack(
-        column.blocks || [],
-        columnWidth,
-        {
-          initialPrevType: "columnStart",
-          applyFirstGap: true
-        }
-      )
+    const stack = createRenderedMeasuredBlockStack(
+      column.blocks || [],
+      columnWidth,
+      {
+        initialPrevType: "columnStart",
+        applyFirstGap: true
+      }
     );
 
+    if (columnClipOffset > 0) {
+      stack.style.transform = `translateY(-${columnClipOffset}px)`;
+      stack.style.transformOrigin = "0 0";
+    }
+
+    columnElement.append(stack);
     wrapper.append(columnElement);
   }
 
@@ -5268,9 +5238,10 @@ function createRenderedPdfPreviewSegment(segment) {
   clone.style.height = `${contentHeight}px`;
   clone.style.overflow = "hidden";
 
-  const clipOffset = segment.type === "equation"
-    ? 0
-    : Number(segment.clipOffset) || 0;
+  const clipOffset =
+    segment.type === "equation" || segment.type === "columns"
+      ? 0
+      : Number(segment.clipOffset) || 0;
 
   if (clipOffset > 0) {
     clone.style.transform = `translateY(-${clipOffset}px)`;
