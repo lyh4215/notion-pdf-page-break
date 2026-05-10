@@ -725,13 +725,36 @@ function getVisibleRect(element) {
 
   return rect;
 }
+function normalizeInlineWhitespacePreserveNewlines(text) {
+  return (text || "")
+    .replace(/\u200b/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    // 줄 내부의 tab/space만 정리하고, \n은 보존
+    .split("\n")
+    .map((line) => line.replace(/[ \t\f\v]+/g, " ").trimEnd())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function normalizeInlineWhitespaceCollapse(text) {
+  return (text || "")
+    .replace(/\u200b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function getElementText(element) {
-  return (element.innerText || element.textContent || "").replace(/\s+/g, " ").trim();
+  return normalizeInlineWhitespaceCollapse(
+    element.innerText || element.textContent || ""
+  );
 }
 
 function getElementRawText(element) {
-  return (element.innerText || element.textContent || "").trim();
+  return normalizeInlineWhitespacePreserveNewlines(
+    element.innerText || element.textContent || ""
+  );
 }
 
 function getCodeRawTextForEstimate(block) {
@@ -777,7 +800,7 @@ function getVisibleTextForEstimate(element, fontSize = 14) {
     return Array.from(node.childNodes).map(walk).join("");
   }
 
-  return walk(element).replace(/\s+/g, " ").trim();
+  return normalizeInlineWhitespacePreserveNewlines(walk(element));
 }
 
 function getKatexSourceText(katexElement) {
@@ -892,32 +915,30 @@ function isInlineCodeOnlyVisualLine(element, line, ownOnly = false) {
   return Boolean(normalizedInlineText) && normalizedInlineText.includes(normalizedLine);
 }
 
-function getOwnVisibleTextForEstimate(element) {
-  const ownerBlock = element.closest("[data-block-id]") || element;
-  const parts = [];
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    const parent = node.parentElement;
-
-    if (!parent) {
-      continue;
-    }
-
-    const closestBlock = parent.closest("[data-block-id]");
-    if (closestBlock && closestBlock !== ownerBlock) {
-      continue;
-    }
-
-    if (parent.closest("script, style, .katex-mathml, table, [role='table'], [role='grid']")) {
-      continue;
-    }
-
-    parts.push(node.textContent || "");
+function getOwnVisibleTextForEstimate(block) {
+  if (!block) {
+    return "";
   }
 
-  return parts.join(" ").replace(/\s+/g, " ").trim();
+  const ownTextParts = [];
+
+  const textLeaves = Array.from(
+    block.querySelectorAll("[data-content-editable-leaf='true']")
+  );
+
+  for (const leaf of textLeaves) {
+    const ownerBlock = leaf.closest("[data-block-id]");
+
+    if (ownerBlock !== block) {
+      continue;
+    }
+
+    ownTextParts.push(getVisibleTextForEstimate(leaf));
+  }
+
+  return normalizeInlineWhitespacePreserveNewlines(
+    ownTextParts.filter(Boolean).join("\n")
+  );
 }
 
 function getPdfLinkTextForEstimate(element) {
@@ -1897,9 +1918,32 @@ function getInlineCodeTokenWidth(token, fontSize) {
   const codeFontSize = fontSize * INLINE_CODE_SCALE;
   return getTextWidth(token, codeFontSize, "code") + codeFontSize * INLINE_CODE_HORIZONTAL_PADDING_EM;
 }
+function normalizeWhitespaceCollapse(text) {
+  return String(text || "")
+    .replace(/\u200b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
+function normalizeWhitespacePreserveNewlines(text) {
+  return String(text || "")
+    .replace(/\u200b/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t\f\v]+/g, " ").trimEnd())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0, inlineCodeFragments = [], fontKind = "body", inlineMathFragments = []) {
   if (!text) {
+    return ["(empty block)"];
+  }
+
+  const normalizedText = normalizeWhitespacePreserveNewlines(text);
+
+  if (!normalizedText) {
     return ["(empty block)"];
   }
 
@@ -1909,7 +1953,7 @@ function wrapTextLinesForPreview(text, fontSize, layoutWidth, reservedWidth = 0,
   for (const rawLine of text.split("\n")) {
     const line = fontKind === "code"
       ? rawLine.replace(/\t/g, "    ")
-      : rawLine.trim().replace(/\s+/g, " ");
+      : rawLine.trim().replace(/[ \t\f\v]+/g, " ");
     if (!line) {
       lines.push("");
       continue;
