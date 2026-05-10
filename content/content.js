@@ -2158,6 +2158,115 @@ function getPrintMediaMaxWidth(block, layoutWidth) {
     NOTION_PDF_MEDIA_MAX_WIDTH_PX
   );
 }
+
+const NOTION_IMAGE_SRC_WIDTH_DPR_SCALE = 2;
+
+function getMediaImageElement(block) {
+  if (!block) {
+    return null;
+  }
+
+  if (block.matches?.("img")) {
+    return block;
+  }
+
+  return getSubstantialMediaElement(block) || block.querySelector("img");
+}
+
+function getNotionImageSrcWidthPx(block) {
+  const image = getMediaImageElement(block);
+
+  if (!image) {
+    return NaN;
+  }
+
+  const rawSrc = image.getAttribute("src") || "";
+  const src = rawSrc.replace(/&amp;/g, "&");
+
+  if (!src) {
+    return NaN;
+  }
+
+  try {
+    const url = new URL(src, window.location.href);
+    const widthParam = url.searchParams.get("width");
+
+    if (widthParam) {
+      const width = Number(widthParam);
+
+      if (Number.isFinite(width) && width > 0) {
+        return width;
+      }
+    }
+  } catch (error) {
+    // fallback regex below
+  }
+
+  const match = src.match(/[?&]width=(\d+)/);
+
+  if (!match) {
+    return NaN;
+  }
+
+  const width = Number(match[1]);
+
+  return Number.isFinite(width) && width > 0
+    ? width
+    : NaN;
+}
+
+function getNotionImageSrcDisplayWidthPx(block) {
+  const srcWidth = getNotionImageSrcWidthPx(block);
+
+  if (!Number.isFinite(srcWidth) || srcWidth <= 0) {
+    return NaN;
+  }
+
+  return srcWidth / NOTION_IMAGE_SRC_WIDTH_DPR_SCALE;
+}
+
+function getInlineStylePxValue(element, propertyName) {
+  if (!element) {
+    return NaN;
+  }
+
+  const value = element.style?.getPropertyValue?.(propertyName) || "";
+  const match = String(value).match(/(-?\d+(?:\.\d+)?)px/);
+
+  if (!match) {
+    return NaN;
+  }
+
+  const parsed = Number(match[1]);
+
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : NaN;
+}
+
+function getNotionImageInlineHeightPx(block) {
+  const image = getMediaImageElement(block);
+
+  if (!image) {
+    return NaN;
+  }
+
+  const heightPx = getInlineStylePxValue(image, "height");
+
+  if (Number.isFinite(heightPx) && heightPx > 0) {
+    return heightPx;
+  }
+
+  const maxHeightPx = getInlineStylePxValue(image, "max-height");
+
+  if (Number.isFinite(maxHeightPx) && maxHeightPx > 0) {
+    return maxHeightPx;
+  }
+
+  return NaN;
+}
+
+
 function getPrintMediaTargetWidth(block, layoutWidth) {
   const containerWidth = getPrintMediaContainerWidth(block, layoutWidth);
 
@@ -2167,19 +2276,26 @@ function getPrintMediaTargetWidth(block, layoutWidth) {
   const widthPx = parseCssLengthToPx(widthValue, containerWidth);
   const maxWidthPx = parseCssLengthToPx(maxWidthValue, containerWidth);
 
+  const srcDisplayWidthPx = getNotionImageSrcDisplayWidthPx(block);
+
   let targetWidth = containerWidth;
 
+  // 핵심:
+  // img src의 width=640은 실제 표시 폭 320px 정도로 본다.
+  if (Number.isFinite(srcDisplayWidthPx) && srcDisplayWidthPx > 0) {
+    targetWidth = Math.min(targetWidth, srcDisplayWidthPx);
+  }
+
+  // 기존 block width/max-width도 유지
   if (Number.isFinite(widthPx) && widthPx > 0) {
-    targetWidth = Math.min(widthPx, containerWidth);
+    targetWidth = Math.min(targetWidth, widthPx);
   }
 
   if (Number.isFinite(maxWidthPx) && maxWidthPx > 0) {
     targetWidth = Math.min(targetWidth, maxWidthPx);
   }
 
-  targetWidth = Math.min(targetWidth, getPrintMediaMaxWidth(block, layoutWidth));
-
-  return Math.max(1, targetWidth);
+  return Math.max(1, Math.min(containerWidth, targetWidth));
 }
 
 function getMediaAspectRatio(mediaElement) {
@@ -2223,24 +2339,34 @@ function getMediaAspectRatio(mediaElement) {
 }
 
 function estimateMediaHeight(block, layoutWidth) {
-  const mediaElement =
-    block.matches("img, video, canvas, iframe, figure")
-      ? block
-      : getSubstantialMediaElement(block) || block.querySelector("img, video, canvas, iframe");
-
+  const image = getMediaImageElement(block);
   const targetWidth = getPrintMediaTargetWidth(block, layoutWidth);
-  const aspectRatio = getMediaAspectRatio(mediaElement);
 
-  if (Number.isFinite(aspectRatio) && aspectRatio > 0) {
-    return Math.max(1, targetWidth * aspectRatio);
+  const srcDisplayWidthPx = getNotionImageSrcDisplayWidthPx(block);
+  const inlineHeightPx = getNotionImageInlineHeightPx(block);
+
+  // 1순위:
+  // src width=640 → display width=320
+  // inline height=164.415
+  // ratio = 164.415 / 320
+  if (
+    Number.isFinite(srcDisplayWidthPx) &&
+    srcDisplayWidthPx > 0 &&
+    Number.isFinite(inlineHeightPx) &&
+    inlineHeightPx > 0
+  ) {
+    return targetWidth * (inlineHeightPx / srcDisplayWidthPx);
   }
 
-  const mediaRect = getVisibleRect(mediaElement);
+  // 2순위: natural ratio
+  const naturalWidth = image?.naturalWidth || 0;
+  const naturalHeight = image?.naturalHeight || 0;
 
-  if (mediaRect && mediaRect.height > 0) {
-    return mediaRect.height;
+  if (naturalWidth > 0 && naturalHeight > 0) {
+    return targetWidth * (naturalHeight / naturalWidth);
   }
 
+  // 3순위: DOM fallback
   const blockRect = getVisibleRect(block);
 
   if (blockRect && blockRect.height > 0) {
