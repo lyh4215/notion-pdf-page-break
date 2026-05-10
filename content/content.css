@@ -670,3 +670,43 @@
   margin: 0 !important;
   box-sizing: border-box;
 }
+
+
+.notion-pdf-preview-list-debug-target[data-debug-label]:hover {
+  outline: 1px solid #2563eb;
+  outline-offset: -1px;
+  z-index: 20;
+}
+
+.notion-pdf-preview-list-debug-target[data-debug-label]:hover::after {
+  content: attr(data-debug-label);
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translateY(-100%);
+  z-index: 9999;
+
+  max-width: 520px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 2px 6px;
+  border-radius: 4px;
+
+  color: white;
+  background: #2563eb;
+  pointer-events: none;
+}
+
+/* list 내부 요소에 hover했을 때, 바깥 list segment 라벨이 같이 뜨는 것 방지 */
+.notion-pdf-preview-rendered-segment:has(.notion-pdf-preview-list-debug-target:hover)::before,
+.notion-pdf-preview-rendered-segment:has(.notion-pdf-preview-list-debug-target:hover)::after {
+  display: none !important;
+}
+
+.notion-pdf-preview-rendered-segment:has(.notion-pdf-preview-list-debug-target:hover) {
+  outline: none !important;
+}

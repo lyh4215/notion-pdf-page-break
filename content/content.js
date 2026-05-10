@@ -4441,6 +4441,74 @@ function createEmbeddedListBlockPreview(row, parentSegment) {
   return embedded;
 }
 
+function getListInternalDebugType(row) {
+  if (row?.kind === "embeddedBlock") {
+    return row.blockType || (row.element ? classifyBlock(row.element) : null) || "embeddedBlock";
+  }
+
+  return row.blockType || "listLine";
+}
+
+function getListInternalDebugText(row) {
+  const raw =
+    row?.text ??
+    (row?.element ? getVisibleTextForEstimate(row.element, 0) : "") ??
+    "";
+
+  const text = String(raw).replace(/\s+/g, " ").trim();
+
+  if (text) {
+    return text;
+  }
+
+  const type = getListInternalDebugType(row);
+
+  if (type === "media") return "[media]";
+  if (type === "equation") return "[equation]";
+  if (type === "table") return "[table]";
+  if (type === "code") return "[code]";
+
+  return "(empty list item)";
+}
+
+function createListInternalDebugFrame(row, child, contentHeightPx, gapBeforePx) {
+  const type = getListInternalDebugType(row);
+  const gap = Math.max(0, Number(gapBeforePx) || 0);
+  const contentHeight = Math.max(1, Number(contentHeightPx) || 1);
+  const totalHeight = Math.max(1, gap + contentHeight);
+  const depth = Math.max(0, Number(row?.depth) || 0);
+  const marker = row?.marker || "";
+
+  const frame = document.createElement("div");
+  frame.className = "notion-pdf-preview-list-debug-target";
+
+  frame.dataset.type = type;
+  frame.dataset.debugLabel =
+    `${type} | ${Math.round(totalHeight)}px` +
+    ` | gap ${Math.round(gap)}px` +
+    ` | content ${Math.round(contentHeight)}px` +
+    ` | depth ${depth}` +
+    `${marker ? ` | ${marker}` : ""}`;
+
+  frame.dataset.copyText = getListInternalDebugText(row);
+
+  frame.style.position = "relative";
+  frame.style.width = "100%";
+  frame.style.height = `${totalHeight}px`;
+  frame.style.boxSizing = "border-box";
+  frame.style.overflow = "visible";
+
+  child.style.position = "absolute";
+  child.style.left = "0";
+  child.style.right = "0";
+  child.style.top = `${gap}px`;
+  child.style.width = "100%";
+  child.style.boxSizing = "border-box";
+
+  frame.append(child);
+  return frame;
+}
+
 function createSyntheticTextPreview(segment) {
   const text = document.createElement("div");
   text.className = "notion-pdf-preview-synthetic-text";
@@ -4471,15 +4539,19 @@ function createSyntheticTextPreview(segment) {
     for (const row of rows) {
       const gapBeforePx = Math.max(0, Number(row.gapBeforePx) || 0);
 
-      if (gapBeforePx > 0) {
-        const spacer = document.createElement("div");
-        spacer.className = "notion-pdf-preview-synthetic-list-spacer";
-        spacer.style.height = `${gapBeforePx}px`;
-        text.append(spacer);
-      }
-
       if (row.kind === "embeddedBlock") {
-        text.append(createEmbeddedListBlockPreview(row, segment));
+        const embedded = createEmbeddedListBlockPreview(row, segment);
+        const embeddedHeight = Math.max(1, Number(row.height) || 1);
+
+        text.append(
+          createListInternalDebugFrame(
+            row,
+            embedded,
+            embeddedHeight,
+            gapBeforePx
+          )
+        );
+
         continue;
       }
 
@@ -4514,11 +4586,20 @@ function createSyntheticTextPreview(segment) {
 
       appendSyntheticLineContent(content, row.text, {
         ...segment,
+        type: row.blockType || segment.type,
         element: row.element || segment.element
       });
 
       lineElement.append(marker, content);
-      text.append(lineElement);
+
+      text.append(
+        createListInternalDebugFrame(
+          row,
+          lineElement,
+          baseHeightPx,
+          gapBeforePx
+        )
+      );
     }
 
     return text;
