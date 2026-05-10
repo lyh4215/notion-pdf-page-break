@@ -2764,15 +2764,56 @@ function getInternalListGapPx(prevRow, nextRow) {
   return ptToPx(getPairwiseGapPt(prevType, nextType));
 }
 
+function getListInternalPairType(row) {
+  if (!row) {
+    return null;
+  }
+
+  if (row.kind === "line") {
+    return "listLine";
+  }
+
+  if (row.kind === "blank") {
+    return "blank";
+  }
+
+  if (row.kind === "embeddedBlock") {
+    return row.blockType || "paragraph";
+  }
+
+  if (row.kind === "textLine") {
+    return row.blockType || "paragraph";
+  }
+
+  return row.blockType || "paragraph";
+}
+
+function isContinuationListRow(row) {
+  return (
+    (row.kind === "line" || row.kind === "textLine") &&
+    row.firstLine === false
+  );
+}
+
 function applyInternalListGaps(rows) {
   return rows.map((row, rowIndex) => {
+    if (rowIndex <= 0 || isContinuationListRow(row)) {
+      return {
+        ...row,
+        gapBeforePx: 0
+      };
+    }
+
     const prevRow = rows[rowIndex - 1];
 
     return {
       ...row,
-      gapBeforePx: shouldApplyInternalListGap(row, rowIndex)
-        ? getInternalListGapPx(prevRow, row)
-        : 0
+      gapBeforePx: ptToPx(
+        getPairwiseGapPt(
+          getListInternalPairType(prevRow),
+          getListInternalPairType(row)
+        )
+      )
     };
   });
 }
@@ -2780,6 +2821,13 @@ function applyInternalListGaps(rows) {
 function getListRowBaseHeight(row) {
   if (row.kind === "embeddedBlock") {
     return Math.max(1, Number(row.height) || 0);
+  }
+
+  if (row.kind === "blank") {
+    return Math.max(
+      1,
+      Number(row.height) || getTextFlowLineHeightForElement(row.element, " ", false)
+    );
   }
 
   if (row.kind === "textLine") {
@@ -2869,6 +2917,125 @@ function createListEmbeddedRow(measuredBlock, depth) {
     measuredBlock
   };
 }
+function getOwnRawMultilineTextForEstimate(block) {
+  if (!block) {
+    return "";
+  }
+
+  const ownTextParts = [];
+
+  const textLeaves = Array.from(
+    block.querySelectorAll("[data-content-editable-leaf='true']")
+  );
+
+  for (const leaf of textLeaves) {
+    const ownerBlock = leaf.closest("[data-block-id]");
+
+    if (ownerBlock !== block) {
+      continue;
+    }
+
+    ownTextParts.push(
+      String(leaf.innerText || leaf.textContent || "")
+        .replace(/\r\n/g, "\n")
+        .replace(/\u00a0/g, " ")
+        .replace(/\u200b/g, "")
+    );
+  }
+
+  return ownTextParts.join("\n");
+}
+
+function splitLeadingBlankLines(rawText) {
+  const lines = String(rawText || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n");
+
+  let leadingBlankCount = 0;
+
+  while (lines.length > 0 && lines[0].trim() === "") {
+    leadingBlankCount += 1;
+    lines.shift();
+  }
+
+  while (lines.length > 0 && lines[lines.length - 1].trim() === "") {
+    lines.pop();
+  }
+
+  return {
+    leadingBlankCount,
+    text: lines.join("\n") || " "
+  };
+}
+
+function createListBlankRow(element, depth, layoutWidth) {
+  return {
+    kind: "blank",
+    blockType: "blank",
+    text: " ",
+    element,
+    depth,
+    lineIndex: 0,
+    firstLine: true,
+    marker: "",
+    layoutWidth,
+    height: ptToPx(18)
+  };
+}
+
+function estimateSyntheticTextHeightFromText(block, type, text, layoutWidth) {
+  const segment = {
+    type,
+    element: block,
+    text,
+    layoutWidth
+  };
+
+  const { fontSize, reservedWidth, fontKind } = getSegmentWrapSettings(segment);
+  const inlineCodeFragments = getInlineCodeFragmentsForPreview(block, false);
+  const inlineMathFragments = getInlineMathFragmentsForPreview(block, false);
+
+  const visualLines = wrapTextLinesForPreview(
+    text || " ",
+    fontSize,
+    layoutWidth,
+    reservedWidth,
+    inlineCodeFragments,
+    fontKind,
+    inlineMathFragments
+  );
+
+  const lineHeightSum = sumHeights(
+    getTextFlowLineHeights(block, visualLines, false)
+  );
+
+  return estimateInlineMathAwareHeight(block, lineHeightSum + ptToPx(-0.62));
+}
+
+function createListSyntheticBlockRow({
+  childBlock,
+  measuredChild,
+  text,
+  layoutWidth,
+  depth
+}) {
+  const height = estimateSyntheticTextHeightFromText(
+    childBlock,
+    measuredChild.type,
+    text,
+    layoutWidth
+  );
+
+  return createListEmbeddedRow(
+    {
+      ...measuredChild,
+      text,
+      height,
+      layoutWidth
+    },
+    depth
+  );
+}
 
 function buildRowsForChildBlockInList(childBlock, parentLayoutWidth, depth, siblingIndex = 0) {
   const childType = classifyBlock(childBlock);
@@ -2886,23 +3053,37 @@ function buildRowsForChildBlockInList(childBlock, parentLayoutWidth, depth, sibl
   const childLayoutWidth = getListChildLayoutWidth(parentLayoutWidth, depth);
   const measuredChild = measureChildBlockForList(childBlock, childLayoutWidth);
 
-  // paragraph / heading / quote / callout 등은 list row처럼 줄 단위로 풀어준다.
   if (isSyntheticTextSegment(measuredChild.type)) {
-    const childText =
-      getOwnVisibleTextForEstimate(childBlock) ||
+    const rows = [];
+
+    const rawText =
+      getOwnRawMultilineTextForEstimate(childBlock) ||
       getVisibleTextForEstimate(childBlock, ptToPx(12)) ||
       " ";
 
-    return createListTextRows({
-      block: childBlock,
-      type: measuredChild.type,
-      text: childText,
-      layoutWidth: childLayoutWidth,
-      depth,
-      ownOnly: false,
-      kind: "textLine",
-      marker: ""
-    });
+    const { leadingBlankCount, text } = splitLeadingBlankLines(rawText);
+
+    for (let i = 0; i < leadingBlankCount; i += 1) {
+      rows.push(
+        createListBlankRow(
+          childBlock,
+          depth,
+          childLayoutWidth
+        )
+      );
+    }
+
+    rows.push(
+      createListSyntheticBlockRow({
+        childBlock,
+        measuredChild,
+        text,
+        layoutWidth: childLayoutWidth,
+        depth
+      })
+    );
+
+    return rows;
   }
 
   // table / code / equation / media / divider / 나중의 columns 모두 여기로 온다.
@@ -3977,11 +4158,33 @@ function formatSegmentTextForPreview(segment) {
     );
 
     return rows.map((row) => {
-      if (row.kind === "embeddedBlock") {
-        return `${"  ".repeat(row.depth)}[${row.blockType}]`;
+      const indent = "  ".repeat(row.depth || 0);
+
+      if (row.kind === "blank") {
+        return `${indent}[blank]`;
       }
 
-      const indent = "  ".repeat(row.depth);
+      if (row.kind === "embeddedBlock") {
+        if (row.blockType === "media") {
+          return `${indent}[media]`;
+        }
+
+        if (row.blockType === "equation") {
+          return `${indent}[equation]`;
+        }
+
+        if (row.blockType === "table") {
+          return `${indent}[table]`;
+        }
+
+        const text = String(row.text || "")
+          .split("\n")
+          .map((line) => `${indent}${line}`)
+          .join("\n");
+
+        return text || `${indent}[${row.blockType}]`;
+      }
+
       const marker = row.firstLine ? `${row.marker} ` : "  ";
       return `${indent}${marker}${row.text}`;
     }).join("\n") || "(empty block)";
