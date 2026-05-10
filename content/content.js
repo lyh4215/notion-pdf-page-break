@@ -3577,6 +3577,237 @@ function paginateBlocks(blocks, pageHeight) {
     });
   }
 
+  function buildMeasuredStackItems(measuredBlocks, options = {}) {
+    const {
+      initialPrevType = null,
+      applyFirstGap = false
+    } = options;
+
+    const items = [];
+    let total = 0;
+    let prevType = initialPrevType;
+
+    for (const block of measuredBlocks || []) {
+      const shouldApplyGap = prevType !== null && (
+        applyFirstGap || total > 0
+      );
+
+      const gapBeforePx = Number.isFinite(block.gapBeforePx)
+        ? block.gapBeforePx
+        : shouldApplyGap
+          ? ptToPx(getPairwiseGapPt(prevType, block.type))
+          : 0;
+
+      const contentHeight = Math.max(1, Number(block.height) || 0);
+      const top = total;
+      const bottom = top + gapBeforePx + contentHeight;
+
+      items.push({
+        block,
+        top,
+        bottom,
+        gapBeforePx,
+        contentHeight,
+        height: bottom - top
+      });
+
+      total = bottom;
+      prevType = block.type;
+    }
+
+    return {
+      items,
+      height: total
+    };
+  }
+
+  function buildColumnStackLayouts(columns) {
+    return (columns || []).map((column) => {
+      const stack = buildMeasuredStackItems(column.blocks || [], {
+        initialPrevType: "columnStart",
+        applyFirstGap: true
+      });
+
+      return {
+        ...column,
+        stackItems: stack.items,
+        stackHeight: Math.max(
+          Number(column.height) || 0,
+          stack.height
+        )
+      };
+    });
+  }
+
+  function isInsideColumnStackItem(y, item) {
+    const EPS = 0.5;
+    return y > item.top + EPS && y < item.bottom - EPS;
+  }
+
+  function isSafeColumnBoundary(y, layouts, fullHeight) {
+    const EPS = 0.5;
+
+    if (Math.abs(y) <= EPS || Math.abs(y - fullHeight) <= EPS) {
+      return true;
+    }
+
+    return layouts.every((layout) => {
+      return !(layout.stackItems || []).some((item) => {
+        return isInsideColumnStackItem(y, item);
+      });
+    });
+  }
+
+  function getColumnBoundaryCandidates(layouts, fullHeight) {
+    const values = [0, fullHeight];
+
+    for (const layout of layouts) {
+      for (const item of layout.stackItems || []) {
+        values.push(item.top);
+        values.push(item.bottom);
+      }
+    }
+
+    return Array.from(new Set(
+      values
+        .map((value) => Math.round(value * 1000) / 1000)
+        .filter((value) => Number.isFinite(value))
+    )).sort((a, b) => a - b);
+  }
+
+  function findColumnSegmentEnd(layouts, startOffset, availableHeight, fullHeight) {
+    const EPS = 0.5;
+    const limit = Math.min(fullHeight, startOffset + Math.max(1, availableHeight));
+    const candidates = getColumnBoundaryCandidates(layouts, fullHeight);
+
+    let best = null;
+
+    for (const candidate of candidates) {
+      if (candidate <= startOffset + EPS) {
+        continue;
+      }
+
+      if (candidate > limit + EPS) {
+        break;
+      }
+
+      if (!isSafeColumnBoundary(candidate, layouts, fullHeight)) {
+        continue;
+      }
+
+      best = candidate;
+    }
+
+    return best;
+  }
+
+  function findFirstColumnBoundaryAfter(layouts, startOffset, fullHeight) {
+    const EPS = 0.5;
+    const candidates = getColumnBoundaryCandidates(layouts, fullHeight);
+
+    return candidates.find((candidate) => {
+      return (
+        candidate > startOffset + EPS &&
+        isSafeColumnBoundary(candidate, layouts, fullHeight)
+      );
+    }) || fullHeight;
+  }
+
+  function getColumnsSegmentTextFromLayouts(layouts, startOffset, endOffset) {
+    return layouts.map((layout, index) => {
+      const visibleText = (layout.stackItems || [])
+        .filter((item) => item.bottom > startOffset && item.top < endOffset)
+        .map((item) => item.block.text || `[${item.block.type}]`)
+        .join(" ")
+        .trim();
+
+      return `[Column ${index + 1}] ${visibleText}`;
+    }).join("\n");
+  }
+
+  function paginateColumnsBlock(block) {
+    const columns = Array.isArray(block.columns) ? block.columns : [];
+
+    if (!columns.length) {
+      return false;
+    }
+
+    const layouts = buildColumnStackLayouts(columns);
+
+    const fullHeight = Math.max(
+      1,
+      Number(block.height) || 0,
+      ...layouts.map((layout) => Number(layout.stackHeight) || 0)
+    );
+
+    const EPS = 0.5;
+    let offset = 0;
+    let segmentIndex = 0;
+
+    while (offset < fullHeight - EPS) {
+      let availableHeight = getAvailableContentHeight(
+        block,
+        segmentIndex > 0
+      );
+
+      if (availableHeight <= EPS && usedHeight > 0) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: offset / fullHeight
+        });
+        continue;
+      }
+
+      let endOffset = findColumnSegmentEnd(
+        layouts,
+        offset,
+        availableHeight,
+        fullHeight
+      );
+
+      // 현재 페이지에 남은 공간이 애매해서 block 단위로 못 자르면 다음 페이지로 넘김.
+      if (endOffset === null && usedHeight > 0) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: offset / fullHeight
+        });
+        continue;
+      }
+
+      // 빈 페이지에서도 안 들어가는 거대한 child block 방어.
+      // 이 경우만 어쩔 수 없이 다음 안전 boundary까지 넣는다.
+      if (endOffset === null) {
+        endOffset = findFirstColumnBoundaryAfter(
+          layouts,
+          offset,
+          fullHeight
+        );
+      }
+
+      const segmentContentHeight = Math.max(1, endOffset - offset);
+
+      pushPairwiseSegment(block, {
+        columns,
+        columnClipOffset: offset,
+        segmentHeight: segmentContentHeight,
+        continued: segmentIndex > 0,
+        splitAfter: endOffset < fullHeight - EPS,
+        text: getColumnsSegmentTextFromLayouts(layouts, offset, endOffset)
+      });
+
+      offset = endOffset;
+      segmentIndex += 1;
+
+      if (offset < fullHeight - EPS) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: offset / fullHeight
+        });
+      }
+    }
+
+    return true;
+  }
   function paginateTableBlock(block) {
     const rowHeights = block.tableRowHeights || estimateTableRowHeights(block.element, block.layoutWidth || PAGE_BODY_WIDTH_PX);
     const rowCount = rowHeights.length;
@@ -3892,6 +4123,29 @@ function paginateBlocks(blocks, pageHeight) {
   for (const block of blocks) {
     const blockHeight = Math.max(1, Number(block.height) || 0);
     const isOversized = blockHeight > pageHeight;
+
+    if (block.type === "columns") {
+      if (isOversized || wouldOverflowSegment(block)) {
+        if (paginateColumnsBlock(block)) {
+          continue;
+        }
+      }
+
+      if (!isOversized && wouldOverflowSegment(block)) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: 0
+        });
+      }
+
+      pushPairwiseSegment(block, {
+        continued: false,
+        segmentHeight: block.height,
+        splitAfter: false
+      });
+
+      continue;
+    }
 
     // 1. Table
     // table은 row 단위 split이 가능하므로 먼저 처리한다.
@@ -4423,9 +4677,22 @@ function createRenderedColumnsPreview(segment) {
 
   const columns = measured.columns || [];
   const layoutWidth = segment.layoutWidth || PAGE_BODY_WIDTH_PX;
+
+  // 중요:
+  // segment.height는 columns 전체 원본 높이일 수 있음.
+  // split segment에서는 반드시 contentHeight를 써야 함.
   const height = Math.max(
     1,
-    Number(segment.height) || Number(measured.height) || 1
+    Number(segment.contentHeight) ||
+      (Number(segment.segmentHeight) - Number(segment.gapBeforePx || 0)) ||
+      Number(measured.height) ||
+      Number(segment.height) ||
+      1
+  );
+
+  const columnClipOffset = Math.max(
+    0,
+    Number(segment.columnClipOffset) || 0
   );
 
   const wrapper = document.createElement("div");
@@ -4451,17 +4718,21 @@ function createRenderedColumnsPreview(segment) {
     columnElement.style.overflow = "hidden";
     columnElement.style.minWidth = "0";
 
-    columnElement.append(
-      createRenderedMeasuredBlockStack(
-        column.blocks || [],
-        columnWidth,
-        {
-          initialPrevType: "columnStart",
-          applyFirstGap: true
-        }
-      )
+    const stack = createRenderedMeasuredBlockStack(
+      column.blocks || [],
+      columnWidth,
+      {
+        initialPrevType: "columnStart",
+        applyFirstGap: true
+      }
     );
 
+    if (columnClipOffset > 0) {
+      stack.style.transform = `translateY(-${columnClipOffset}px)`;
+      stack.style.transformOrigin = "0 0";
+    }
+
+    columnElement.append(stack);
     wrapper.append(columnElement);
   }
 
