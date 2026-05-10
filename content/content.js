@@ -1118,6 +1118,72 @@ function getPageMetadataValueText(row) {
 
   return rawValue;
 }
+function normalizePageMetadataText(text) {
+  return String(text || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isPageMetadataEmptyPlaceholder(value) {
+  const normalized = normalizePageMetadataText(value).toLowerCase();
+
+  return (
+    normalized === "비어 있음" ||
+    normalized === "empty"
+  );
+}
+
+function getPageMetadataPropertyIconName(row) {
+  if (!row) {
+    return "";
+  }
+
+  const iconElement = Array.from(row.querySelectorAll("[style*='/icons/']"))
+    .find((element) => {
+      const style = element.getAttribute("style") || "";
+      return /\/icons\/[^)"']+\.svg/i.test(style);
+    });
+
+  if (!iconElement) {
+    return "";
+  }
+
+  const style = iconElement.getAttribute("style") || "";
+  const match = style.match(/\/icons\/([^/?)"']+)\.svg/i);
+
+  if (!match) {
+    return "";
+  }
+
+  return match[1]
+    .replace(/_gray$/i, "")
+    .replace(/-/g, "_")
+    .toLowerCase();
+}
+
+function isSelectLikePageMetadataRow(row, label) {
+  const iconName = getPageMetadataPropertyIconName(row);
+
+  // Notion에서 태그/multi-select 계열이 list_gray.svg로 들어오는 케이스가 있음.
+  if (
+    iconName === "select" ||
+    iconName === "multi_select" ||
+    iconName === "multi_select_list" ||
+    iconName === "list"
+  ) {
+    return true;
+  }
+
+  // fallback: 아이콘 파싱 실패 시 한국어/영문 기본 태그 속성만 살림.
+  const normalizedLabel = normalizePageMetadataText(label).toLowerCase();
+
+  return (
+    normalizedLabel === "태그" ||
+    normalizedLabel === "tags" ||
+    normalizedLabel === "tag"
+  );
+}
 function getPageMetadataRows(metadataElement) {
   const table = getPageMetadataTable(metadataElement);
 
@@ -1136,42 +1202,43 @@ function getPageMetadataRows(metadataElement) {
         labelCell?.querySelector("div[style*='white-space: nowrap']") ||
         labelCell;
 
-      const label = getElementText(labelSource || row)
-        .replace(/\u00a0/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
+      const label = normalizePageMetadataText(
+        getElementText(labelSource || row)
+      );
 
       let value = valueElement
-        ? getElementText(valueElement)
-            .replace(/\u00a0/g, " ")
-            .replace(/\s+/g, " ")
-            .trim()
+        ? normalizePageMetadataText(getElementText(valueElement))
         : "";
 
-      const normalizedValue = value.toLowerCase();
+      const isPlaceholderValue = isPageMetadataEmptyPlaceholder(value);
 
-      // 중요:
-      // "비어 있음" placeholder는 PDF에 글자로 찍히는 값이 아니라
-      // 빈 metadata value로 취급한다.
-      // row 자체는 삭제하지 않는다.
-      if (
-        value === "비어 있음" ||
-        normalizedValue === "empty"
-      ) {
+      if (isPlaceholderValue) {
         value = "";
       }
+
+      const isSelectLike = isSelectLikePageMetadataRow(row, label);
 
       return {
         label,
         value,
         isEmpty: value.length === 0,
+        isSelectLike,
+        propertyIconName: getPageMetadataPropertyIconName(row),
         element: row
       };
     })
     .filter((row) => {
-      // value가 없어도 label이 있으면 표시한다.
-      // 예: 태그 metadata row.
-      return Boolean(row.label);
+      if (!row.label) {
+        return false;
+      }
+
+      // 값이 있으면 일반 text든 select든 표시.
+      if (row.value) {
+        return true;
+      }
+
+      // 값이 비어 있으면 select / multi-select 계열만 표시.
+      return row.isSelectLike;
     });
 
   return rows;
