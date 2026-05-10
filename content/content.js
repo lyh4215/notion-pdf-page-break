@@ -5450,7 +5450,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return false;
 });
 
-const REQUIRED_NOTION_BODY_WIDTH_PX = 826;
+const REQUIRED_NOTION_BODY_WIDTH_PX = 710;
 const NOTION_BODY_WIDTH_TOLERANCE_PX = 2;
 
 function findMainNotionPageContent() {
