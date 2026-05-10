@@ -68,10 +68,11 @@ const BlockType = Object.freeze({
   DIVIDER: 13,
   BLANK: 14,
   PAGEMETADATA: 15,
-
-  // 실제 Notion block은 아님.
-  // column 내부 첫 block의 top gap 계산용 가상 타입.
   COLUMNSTART: 16,
+
+  // 실제 block 아님.
+  // list 내부 bullet text row gap 계산용 가상 타입.
+  LISTLINE: 17,
 });
 
 const T = BlockType;
@@ -97,6 +98,7 @@ const BLOCK_TYPE_INDEX = Object.freeze({
   pageMetadata: T.PAGEMETADATA,
 
   columnStart: T.COLUMNSTART,
+  listLine: T.LISTLINE,
 });
 
 const PAIRWISE_GAP_PT = Array.from(
@@ -124,6 +126,7 @@ const BLOCK_TYPE_LABELS = Object.freeze([
   "blank",
   "pageMetadata",
   "columnStart",
+  "listLine",
 ]);
 
 let PAIRWISE_GAP_DEFAULT_PT = null;
@@ -560,7 +563,7 @@ setPairwiseGap(T.BLANK, T.COLUMNSTART, 6.6);
 setPairwiseGap(T.PAGEMETADATA, T.PAGETITLE, 12.0);
 setPairwiseGap(T.PAGEMETADATA, T.PARAGRAPH, 12.0);
 setPairwiseGap(T.PAGEMETADATA, T.LIST, 12.0);
-setPairwiseGap(T.PAGEMETADATA, T.H2, 12.0);
+setPairwiseGap(T.PAGEMETADATA, T.H2, 24.0);
 setPairwiseGap(T.PAGEMETADATA, T.H3, 12.0);
 setPairwiseGap(T.PAGEMETADATA, T.H4, 12.0);
 setPairwiseGap(T.PAGEMETADATA, T.EQUATION, 12.0);
@@ -587,12 +590,56 @@ setPairwiseGap(T.COLUMNSTART, T.TABLE, 6.6);
 setPairwiseGap(T.COLUMNSTART, T.CODE, 6.6);
 setPairwiseGap(T.COLUMNSTART, T.QUOTE, 6.6);
 setPairwiseGap(T.COLUMNSTART, T.CALLOUT, 6.6);
-setPairwiseGap(T.COLUMNSTART, T.MEDIA, 6.6);
+setPairwiseGap(T.COLUMNSTART, T.MEDIA, 12.0);
 setPairwiseGap(T.COLUMNSTART, T.COLUMNS, 6.6);
 setPairwiseGap(T.COLUMNSTART, T.DIVIDER, 6.6);
 setPairwiseGap(T.COLUMNSTART, T.BLANK, 6.6);
 setPairwiseGap(T.COLUMNSTART, T.PAGEMETADATA, 6.6);
 setPairwiseGap(T.COLUMNSTART, T.COLUMNSTART, 6.6);
+
+// listLine -> *
+// list 내부의 bullet text row를 paragraph처럼 취급하기 위한 기본값
+setPairwiseGap(T.LISTLINE, T.PAGETITLE, 6.6);
+setPairwiseGap(T.LISTLINE, T.PARAGRAPH, 6.6);
+setPairwiseGap(T.LISTLINE, T.LIST, 7.0);
+setPairwiseGap(T.LISTLINE, T.H2, 19.3);
+setPairwiseGap(T.LISTLINE, T.H3, 15.5);
+setPairwiseGap(T.LISTLINE, T.H4, 14.5);
+setPairwiseGap(T.LISTLINE, T.EQUATION, 14.0);
+setPairwiseGap(T.LISTLINE, T.TABLE, 10.6);
+setPairwiseGap(T.LISTLINE, T.CODE, 4.0);
+setPairwiseGap(T.LISTLINE, T.QUOTE, 10.0);
+setPairwiseGap(T.LISTLINE, T.CALLOUT, 10.0);
+setPairwiseGap(T.LISTLINE, T.MEDIA, 18.2);
+setPairwiseGap(T.LISTLINE, T.COLUMNS, 12.0);
+setPairwiseGap(T.LISTLINE, T.DIVIDER, 6.6);
+setPairwiseGap(T.LISTLINE, T.BLANK, 6.6);
+setPairwiseGap(T.LISTLINE, T.PAGEMETADATA, 6.6);
+setPairwiseGap(T.LISTLINE, T.COLUMNSTART, 6.6);
+
+// paragraph -> paragraph에 대응되는 값
+setPairwiseGap(T.LISTLINE, T.LISTLINE, 6.6);
+
+function copyPairwiseGapRow(fromType, toType) {
+  for (let nextType = 0; nextType < BLOCK_TYPE_COUNT; nextType += 1) {
+    setPairwiseGap(toType, nextType, getPairwiseGapPt(fromType, nextType));
+  }
+}
+
+function copyPairwiseGapColumn(fromType, toType) {
+  for (let prevType = 0; prevType < BLOCK_TYPE_COUNT; prevType += 1) {
+    setPairwiseGap(prevType, toType, getPairwiseGapPt(prevType, fromType));
+  }
+}
+
+// list 내부의 bullet text row는 paragraph처럼 취급.
+// listLine -> *  = paragraph -> *
+// * -> listLine  = * -> paragraph
+copyPairwiseGapRow(T.PARAGRAPH, T.LISTLINE);
+copyPairwiseGapColumn(T.PARAGRAPH, T.LISTLINE);
+
+// 안전하게 명시
+setPairwiseGap(T.LISTLINE, T.LISTLINE, getPairwiseGapPt(T.PARAGRAPH, T.PARAGRAPH));
 
 captureDefaultPairwiseGapMatrix();
 loadPairwiseGapOverrides();
@@ -2666,8 +2713,28 @@ function getTextFlowLineHeightForElement(element, line, ownOnly = false) {
 
   return ptToPx(18);
 }
-function getListToListGapPx() {
-  return ptToPx(getPairwiseGapPt("list", "list"));
+function getListRowPairwiseType(row) {
+  if (!row) {
+    return null;
+  }
+
+  // 실제 list bullet text row
+  if (row.kind === "line") {
+    return "listLine";
+  }
+
+  // list 안에 들어온 paragraph / h3 / h4 같은 text block
+  // 이건 listLine이 아니라 원래 block type을 유지하는 게 맞다.
+  if (row.kind === "textLine") {
+    return row.blockType || "paragraph";
+  }
+
+  // list 안에 들어온 media / table / equation / code / columns 등
+  if (row.kind === "embeddedBlock") {
+    return row.blockType || row.measuredBlock?.type || "paragraph";
+  }
+
+  return row.blockType || "paragraph";
 }
 
 function shouldApplyInternalListGap(row, rowIndex) {
@@ -2675,24 +2742,39 @@ function shouldApplyInternalListGap(row, rowIndex) {
     return false;
   }
 
+  // bullet text의 첫 줄 앞에만 gap.
+  // 줄바꿈으로 생긴 2번째 줄, 3번째 줄 앞에는 gap 금지.
   if (row.kind === "line") {
     return row.firstLine === true;
   }
 
+  // list 안 paragraph/h3/h4 등의 첫 줄 앞에만 gap.
   if (row.kind === "textLine") {
     return row.firstLine === true;
   }
 
+  // media/table/code/equation/columns 같은 embedded block 앞에는 gap.
   return row.kind === "embeddedBlock";
 }
 
+function getInternalListGapPx(prevRow, nextRow) {
+  const prevType = getListRowPairwiseType(prevRow);
+  const nextType = getListRowPairwiseType(nextRow);
+
+  return ptToPx(getPairwiseGapPt(prevType, nextType));
+}
+
 function applyInternalListGaps(rows) {
-  return rows.map((row, rowIndex) => ({
-    ...row,
-    gapBeforePx: shouldApplyInternalListGap(row, rowIndex)
-      ? getListToListGapPx()
-      : 0
-  }));
+  return rows.map((row, rowIndex) => {
+    const prevRow = rows[rowIndex - 1];
+
+    return {
+      ...row,
+      gapBeforePx: shouldApplyInternalListGap(row, rowIndex)
+        ? getInternalListGapPx(prevRow, row)
+        : 0
+    };
+  });
 }
 
 function getListRowBaseHeight(row) {
@@ -2829,6 +2911,8 @@ function buildRowsForChildBlockInList(childBlock, parentLayoutWidth, depth, sibl
   ];
 }
 
+
+
 function buildRawListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0) {
   const ownText = getListOwnText(block);
 
@@ -2861,8 +2945,6 @@ function buildRawListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0
 }
 
 function buildListPreviewRows(block, layoutWidth, depth = 0, siblingIndex = 0) {
-  // 외부에서는 항상 gap이 적용된 rows만 사용한다.
-  // recursive 내부에서는 gap을 적용하지 않아야 한다.
   return applyInternalListGaps(
     buildRawListPreviewRows(block, layoutWidth, depth, siblingIndex)
   );
@@ -4432,7 +4514,6 @@ function createSyntheticTextPreview(segment) {
 
       appendSyntheticLineContent(content, row.text, {
         ...segment,
-        type: row.blockType || segment.type,
         element: row.element || segment.element
       });
 
