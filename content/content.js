@@ -3488,20 +3488,62 @@ function applyRenderedMeasurements(contentRoot, measuredBlocks, layoutWidth) {
   }
 }
 
-function paginateBlocks(blocks, pageHeight) {
+function paginateBlocks(blocks, pageHeight, options = {}) {
+  const {
+    nested = false,
+    collectBreaks = true,
+
+    // column 내부 첫 block gap 계산용
+    initialPrevType = null,
+    applyFirstGap = false,
+
+    // columns가 현재 page 중간에서 시작할 때,
+    // 첫 column page는 남은 높이만 사용하고,
+    // 이후 column page는 일반 page height를 사용한다.
+    firstPageHeight = pageHeight,
+    continuedPageHeight = pageHeight,
+
+    // nested column pagination에서는 leading empty page가 중요하다.
+    // 예: column2의 media가 첫 page에 안 들어가면 page0은 비어 있어야 함.
+    preserveEmptyPages = Boolean(nested)
+  } = options;
+
   const pages = [[]];
   const breaks = [];
   let usedHeight = 0;
+
+  const normalPageHeight = Math.max(
+    1,
+    Number(continuedPageHeight) || Number(pageHeight) || 1
+  );
+
+  const firstPageCapacity = Math.max(
+    1,
+    Number(firstPageHeight) || normalPageHeight
+  );
 
   function currentPage() {
     return pages[pages.length - 1];
   }
 
-  function startNewPage(pageBreak) {
-    breaks.push({
-      ...pageBreak,
-      pageNumber: pages.length
-    });
+  function getCurrentPageHeight() {
+    return pages.length === 1
+      ? firstPageCapacity
+      : normalPageHeight;
+  }
+
+  function getFullPageHeight() {
+    return normalPageHeight;
+  }
+
+  function startNewPage(pageBreak = {}) {
+    if (collectBreaks) {
+      breaks.push({
+        ...pageBreak,
+        pageNumber: pages.length
+      });
+    }
+
     pages.push([]);
     usedHeight = 0;
   }
@@ -3518,11 +3560,21 @@ function paginateBlocks(blocks, pageHeight) {
 
     const prev = lastSegment();
 
-    if (!prev || prev.splitAfter) {
-      return 0;
+    if (prev && !prev.splitAfter) {
+      return ptToPx(getPairwiseGapPt(prev.type, block.type));
     }
 
-    return ptToPx(getPairwiseGapPt(prev.type, block.type));
+    // nested column의 첫 block만 columnStart -> firstBlock gap 적용
+    if (
+      !prev &&
+      pages.length === 1 &&
+      initialPrevType &&
+      applyFirstGap
+    ) {
+      return ptToPx(getPairwiseGapPt(initialPrevType, block.type));
+    }
+
+    return 0;
   }
 
   function getSegmentContentHeight(block, segmentHeight = block.height) {
@@ -3530,14 +3582,14 @@ function paginateBlocks(blocks, pageHeight) {
   }
 
   function getAvailableContentHeight(block, continued = false) {
-    return pageHeight - usedHeight - getGapBeforePx(block, continued);
+    return getCurrentPageHeight() - usedHeight - getGapBeforePx(block, continued);
   }
 
   function wouldOverflowSegment(block, segmentHeight = block.height, continued = false) {
     const contentHeight = getSegmentContentHeight(block, segmentHeight);
     const gapBeforePx = getGapBeforePx(block, continued);
 
-    return usedHeight > 0 && usedHeight + gapBeforePx + contentHeight > pageHeight;
+    return usedHeight + gapBeforePx + contentHeight > getCurrentPageHeight();
   }
 
   function pushPairwiseSegment(block, options = {}) {
@@ -3559,11 +3611,116 @@ function paginateBlocks(blocks, pageHeight) {
   }
 
   function isTextFlowType(type) {
-    return type === "paragraph" || type === "list" || type === "quote" || type === "callout";
+    return (
+      type === "paragraph" ||
+      type === "list" ||
+      type === "quote" ||
+      type === "callout"
+    );
   }
 
   function isLineSplittableTextFlow(block) {
     return isTextFlowType(block.type) && block.height > ptToPx(42);
+  }
+
+  function getPageSegmentsHeight(segments) {
+    return (segments || []).reduce((sum, segment) => {
+      return sum + Math.max(
+        1,
+        Number(segment.segmentHeight ?? segment.height) || 0
+      );
+    }, 0);
+  }
+
+  function getColumnsPageText(columns) {
+    return columns.map((column, index) => {
+      const text = (column.segments || [])
+        .map((segment) => segment.text || `[${segment.type}]`)
+        .join(" ")
+        .trim();
+
+      return `[Column ${index + 1}] ${text}`;
+    }).join("\n");
+  }
+
+  function paginateColumnsBlock(block) {
+    const sourceColumns = Array.isArray(block.columns)
+      ? block.columns
+      : [];
+
+    if (!sourceColumns.length) {
+      return false;
+    }
+
+    let firstColumnPageHeight = getAvailableContentHeight(block, false);
+
+    if (firstColumnPageHeight <= 0 && usedHeight > 0) {
+      startNewPage({
+        element: block.element,
+        offsetRatio: 0
+      });
+
+      firstColumnPageHeight = getAvailableContentHeight(block, false);
+    }
+
+    firstColumnPageHeight = Math.max(1, firstColumnPageHeight);
+
+    const columnPaginations = sourceColumns.map((column) => {
+      return paginateBlocks(column.blocks || [], normalPageHeight, {
+        nested: true,
+        collectBreaks: false,
+
+        initialPrevType: "columnStart",
+        applyFirstGap: true,
+
+        firstPageHeight: firstColumnPageHeight,
+        continuedPageHeight: normalPageHeight,
+
+        preserveEmptyPages: true
+      });
+    });
+
+    const maxPageCount = Math.max(
+      1,
+      ...columnPaginations.map((pagination) => pagination.pages.length)
+    );
+
+    for (let pageIndex = 0; pageIndex < maxPageCount; pageIndex += 1) {
+      const segmentColumns = sourceColumns.map((column, columnIndex) => {
+        const columnPage =
+          columnPaginations[columnIndex].pages[pageIndex] || [];
+
+        return {
+          ...column,
+          segments: columnPage,
+          height: getPageSegmentsHeight(columnPage)
+        };
+      });
+
+      const segmentHeight = Math.max(
+        1,
+        ...segmentColumns.map((column) => Number(column.height) || 0)
+      );
+
+      const splitAfter = pageIndex < maxPageCount - 1;
+
+      pushPairwiseSegment(block, {
+        columns: segmentColumns,
+        continued: pageIndex > 0,
+        segmentHeight,
+        splitAfter,
+        text: getColumnsPageText(segmentColumns)
+      });
+
+      if (splitAfter) {
+        startNewPage({
+          element: block.element,
+          offsetRatio: 0
+        });
+      }
+    }
+
+    return true;
   }
 
   function pushTableSegment(block, segmentHeight, consumedRows, rowCount, segmentIndex, clipOffset = 0) {
@@ -3577,386 +3734,11 @@ function paginateBlocks(blocks, pageHeight) {
     });
   }
 
-  function buildMeasuredStackItems(measuredBlocks, options = {}) {
-    const {
-      initialPrevType = null,
-      applyFirstGap = false
-    } = options;
-
-    const items = [];
-    let total = 0;
-    let prevType = initialPrevType;
-
-    for (const block of measuredBlocks || []) {
-      const shouldApplyGap = prevType !== null && (
-        applyFirstGap || total > 0
-      );
-
-      const gapBeforePx = Number.isFinite(block.gapBeforePx)
-        ? block.gapBeforePx
-        : shouldApplyGap
-          ? ptToPx(getPairwiseGapPt(prevType, block.type))
-          : 0;
-
-      const contentHeight = Math.max(1, Number(block.height) || 0);
-      const top = total;
-      const bottom = top + gapBeforePx + contentHeight;
-
-      items.push({
-        block,
-        top,
-        bottom,
-        gapBeforePx,
-        contentHeight,
-        height: bottom - top
-      });
-
-      total = bottom;
-      prevType = block.type;
-    }
-
-    return {
-      items,
-      height: total
-    };
-  }
-
-  function buildColumnStackLayouts(columns) {
-    return (columns || []).map((column) => {
-      const stack = buildMeasuredStackItems(column.blocks || [], {
-        initialPrevType: "columnStart",
-        applyFirstGap: true
-      });
-
-      return {
-        ...column,
-        stackItems: stack.items,
-        stackHeight: Math.max(
-          Number(column.height) || 0,
-          stack.height
-        )
-      };
-    });
-  }
-
-  function isInsideColumnStackItem(y, item) {
-    const EPS = 0.5;
-    return y > item.top + EPS && y < item.bottom - EPS;
-  }
-
-  function isSafeColumnBoundary(y, layouts, fullHeight) {
-    const EPS = 0.5;
-
-    if (Math.abs(y) <= EPS || Math.abs(y - fullHeight) <= EPS) {
-      return true;
-    }
-
-    return layouts.every((layout) => {
-      return !(layout.stackItems || []).some((item) => {
-        return isInsideColumnStackItem(y, item);
-      });
-    });
-  }
-
-  function getColumnBoundaryCandidates(layouts, fullHeight) {
-    const values = [0, fullHeight];
-
-    for (const layout of layouts) {
-      for (const item of layout.stackItems || []) {
-        values.push(item.top);
-        values.push(item.bottom);
-      }
-    }
-
-    return Array.from(new Set(
-      values
-        .map((value) => Math.round(value * 1000) / 1000)
-        .filter((value) => Number.isFinite(value))
-    )).sort((a, b) => a - b);
-  }
-
-  function findColumnSegmentEnd(layouts, startOffset, availableHeight, fullHeight) {
-    const EPS = 0.5;
-    const limit = Math.min(fullHeight, startOffset + Math.max(1, availableHeight));
-    const candidates = getColumnBoundaryCandidates(layouts, fullHeight);
-
-    let best = null;
-
-    for (const candidate of candidates) {
-      if (candidate <= startOffset + EPS) {
-        continue;
-      }
-
-      if (candidate > limit + EPS) {
-        break;
-      }
-
-      if (!isSafeColumnBoundary(candidate, layouts, fullHeight)) {
-        continue;
-      }
-
-      best = candidate;
-    }
-
-    return best;
-  }
-
-  function findFirstColumnBoundaryAfter(layouts, startOffset, fullHeight) {
-    const EPS = 0.5;
-    const candidates = getColumnBoundaryCandidates(layouts, fullHeight);
-
-    return candidates.find((candidate) => {
-      return (
-        candidate > startOffset + EPS &&
-        isSafeColumnBoundary(candidate, layouts, fullHeight)
-      );
-    }) || fullHeight;
-  }
-
-  function getColumnsSegmentTextFromLayouts(layouts, startOffset, endOffset) {
-    return layouts.map((layout, index) => {
-      const visibleText = (layout.stackItems || [])
-        .filter((item) => item.bottom > startOffset && item.top < endOffset)
-        .map((item) => item.block.text || `[${item.block.type}]`)
-        .join(" ")
-        .trim();
-
-      return `[Column ${index + 1}] ${visibleText}`;
-    }).join("\n");
-  }
-  function buildColumnStackLayout(column) {
-    const sourceBlocks = column.blocks || [];
-    const stackItems = [];
-
-    let offset = 0;
-    let prevType = "columnStart";
-
-    for (const block of sourceBlocks) {
-      const gapBeforePx = Number.isFinite(block.gapBeforePx)
-        ? block.gapBeforePx
-        : ptToPx(getPairwiseGapPt(prevType, block.type));
-
-      const contentHeight = Math.max(1, Number(block.height) || 1);
-      const top = offset;
-      const bottom = top + gapBeforePx + contentHeight;
-
-      stackItems.push({
-        block,
-        top,
-        bottom,
-        gapBeforePx,
-        contentHeight,
-        height: bottom - top
-      });
-
-      offset = bottom;
-      prevType = block.type;
-    }
-
-    return {
-      ...column,
-      stackItems,
-      stackHeight: Math.max(
-        Number(column.height) || 0,
-        offset
-      )
-    };
-  }
-
-  function buildColumnsStackLayouts(columns) {
-    return (columns || []).map(buildColumnStackLayout);
-  }
-
-  function getColumnsSliceText(layouts, startOffset, endOffset) {
-    return layouts.map((layout, index) => {
-      const text = (layout.stackItems || [])
-        .filter((item) => {
-          return item.bottom > startOffset && item.top < endOffset;
-        })
-        .map((item) => {
-          return item.block.text || `[${item.block.type}]`;
-        })
-        .join(" ")
-        .trim();
-
-      return `[Column ${index + 1}] ${text}`;
-    }).join("\n");
-  }
-
-  function isColumnHardUnsplittableBlock(block) {
-    if (!block) {
-      return false;
-    }
-
-    // media는 절대 중간 split 금지.
-    // equation도 보통 중간 split하면 이상해져서 금지.
-    // table/code/list/paragraph는 기존 로직상 split 가능성이 있으므로 일단 허용.
-    return (
-      block.type === "media" ||
-      block.type === "equation"
-    );
-  }
-
-  function isOffsetInsideItem(offsetValue, item) {
-    const EPS = 0.5;
-
-    return (
-      offsetValue > item.top + EPS &&
-      offsetValue < item.bottom - EPS
-    );
-  }
-
-  function findHardUnsplittableItemCrossingOffset(layouts, offsetValue) {
-    for (const layout of layouts) {
-      for (const item of layout.stackItems || []) {
-        if (!isColumnHardUnsplittableBlock(item.block)) {
-          continue;
-        }
-
-        if (isOffsetInsideItem(offsetValue, item)) {
-          return item;
-        }
-      }
-    }
-
-    return null;
-  }
-
-  function findSafeColumnsEndOffset(layouts, startOffset, preferredEndOffset, fullHeight) {
-    const EPS = 0.5;
-
-    let safeEndOffset = Math.min(fullHeight, preferredEndOffset);
-
-    while (safeEndOffset < fullHeight - EPS) {
-      const crossingItem = findHardUnsplittableItemCrossingOffset(
-        layouts,
-        safeEndOffset
-      );
-
-      if (!crossingItem) {
-        return safeEndOffset;
-      }
-
-      // 절단선이 media/equation 중간을 지나가면,
-      // 그 block 전체를 다음 페이지로 넘기기 위해 block 시작점으로 당긴다.
-      const candidate = crossingItem.top;
-
-      // candidate가 현재 offset보다 뒤에 있으면 안전하게 그 지점에서 자를 수 있음.
-      if (candidate > startOffset + EPS) {
-        safeEndOffset = candidate;
-        continue;
-      }
-
-      // 여기까지 왔다는 건 현재 segment 시작점 자체가 media 내부거나,
-      // media가 페이지 처음부터 시작해서 현재 페이지에 안 들어가는 경우.
-      // 이런 경우에는 위로 당길 수 없으므로 null을 반환하고 호출부에서 처리한다.
-      return null;
-    }
-
-    return fullHeight;
-  }
-  function paginateColumnsBlock(block) {
-    const sourceColumns = Array.isArray(block.columns)
-      ? block.columns
-      : [];
-
-    if (!sourceColumns.length) {
-      return false;
-    }
-
-    const layouts = buildColumnsStackLayouts(sourceColumns);
-
-    const fullHeight = Math.max(
-      1,
-      Number(block.height) || 0,
-      ...layouts.map((layout) => Number(layout.stackHeight) || 0)
-    );
-
-    const EPS = 0.5;
-    let offset = 0;
-    let segmentIndex = 0;
-
-    while (offset < fullHeight - EPS) {
-      let availableHeight = getAvailableContentHeight(
-        block,
-        segmentIndex > 0
-      );
-
-      if (availableHeight <= EPS && usedHeight > 0) {
-        startNewPage({
-          element: block.element,
-          offsetRatio: offset / fullHeight
-        });
-        continue;
-      }
-
-      // 빈 페이지에서도 availableHeight가 너무 작으면 방어
-      if (availableHeight <= EPS) {
-        availableHeight = pageHeight;
-      }
-
-      const preferredEndOffset = Math.min(
-        fullHeight,
-        offset + availableHeight
-      );
-
-      let endOffset = findSafeColumnsEndOffset(
-        layouts,
-        offset,
-        preferredEndOffset,
-        fullHeight
-      );
-
-      // 현재 페이지 남은 공간에서는 media/equation을 중간에 자르지 않고는
-      // 아무것도 넣을 수 없는 경우.
-      if (endOffset === null) {
-        if (usedHeight > 0) {
-          startNewPage({
-            element: block.element,
-            offsetRatio: offset / fullHeight
-          });
-          continue;
-        }
-
-        // 빈 페이지에서도 안 들어가는 거대한 media/equation이면
-        // 어쩔 수 없이 기존 방식으로 fallback.
-        // 일반적인 이미지 크기에서는 거의 발생하지 않아야 함.
-        endOffset = preferredEndOffset;
-      }
-
-      const segmentContentHeight = Math.max(
-        1,
-        endOffset - offset
-      );
-
-      pushPairwiseSegment(block, {
-        columns: sourceColumns,
-
-        // 핵심:
-        // column별 cursor가 아니라 모든 column에 같은 y-offset을 적용.
-        columnClipOffset: offset,
-
-        continued: segmentIndex > 0,
-        segmentHeight: segmentContentHeight,
-        splitAfter: endOffset < fullHeight - EPS,
-        text: getColumnsSliceText(layouts, offset, endOffset)
-      });
-
-      offset = endOffset;
-      segmentIndex += 1;
-
-      if (offset < fullHeight - EPS) {
-        startNewPage({
-          element: block.element,
-          offsetRatio: offset / fullHeight
-        });
-      }
-    }
-
-    return true;
-  }
   function paginateTableBlock(block) {
-    const rowHeights = block.tableRowHeights || estimateTableRowHeights(block.element, block.layoutWidth || PAGE_BODY_WIDTH_PX);
+    const rowHeights =
+      block.tableRowHeights ||
+      estimateTableRowHeights(block.element, block.layoutWidth || PAGE_BODY_WIDTH_PX);
+
     const rowCount = rowHeights.length;
 
     if (rowCount <= 1) {
@@ -3965,7 +3747,9 @@ function paginateBlocks(blocks, pageHeight) {
 
     const borderHeight = ptToPx(0.75);
     const headerHeight = rowHeights[0];
-    const repeatsHeader = block.tableRepeatsHeader ?? tableRepeatsHeader(block.element);
+    const repeatsHeader =
+      block.tableRepeatsHeader ?? tableRepeatsHeader(block.element);
+
     let consumedRows = 0;
     let segmentIndex = 0;
 
@@ -3977,11 +3761,14 @@ function paginateBlocks(blocks, pageHeight) {
           element: block.element,
           offsetRatio: Math.min(1, consumedRows / rowCount)
         });
-        availableHeight = pageHeight;
+
+        availableHeight = getCurrentPageHeight();
       }
 
       const isContinuation = segmentIndex > 0;
-      const repeatedHeaderHeight = isContinuation && repeatsHeader ? headerHeight : 0;
+      const repeatedHeaderHeight =
+        isContinuation && repeatsHeader ? headerHeight : 0;
+
       let segmentHeight = borderHeight + repeatedHeaderHeight;
       let originalRows = 0;
       const segmentStartRow = consumedRows;
@@ -4008,8 +3795,20 @@ function paginateBlocks(blocks, pageHeight) {
       }
 
       consumedRows += originalRows;
-      const clipOffset = rowHeights.slice(0, segmentStartRow).reduce((sum, height) => sum + height, borderHeight);
-      pushTableSegment(block, segmentHeight, consumedRows, rowCount, segmentIndex, clipOffset);
+
+      const clipOffset = rowHeights
+        .slice(0, segmentStartRow)
+        .reduce((sum, height) => sum + height, borderHeight);
+
+      pushTableSegment(
+        block,
+        segmentHeight,
+        consumedRows,
+        rowCount,
+        segmentIndex,
+        clipOffset
+      );
+
       segmentIndex += 1;
 
       if (consumedRows < rowCount) {
@@ -4025,7 +3824,7 @@ function paginateBlocks(blocks, pageHeight) {
 
   function paginateHeightSplitBlock(block) {
     let consumedHeight = 0;
-    let remainingHeight = block.height;
+    let remainingHeight = Math.max(1, Number(block.height) || 0);
     let segmentIndex = 0;
 
     while (remainingHeight > 0) {
@@ -4036,11 +3835,13 @@ function paginateBlocks(blocks, pageHeight) {
           element: block.element,
           offsetRatio: Math.min(1, consumedHeight / block.height)
         });
-        availableHeight = pageHeight;
+
+        availableHeight = getCurrentPageHeight();
       }
 
       const segmentHeight = Math.min(remainingHeight, availableHeight);
       const clipOffset = consumedHeight;
+
       consumedHeight += segmentHeight;
       remainingHeight -= segmentHeight;
 
@@ -4050,6 +3851,7 @@ function paginateBlocks(blocks, pageHeight) {
         segmentHeight,
         splitAfter: remainingHeight > 0
       });
+
       segmentIndex += 1;
 
       if (remainingHeight > 0) {
@@ -4107,6 +3909,7 @@ function paginateBlocks(blocks, pageHeight) {
   function paginateTextFlowBlock(block) {
     const { rows, lineHeights, trailingGap } = getTextFlowLineMetrics(block);
     const totalLines = Math.max(1, rows.length);
+
     let lineIndex = 0;
     let segmentIndex = 0;
 
@@ -4123,13 +3926,23 @@ function paginateBlocks(blocks, pageHeight) {
           element: block.element,
           offsetRatio: Math.min(1, lineIndex / totalLines)
         });
-        availableHeight = pageHeight;
+
+        availableHeight = getCurrentPageHeight();
       }
 
       const finalHeight = sumHeights(lineHeights, lineIndex) + trailingGap;
 
       if (finalHeight <= availableHeight) {
-        pushTextFlowSegment(block, rows, lineIndex, totalLines, finalHeight, segmentIndex, totalLines);
+        pushTextFlowSegment(
+          block,
+          rows,
+          lineIndex,
+          totalLines,
+          finalHeight,
+          segmentIndex,
+          totalLines
+        );
+
         lineIndex = totalLines;
         break;
       }
@@ -4137,7 +3950,10 @@ function paginateBlocks(blocks, pageHeight) {
       let lineEnd = lineIndex;
       let segmentHeight = 0;
 
-      while (lineEnd < totalLines && segmentHeight + lineHeights[lineEnd] <= availableHeight) {
+      while (
+        lineEnd < totalLines &&
+        segmentHeight + lineHeights[lineEnd] <= availableHeight
+      ) {
         segmentHeight += lineHeights[lineEnd];
         lineEnd += 1;
       }
@@ -4150,7 +3966,16 @@ function paginateBlocks(blocks, pageHeight) {
         continue;
       }
 
-      pushTextFlowSegment(block, rows, lineIndex, lineEnd, segmentHeight, segmentIndex, totalLines);
+      pushTextFlowSegment(
+        block,
+        rows,
+        lineIndex,
+        lineEnd,
+        segmentHeight,
+        segmentIndex,
+        totalLines
+      );
+
       lineIndex = lineEnd;
       segmentIndex += 1;
 
@@ -4165,8 +3990,19 @@ function paginateBlocks(blocks, pageHeight) {
     return true;
   }
 
-  function pushCodeSegment(block, lines, lineStart, lineEnd, segmentHeight, segmentIndex, totalLines, codePaddingTop, codePaddingBottom) {
+  function pushCodeSegment(
+    block,
+    lines,
+    lineStart,
+    lineEnd,
+    segmentHeight,
+    segmentIndex,
+    totalLines,
+    codePaddingTop,
+    codePaddingBottom
+  ) {
     const splitAfter = lineEnd < totalLines;
+
     pushPairwiseSegment(block, {
       text: lines.slice(lineStart, lineEnd).join("\n"),
       continued: segmentIndex > 0,
@@ -4178,11 +4014,16 @@ function paginateBlocks(blocks, pageHeight) {
   }
 
   function paginateCodeBlock(block) {
-    const lines = getCodePreviewLines(block.text || getCodeRawTextForEstimate(block.element), block.layoutWidth || PAGE_BODY_WIDTH_PX);
+    const lines = getCodePreviewLines(
+      block.text || getCodeRawTextForEstimate(block.element),
+      block.layoutWidth || PAGE_BODY_WIDTH_PX
+    );
+
     const totalLines = Math.max(1, lines.length);
     const lineHeight = ptToPx(CODE_BLOCK_LINE_HEIGHT_PT);
     const firstTopPadding = ptToPx(CODE_BLOCK_PADDING_TOP_PT);
-  const finalBottomSpace = ptToPx(CODE_BLOCK_PADDING_BOTTOM_PT);
+    const finalBottomSpace = ptToPx(CODE_BLOCK_PADDING_BOTTOM_PT);
+
     let lineIndex = 0;
     let segmentIndex = 0;
 
@@ -4195,14 +4036,27 @@ function paginateBlocks(blocks, pageHeight) {
           element: block.element,
           offsetRatio: Math.min(1, lineIndex / totalLines)
         });
-        availableHeight = pageHeight;
+
+        availableHeight = getCurrentPageHeight();
       }
 
       const remainingLines = totalLines - lineIndex;
-      const finalSegmentHeight = codePaddingTop + remainingLines * lineHeight + finalBottomSpace;
+      const finalSegmentHeight =
+        codePaddingTop + remainingLines * lineHeight + finalBottomSpace;
 
       if (finalSegmentHeight <= availableHeight) {
-        pushCodeSegment(block, lines, lineIndex, totalLines, finalSegmentHeight, segmentIndex, totalLines, codePaddingTop, ptToPx(CODE_BLOCK_PADDING_BOTTOM_PT));
+        pushCodeSegment(
+          block,
+          lines,
+          lineIndex,
+          totalLines,
+          finalSegmentHeight,
+          segmentIndex,
+          totalLines,
+          codePaddingTop,
+          ptToPx(CODE_BLOCK_PADDING_BOTTOM_PT)
+        );
+
         lineIndex = totalLines;
         break;
       }
@@ -4223,8 +4077,21 @@ function paginateBlocks(blocks, pageHeight) {
       }
 
       const lineEnd = Math.min(totalLines, lineIndex + fittingLines);
-      const segmentHeight = codePaddingTop + (lineEnd - lineIndex) * lineHeight;
-      pushCodeSegment(block, lines, lineIndex, lineEnd, segmentHeight, segmentIndex, totalLines, codePaddingTop, 0);
+      const segmentHeight =
+        codePaddingTop + (lineEnd - lineIndex) * lineHeight;
+
+      pushCodeSegment(
+        block,
+        lines,
+        lineIndex,
+        lineEnd,
+        segmentHeight,
+        segmentIndex,
+        totalLines,
+        codePaddingTop,
+        0
+      );
+
       lineIndex = lineEnd;
       segmentIndex += 1;
 
@@ -4267,9 +4134,14 @@ function paginateBlocks(blocks, pageHeight) {
     });
   }
 
-  for (const block of blocks) {
+  for (const block of blocks || []) {
     const blockHeight = Math.max(1, Number(block.height) || 0);
-    const isOversized = blockHeight > pageHeight;
+
+    // 중요:
+    // isOversized는 현재 남은 높이가 아니라 "정상 한 페이지 높이" 기준.
+    // 그래야 column 내부에서 media가 첫 page 남은 공간에 안 들어간다고
+    // 바로 height split되지 않고 다음 page로 넘어간다.
+    const isOversized = blockHeight > getFullPageHeight();
 
     if (block.type === "columns") {
       if (isOversized || wouldOverflowSegment(block)) {
@@ -4295,9 +4167,6 @@ function paginateBlocks(blocks, pageHeight) {
     }
 
     // 1. Table
-    // table은 row 단위 split이 가능하므로 먼저 처리한다.
-    // 단, row가 1개 이하라 paginateTableBlock()이 false를 반환할 수 있으므로
-    // 그 경우에는 아래 일반 block 처리로 fall through 시킨다.
     if (
       block.type === "table" &&
       (isOversized || wouldOverflowSegment(block))
@@ -4308,7 +4177,6 @@ function paginateBlocks(blocks, pageHeight) {
     }
 
     // 2. Code block
-    // code는 line 단위 split을 우선 적용한다.
     if (
       block.type === "code" &&
       (isOversized || wouldOverflowSegment(block))
@@ -4318,15 +4186,12 @@ function paginateBlocks(blocks, pageHeight) {
     }
 
     // 3. Equation
-    // equation은 자체 content height를 다시 재므로 전용 push 함수로 보낸다.
-    // pushEquationBlock 내부에서 pairwise gap + page overflow를 처리해야 한다.
     if (block.type === "equation") {
       pushEquationBlock(block);
       continue;
     }
 
     // 4. Paragraph / List / Quote / Callout
-    // 여러 줄짜리 text flow는 line 단위 split을 시도한다.
     if (
       isLineSplittableTextFlow(block) &&
       (isOversized || wouldOverflowSegment(block))
@@ -4337,7 +4202,8 @@ function paginateBlocks(blocks, pageHeight) {
     }
 
     // 5. 일반 block
-    // 현재 페이지에 들어갈 수 있으면 pairwise gap을 붙여 push한다.
+    // media처럼 중간 split하면 안 되는 block은 여기를 탄다.
+    // 현재 page에 안 들어가지만 정상 page에는 들어가면 다음 page로 넘김.
     if (!isOversized) {
       if (wouldOverflowSegment(block)) {
         startNewPage({
@@ -4356,8 +4222,7 @@ function paginateBlocks(blocks, pageHeight) {
     }
 
     // 6. 너무 큰 block fallback
-    // table/code/text-flow에서 처리되지 않은 큰 block은 height 기준으로 잘라낸다.
-    // 예: media, 큰 custom block 등.
+    // 정상 page에도 못 들어가는 큰 media/custom block만 height split.
     if (usedHeight > 0) {
       startNewPage({
         element: block.element,
@@ -4368,9 +4233,13 @@ function paginateBlocks(blocks, pageHeight) {
     paginateHeightSplitBlock(block);
   }
 
+  const outputPages = preserveEmptyPages
+    ? pages
+    : pages.filter((page) => page.length > 0);
+
   return {
     breaks,
-    pages: pages.filter((page) => page.length > 0)
+    pages: outputPages
   };
 }
 
@@ -4809,6 +4678,24 @@ function createRenderedMeasuredBlockStack(blocks, stackWidth, options = {}) {
 
   return stack;
 }
+function createRenderedSegmentStack(segments, stackWidth) {
+  const stack = document.createElement("div");
+  stack.className = "notion-pdf-preview-rendered-stack";
+  stack.style.width = `${stackWidth}px`;
+  stack.style.boxSizing = "border-box";
+  stack.style.overflow = "hidden";
+
+  for (const segment of segments || []) {
+    stack.append(
+      createRenderedPdfPreviewSegment({
+        ...segment,
+        layoutWidth: segment.layoutWidth || stackWidth
+      })
+    );
+  }
+
+  return stack;
+}
 
 function createRenderedColumnsPreview(segment) {
   const measured = Array.isArray(segment.columns)
@@ -4862,19 +4749,16 @@ function createRenderedColumnsPreview(segment) {
     columnElement.style.overflow = "hidden";
     columnElement.style.minWidth = "0";
 
-    const stack = createRenderedMeasuredBlockStack(
-      column.blocks || [],
-      columnWidth,
-      {
-        initialPrevType: "columnStart",
-        applyFirstGap: true
-      }
-    );
-
-    if (columnClipOffset > 0) {
-      stack.style.transform = `translateY(-${columnClipOffset}px)`;
-      stack.style.transformOrigin = "0 0";
-    }
+    const stack = Array.isArray(column.segments)
+      ? createRenderedSegmentStack(column.segments, columnWidth)
+      : createRenderedMeasuredBlockStack(
+          column.blocks || [],
+          columnWidth,
+          {
+            initialPrevType: "columnStart",
+            applyFirstGap: true
+          }
+        );
 
     columnElement.append(stack);
     wrapper.append(columnElement);
