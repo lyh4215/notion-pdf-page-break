@@ -3725,83 +3725,173 @@ function paginateBlocks(blocks, pageHeight) {
     }).join("\n");
   }
 
-  function paginateColumnsBlock(block) {
-    const columns = Array.isArray(block.columns) ? block.columns : [];
+function getColumnBlockGapBeforePx(column, blockIndex) {
+  const blocks = column.blocks || [];
+  const block = blocks[blockIndex];
 
-    if (!columns.length) {
+  if (!block) {
+    return 0;
+  }
+
+  const prevType =
+    blockIndex > 0
+      ? blocks[blockIndex - 1]?.type
+      : "columnStart";
+
+  if (!prevType) {
+    return 0;
+  }
+
+  return ptToPx(getPairwiseGapPt(prevType, block.type));
+}
+
+function takeColumnBlocksForPage(column, startIndex, availableHeight, forceFirst = false) {
+  const sourceBlocks = column.blocks || [];
+  const selectedBlocks = [];
+
+  let index = startIndex;
+  let height = 0;
+
+  while (index < sourceBlocks.length) {
+    const sourceBlock = sourceBlocks[index];
+    const gapBeforePx = getColumnBlockGapBeforePx(column, index);
+    const blockHeight = Math.max(1, Number(sourceBlock.height) || 1);
+    const nextHeight = gapBeforePx + blockHeight;
+
+    if (selectedBlocks.length > 0 && height + nextHeight > availableHeight) {
+      break;
+    }
+
+    if (
+      selectedBlocks.length === 0 &&
+      height + nextHeight > availableHeight &&
+      !forceFirst
+    ) {
+      break;
+    }
+
+    selectedBlocks.push({
+      ...sourceBlock,
+      gapBeforePx
+    });
+
+    height += nextHeight;
+    index += 1;
+  }
+
+  return {
+    blocks: selectedBlocks,
+    consumed: selectedBlocks.length,
+    height
+  };
+}
+
+function hasRemainingColumnBlocks(columns, cursors) {
+  return columns.some((column, index) => {
+    return cursors[index] < (column.blocks || []).length;
+  });
+}
+
+function getColumnsSegmentText(columns) {
+  return columns.map((column, index) => {
+    const text = (column.blocks || [])
+      .map((block) => {
+        if (block.text) {
+          return block.text;
+        }
+
+        return `[${block.type}]`;
+      })
+      .join(" ")
+      .trim();
+
+    return `[Column ${index + 1}] ${text}`;
+  }).join("\n");
+}
+
+  function paginateColumnsBlock(block) {
+    const sourceColumns = Array.isArray(block.columns) ? block.columns : [];
+
+    if (!sourceColumns.length) {
       return false;
     }
 
-    const layouts = buildColumnStackLayouts(columns);
-
-    const fullHeight = Math.max(
-      1,
-      Number(block.height) || 0,
-      ...layouts.map((layout) => Number(layout.stackHeight) || 0)
-    );
-
-    const EPS = 0.5;
-    let offset = 0;
+    const cursors = sourceColumns.map(() => 0);
     let segmentIndex = 0;
 
-    while (offset < fullHeight - EPS) {
+    while (hasRemainingColumnBlocks(sourceColumns, cursors)) {
       let availableHeight = getAvailableContentHeight(
         block,
         segmentIndex > 0
       );
 
-      if (availableHeight <= EPS && usedHeight > 0) {
+      if (availableHeight <= 0 && usedHeight > 0) {
         startNewPage({
           element: block.element,
-          offsetRatio: offset / fullHeight
+          offsetRatio: 0
         });
         continue;
       }
 
-      let endOffset = findColumnSegmentEnd(
-        layouts,
-        offset,
-        availableHeight,
-        fullHeight
-      );
+      const forceFirst = usedHeight === 0;
+      const segmentColumns = [];
+      let segmentHeight = 0;
+      let consumedAny = false;
 
-      // 현재 페이지에 남은 공간이 애매해서 block 단위로 못 자르면 다음 페이지로 넘김.
-      if (endOffset === null && usedHeight > 0) {
-        startNewPage({
-          element: block.element,
-          offsetRatio: offset / fullHeight
-        });
-        continue;
-      }
+      for (let columnIndex = 0; columnIndex < sourceColumns.length; columnIndex += 1) {
+        const sourceColumn = sourceColumns[columnIndex];
 
-      // 빈 페이지에서도 안 들어가는 거대한 child block 방어.
-      // 이 경우만 어쩔 수 없이 다음 안전 boundary까지 넣는다.
-      if (endOffset === null) {
-        endOffset = findFirstColumnBoundaryAfter(
-          layouts,
-          offset,
-          fullHeight
+        const taken = takeColumnBlocksForPage(
+          sourceColumn,
+          cursors[columnIndex],
+          availableHeight,
+          forceFirst
         );
+
+        if (taken.consumed > 0) {
+          consumedAny = true;
+        }
+
+        cursors[columnIndex] += taken.consumed;
+        segmentHeight = Math.max(segmentHeight, taken.height);
+
+        segmentColumns.push({
+          ...sourceColumn,
+          blocks: taken.blocks,
+          height: taken.height
+        });
       }
 
-      const segmentContentHeight = Math.max(1, endOffset - offset);
+      // 현재 페이지의 남은 공간에 어떤 column block도 못 넣으면 다음 페이지로 보냄.
+      if (!consumedAny) {
+        if (usedHeight > 0) {
+          startNewPage({
+            element: block.element,
+            offsetRatio: 0
+          });
+          continue;
+        }
+
+        // 빈 페이지에서도 못 넣는 경우 방어.
+        return false;
+      }
+
+      const splitAfter = hasRemainingColumnBlocks(sourceColumns, cursors);
 
       pushPairwiseSegment(block, {
-        columns,
-        columnClipOffset: offset,
-        segmentHeight: segmentContentHeight,
+        columns: segmentColumns,
         continued: segmentIndex > 0,
-        splitAfter: endOffset < fullHeight - EPS,
-        text: getColumnsSegmentTextFromLayouts(layouts, offset, endOffset)
+        segmentHeight: Math.max(1, segmentHeight),
+        splitAfter,
+        text: getColumnsSegmentText(segmentColumns)
       });
 
-      offset = endOffset;
       segmentIndex += 1;
 
-      if (offset < fullHeight - EPS) {
+      if (splitAfter) {
         startNewPage({
           element: block.element,
-          offsetRatio: offset / fullHeight
+          offsetRatio: 0
         });
       }
     }
@@ -4667,7 +4757,7 @@ function createRenderedColumnsPreview(segment) {
   const measured = Array.isArray(segment.columns)
     ? {
         columns: segment.columns,
-        height: segment.height
+        height: segment.contentHeight || segment.height
       }
     : measureColumnsBlock(
         segment.element,
@@ -4678,21 +4768,13 @@ function createRenderedColumnsPreview(segment) {
   const columns = measured.columns || [];
   const layoutWidth = segment.layoutWidth || PAGE_BODY_WIDTH_PX;
 
-  // 중요:
-  // segment.height는 columns 전체 원본 높이일 수 있음.
-  // split segment에서는 반드시 contentHeight를 써야 함.
   const height = Math.max(
     1,
     Number(segment.contentHeight) ||
-      (Number(segment.segmentHeight) - Number(segment.gapBeforePx || 0)) ||
+      Number(segment.segmentHeight) - Number(segment.gapBeforePx || 0) ||
       Number(measured.height) ||
       Number(segment.height) ||
       1
-  );
-
-  const columnClipOffset = Math.max(
-    0,
-    Number(segment.columnClipOffset) || 0
   );
 
   const wrapper = document.createElement("div");
@@ -4718,21 +4800,17 @@ function createRenderedColumnsPreview(segment) {
     columnElement.style.overflow = "hidden";
     columnElement.style.minWidth = "0";
 
-    const stack = createRenderedMeasuredBlockStack(
-      column.blocks || [],
-      columnWidth,
-      {
-        initialPrevType: "columnStart",
-        applyFirstGap: true
-      }
+    columnElement.append(
+      createRenderedMeasuredBlockStack(
+        column.blocks || [],
+        columnWidth,
+        {
+          initialPrevType: "columnStart",
+          applyFirstGap: true
+        }
+      )
     );
 
-    if (columnClipOffset > 0) {
-      stack.style.transform = `translateY(-${columnClipOffset}px)`;
-      stack.style.transformOrigin = "0 0";
-    }
-
-    columnElement.append(stack);
     wrapper.append(columnElement);
   }
 
