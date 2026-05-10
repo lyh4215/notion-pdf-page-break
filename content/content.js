@@ -2011,7 +2011,22 @@ function findNotionColumnAncestor(block) {
 function getPrintMediaContainerWidth(block, layoutWidth) {
   return Math.max(1, Number(layoutWidth) || PAGE_BODY_WIDTH_PX);
 }
+const NOTION_PDF_MEDIA_MAX_WIDTH_PX = 500;
 
+function getPrintMediaMaxWidth(block, layoutWidth) {
+  const containerWidth = getPrintMediaContainerWidth(block, layoutWidth);
+
+  // column 안에서는 column width 자체가 이미 cap 역할을 하므로,
+  // 전역 media max width를 또 강하게 걸 필요가 없음.
+  if (findNotionColumnAncestor(block)) {
+    return containerWidth;
+  }
+
+  return Math.min(
+    containerWidth,
+    NOTION_PDF_MEDIA_MAX_WIDTH_PX
+  );
+}
 function getPrintMediaTargetWidth(block, layoutWidth) {
   const containerWidth = getPrintMediaContainerWidth(block, layoutWidth);
 
@@ -2030,6 +2045,8 @@ function getPrintMediaTargetWidth(block, layoutWidth) {
   if (Number.isFinite(maxWidthPx) && maxWidthPx > 0) {
     targetWidth = Math.min(targetWidth, maxWidthPx);
   }
+
+  targetWidth = Math.min(targetWidth, getPrintMediaMaxWidth(block, layoutWidth));
 
   return Math.max(1, targetWidth);
 }
