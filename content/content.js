@@ -1029,9 +1029,9 @@ function measurePageMetadataBlocks(metadataElement, layoutWidth) {
   return rows.map((row, index) => ({
     element: metadataElement,
     type: "pageMetadata",
-    text: `${row.label} ${row.value}`,
+    text: row.value ? `${row.label} ${row.value}` : row.label,
     layoutWidth,
-    height: estimatePageMetadataRowBlockHeight(row, layoutWidth),
+    height: PAGE_METADATA_ROW_HEIGHT_PX,
     metadataRow: row,
     metadataRowIndex: index,
     metadataLabelWidth: labelWidth
@@ -1064,7 +1064,60 @@ function getPageMetadataTable(metadataElement) {
 
   return metadataElement.querySelector("[role='table'][aria-label='페이지 속성']");
 }
+function normalizeMetadataText(text) {
+  return String(text || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
+function isPageMetadataEmptyPlaceholder(text) {
+  const normalized = normalizeMetadataText(text);
+
+  return (
+    normalized === "비어 있음" ||
+    normalized === "Empty" ||
+    normalized === "Untitled"
+  );
+}
+
+function getPageMetadataLabelText(row) {
+  const labelledBy = row.getAttribute("aria-labelledby");
+
+  if (labelledBy) {
+    const labelCell = row.querySelector(`#${CSS.escape(labelledBy)}`);
+
+    if (labelCell) {
+      return normalizeMetadataText(labelCell.textContent);
+    }
+  }
+
+  const labelCell = row.querySelector('[role="cell"]');
+
+  if (labelCell) {
+    return normalizeMetadataText(labelCell.textContent);
+  }
+
+  return "";
+}
+
+function getPageMetadataValueText(row) {
+  const valueElement = row.querySelector('[data-testid="property-value"]');
+
+  if (!valueElement) {
+    return "";
+  }
+
+  const rawValue = normalizeMetadataText(valueElement.textContent);
+
+  // Notion 화면 HTML에는 빈 값이 "비어 있음"으로 들어갈 수 있는데,
+  // PDF에는 이 텍스트가 출력되지 않고 빈 칸으로 표시된다.
+  if (isPageMetadataEmptyPlaceholder(rawValue)) {
+    return "";
+  }
+
+  return rawValue;
+}
 function getPageMetadataRows(metadataElement) {
   const table = getPageMetadataTable(metadataElement);
 
@@ -1084,30 +1137,41 @@ function getPageMetadataRows(metadataElement) {
         labelCell;
 
       const label = getElementText(labelSource || row)
+        .replace(/\u00a0/g, " ")
         .replace(/\s+/g, " ")
         .trim();
 
-      const value = getElementText(valueElement)
-        .replace(/\s+/g, " ")
-        .trim();
+      let value = valueElement
+        ? getElementText(valueElement)
+            .replace(/\u00a0/g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+        : "";
+
+      const normalizedValue = value.toLowerCase();
+
+      // 중요:
+      // "비어 있음" placeholder는 PDF에 글자로 찍히는 값이 아니라
+      // 빈 metadata value로 취급한다.
+      // row 자체는 삭제하지 않는다.
+      if (
+        value === "비어 있음" ||
+        normalizedValue === "empty"
+      ) {
+        value = "";
+      }
 
       return {
         label,
         value,
+        isEmpty: value.length === 0,
         element: row
       };
     })
     .filter((row) => {
-      if (!row.label || !row.value) {
-        return false;
-      }
-
-      // Notion UI의 빈 property placeholder는 PDF metadata에서 제외.
-      if (row.value === "비어 있음" || row.value.toLowerCase() === "empty") {
-        return false;
-      }
-
-      return true;
+      // value가 없어도 label이 있으면 표시한다.
+      // 예: 태그 metadata row.
+      return Boolean(row.label);
     });
 
   return rows;
