@@ -2271,28 +2271,22 @@ function getPrintMediaTargetWidth(block, layoutWidth) {
   const containerWidth = getPrintMediaContainerWidth(block, layoutWidth);
 
   const widthValue = readInlineStyleValue(block, "width");
-  const maxWidthValue = readInlineStyleValue(block, "max-width");
-
   const widthPx = parseCssLengthToPx(widthValue, containerWidth);
-  const maxWidthPx = parseCssLengthToPx(maxWidthValue, containerWidth);
 
   const srcDisplayWidthPx = getNotionImageSrcDisplayWidthPx(block);
 
   let targetWidth = containerWidth;
 
-  // 핵심:
-  // img src의 width=640은 실제 표시 폭 320px 정도로 본다.
+  // 1순위: Notion image src의 width 파라미터
+  // 예: width=640 → display width ≈ 320
   if (Number.isFinite(srcDisplayWidthPx) && srcDisplayWidthPx > 0) {
     targetWidth = Math.min(targetWidth, srcDisplayWidthPx);
   }
 
-  // 기존 block width/max-width도 유지
+  // 2순위: inline width
+  // 단, width: 100%는 containerWidth라서 사실상 영향 없음.
   if (Number.isFinite(widthPx) && widthPx > 0) {
     targetWidth = Math.min(targetWidth, widthPx);
-  }
-
-  if (Number.isFinite(maxWidthPx) && maxWidthPx > 0) {
-    targetWidth = Math.min(targetWidth, maxWidthPx);
   }
 
   return Math.max(1, Math.min(containerWidth, targetWidth));
@@ -2345,10 +2339,6 @@ function estimateMediaHeight(block, layoutWidth) {
   const srcDisplayWidthPx = getNotionImageSrcDisplayWidthPx(block);
   const inlineHeightPx = getNotionImageInlineHeightPx(block);
 
-  // 1순위:
-  // src width=640 → display width=320
-  // inline height=164.415
-  // ratio = 164.415 / 320
   if (
     Number.isFinite(srcDisplayWidthPx) &&
     srcDisplayWidthPx > 0 &&
@@ -2358,7 +2348,6 @@ function estimateMediaHeight(block, layoutWidth) {
     return targetWidth * (inlineHeightPx / srcDisplayWidthPx);
   }
 
-  // 2순위: natural ratio
   const naturalWidth = image?.naturalWidth || 0;
   const naturalHeight = image?.naturalHeight || 0;
 
@@ -2366,7 +2355,6 @@ function estimateMediaHeight(block, layoutWidth) {
     return targetWidth * (naturalHeight / naturalWidth);
   }
 
-  // 3순위: DOM fallback
   const blockRect = getVisibleRect(block);
 
   if (blockRect && blockRect.height > 0) {
