@@ -3783,6 +3783,78 @@ function paginateBlocks(blocks, pageHeight) {
     }).join("\n");
   }
 
+  function isColumnHardUnsplittableBlock(block) {
+    if (!block) {
+      return false;
+    }
+
+    // media는 절대 중간 split 금지.
+    // equation도 보통 중간 split하면 이상해져서 금지.
+    // table/code/list/paragraph는 기존 로직상 split 가능성이 있으므로 일단 허용.
+    return (
+      block.type === "media" ||
+      block.type === "equation"
+    );
+  }
+
+  function isOffsetInsideItem(offsetValue, item) {
+    const EPS = 0.5;
+
+    return (
+      offsetValue > item.top + EPS &&
+      offsetValue < item.bottom - EPS
+    );
+  }
+
+  function findHardUnsplittableItemCrossingOffset(layouts, offsetValue) {
+    for (const layout of layouts) {
+      for (const item of layout.stackItems || []) {
+        if (!isColumnHardUnsplittableBlock(item.block)) {
+          continue;
+        }
+
+        if (isOffsetInsideItem(offsetValue, item)) {
+          return item;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function findSafeColumnsEndOffset(layouts, startOffset, preferredEndOffset, fullHeight) {
+    const EPS = 0.5;
+
+    let safeEndOffset = Math.min(fullHeight, preferredEndOffset);
+
+    while (safeEndOffset < fullHeight - EPS) {
+      const crossingItem = findHardUnsplittableItemCrossingOffset(
+        layouts,
+        safeEndOffset
+      );
+
+      if (!crossingItem) {
+        return safeEndOffset;
+      }
+
+      // 절단선이 media/equation 중간을 지나가면,
+      // 그 block 전체를 다음 페이지로 넘기기 위해 block 시작점으로 당긴다.
+      const candidate = crossingItem.top;
+
+      // candidate가 현재 offset보다 뒤에 있으면 안전하게 그 지점에서 자를 수 있음.
+      if (candidate > startOffset + EPS) {
+        safeEndOffset = candidate;
+        continue;
+      }
+
+      // 여기까지 왔다는 건 현재 segment 시작점 자체가 media 내부거나,
+      // media가 페이지 처음부터 시작해서 현재 페이지에 안 들어가는 경우.
+      // 이런 경우에는 위로 당길 수 없으므로 null을 반환하고 호출부에서 처리한다.
+      return null;
+    }
+
+    return fullHeight;
+  }
   function paginateColumnsBlock(block) {
     const sourceColumns = Array.isArray(block.columns)
       ? block.columns
@@ -3823,10 +3895,34 @@ function paginateBlocks(blocks, pageHeight) {
         availableHeight = pageHeight;
       }
 
-      const endOffset = Math.min(
+      const preferredEndOffset = Math.min(
         fullHeight,
         offset + availableHeight
       );
+
+      let endOffset = findSafeColumnsEndOffset(
+        layouts,
+        offset,
+        preferredEndOffset,
+        fullHeight
+      );
+
+      // 현재 페이지 남은 공간에서는 media/equation을 중간에 자르지 않고는
+      // 아무것도 넣을 수 없는 경우.
+      if (endOffset === null) {
+        if (usedHeight > 0) {
+          startNewPage({
+            element: block.element,
+            offsetRatio: offset / fullHeight
+          });
+          continue;
+        }
+
+        // 빈 페이지에서도 안 들어가는 거대한 media/equation이면
+        // 어쩔 수 없이 기존 방식으로 fallback.
+        // 일반적인 이미지 크기에서는 거의 발생하지 않아야 함.
+        endOffset = preferredEndOffset;
+      }
 
       const segmentContentHeight = Math.max(
         1,
