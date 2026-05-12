@@ -2,6 +2,41 @@
 
 Chrome Extension MVP for previewing estimated A4 PDF page breaks before exporting a Notion page.
 
+Source files live under `src/`. Vite builds the loadable Chrome extension into `dist/`.
+
+```text
+src/
+  manifest.json
+  content/
+    index.js                 # content script entry
+    previewEngine.js         # Notion PDF preview estimation/runtime
+    config/layoutConstants.js
+    config/listConstants.js
+    config/mediaConstants.js
+    config/pageMetadataConstants.js
+    config/scale.js
+    debug/pairwiseGapDebugPanel.js
+    debug/registerPairwiseGapDebug.js
+    gaps/blockTypes.js
+    gaps/pairwiseGaps.js
+    measurement/renderedMeasurements.js
+    media/mediaElements.js
+    media/mediaMeasurements.js
+    messaging/previewMessages.js
+    messaging/registerContentMessages.js
+    notion/bodyWidthStatus.js
+    notion/contentBlocks.js
+    rendering/styledTextRuns.js
+    utils/buttonText.js
+    utils/clipboard.js
+    utils/domRects.js
+    utils/units.js
+  popup/
+    popup.html
+    popup.js
+    popup.css
+```
+
 The extension does not control Notion's export UI. It reads the visible Notion document, estimates how many A4 portrait pages the content will occupy at a user-entered scale percent, and draws page-end guide lines over the current page.
 
 ## MVP Scope
@@ -15,11 +50,18 @@ The extension does not control Notion's export UI. It reads the visible Notion d
 
 ## Install Locally
 
+```sh
+npm install
+npm run build
+```
+
 1. Open `chrome://extensions`.
 2. Enable Developer mode.
 3. Choose Load unpacked.
-4. Select this repository folder.
+4. Select this repository's `dist` folder.
 5. Open a Notion page and click the extension icon.
+
+During development, run `npm run dev` to rebuild the extension whenever source files change.
 
 ## How It Estimates
 

@@ -1,4 +1,3 @@
-(() => {
   function ensurePairwiseGapDebugPanelStyle() {
     if (document.getElementById("notion-pdf-gap-debug-style")) {
       return;
@@ -165,7 +164,7 @@
     }
   }
 
-  function createPairwiseGapDebugPanel(deps) {
+export function createPairwiseGapDebugPanel(deps) {
     const {
       blockTypeCount,
       pairwiseGapPt,
@@ -423,8 +422,3 @@
       getPairwiseGapChangedSetCode
     };
   }
-
-  window.NotionPdfGapDebugPanel = {
-    createPairwiseGapDebugPanel
-  };
-})();

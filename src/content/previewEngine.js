@@ -1,678 +1,109 @@
-(() => {
+import {
+  A4_HEIGHT_PX,
+  A4_WIDTH_PX,
+  BODY_TEXT_FONT_SIZE_PT,
+  CODE_BLOCK_FONT_SIZE_PT,
+  CODE_BLOCK_LINE_HEIGHT_PT,
+  CODE_BLOCK_MARGIN_BOTTOM_PT,
+  CODE_BLOCK_PADDING_BOTTOM_PT,
+  CODE_BLOCK_PADDING_LEFT_PT,
+  CODE_BLOCK_PADDING_RIGHT_PT,
+  CODE_BLOCK_PADDING_TOP_PT,
+  EQUATION_DISPLAY_MARGIN_BOTTOM_PT,
+  EQUATION_DISPLAY_MARGIN_TOP_PT,
+  H2_FONT_SIZE_PT,
+  H3_FONT_SIZE_PT,
+  H4_FONT_SIZE_PT,
+  INLINE_CODE_FONT_SIZE_PT,
+  INLINE_CODE_ONLY_LINE_HEIGHT_PT,
+  INLINE_MATH_LINE_HEIGHT_PT,
+  MEASURE_ROOT_ID,
+  OVERLAY_ID,
+  PAGE_BODY_HEIGHT_PX,
+  PAGE_BODY_WIDTH_PX,
+  PAGE_TITLE_FONT_SIZE_PT,
+  PANEL_ID,
+  PDF_PREVIEW_ID,
+  TABLE_TEXT_FONT_SIZE_PT,
+  TABLE_TOP_GAP_PT
+} from "./config/layoutConstants.js";
+import {
+  LIST_MARKER_RESERVED_PT,
+  LIST_NESTED_INDENT_PT
+} from "./config/listConstants.js";
+import {
+  NOTION_IMAGE_SRC_WIDTH_DPR_SCALE,
+  NOTION_PDF_MEDIA_MAX_WIDTH_PX
+} from "./config/mediaConstants.js";
+import {
+  PAGE_METADATA_BOTTOM_GAP_PX,
+  PAGE_METADATA_FONT_SIZE_PX,
+  PAGE_METADATA_LABEL_COLOR,
+  PAGE_METADATA_LABEL_MAX_WIDTH_PX,
+  PAGE_METADATA_LABEL_MIN_WIDTH_PX,
+  PAGE_METADATA_LABEL_RIGHT_GAP_PX,
+  PAGE_METADATA_LINE_HEIGHT_PX,
+  PAGE_METADATA_ROW_HEIGHT_PX,
+  PAGE_METADATA_TABLE_MAX_WIDTH_PX,
+  PAGE_METADATA_TABLE_MIN_WIDTH_PX,
+  PAGE_METADATA_TABLE_WIDTH_RATIO,
+  PAGE_METADATA_VALUE_COLOR
+} from "./config/pageMetadataConstants.js";
+import { clampScale } from "./config/scale.js";
+import {
+  T,
+  getBlockTypeIndex,
+  getPairwiseGapPt
+} from "./gaps/pairwiseGaps.js";
+import { registerPairwiseGapDebug } from "./debug/registerPairwiseGapDebug.js";
+import {
+  applyInheritedStyleSnapshot,
+  applyRenderedMeasurements,
+  getInheritedStyleSnapshot,
+  prepareCloneForMeasurement
+} from "./measurement/renderedMeasurements.js";
+import {
+  getMediaImageElement,
+  getSubstantialMediaElement,
+  hasExplicitMediaHint
+} from "./media/mediaElements.js";
+import {
+  estimateMediaHeight,
+  getPrintMediaTargetWidth
+} from "./media/mediaMeasurements.js";
+import { registerContentMessages } from "./messaging/registerContentMessages.js";
+import {
+  findNotionContentRoot,
+  findPageMetadataElement,
+  getContentBlocks,
+  isInsidePageMetadata,
+  sortBlocksByPagePosition
+} from "./notion/contentBlocks.js";
+import { appendStyledTextRun } from "./rendering/styledTextRuns.js";
+import { setTemporaryButtonText } from "./utils/buttonText.js";
+import { copyTextToClipboard } from "./utils/clipboard.js";
+import { getVisibleRect } from "./utils/domRects.js";
+import { cssPxToPt, ptToPx } from "./utils/units.js";
+
+function installNotionPdfPreview() {
 if (window.__notionPdfPreviewInstalled) {
   return;
 }
 window.__notionPdfPreviewInstalled = true;
 
-const OVERLAY_ID = "notion-pdf-preview-overlay";
-const PANEL_ID = "notion-pdf-preview-panel";
-const PDF_PREVIEW_ID = "notion-pdf-preview-pages";
-const MEASURE_ROOT_ID = "notion-pdf-preview-measure-root";
 
-// Calibrated from Notion native PDF export: A4, scale 100%.
-// PDF units: 1pt = 4/3 CSS px.
-const PT_TO_CSS_PX = 4 / 3;
-
-const A4_WIDTH_PT = 595.92;
-const A4_HEIGHT_PT = 842.88;
-const A4_WIDTH_PX = A4_WIDTH_PT * PT_TO_CSS_PX;
-const A4_HEIGHT_PX = A4_HEIGHT_PT * PT_TO_CSS_PX;
-
-// Notion native PDF export content box, A4 scale 100%.
-// Body content uses ~1 inch margins; browser footer/header live outside this box.
-const PAGE_BODY_MARGIN_PT = 72;
-const PAGE_BODY_WIDTH_PT = A4_WIDTH_PT - PAGE_BODY_MARGIN_PT * 2;
-const PAGE_BODY_HEIGHT_PT = A4_HEIGHT_PT - PAGE_BODY_MARGIN_PT * 2;
-const PAGE_BODY_WIDTH_PX = PAGE_BODY_WIDTH_PT * PT_TO_CSS_PX;
-const PAGE_BODY_HEIGHT_PX = PAGE_BODY_HEIGHT_PT * PT_TO_CSS_PX;
-const PAGE_TITLE_FONT_SIZE_PT = 30;
-const H2_FONT_SIZE_PT = 22.5;
-const H3_FONT_SIZE_PT = 18;
-const H4_FONT_SIZE_PT = 15;
-const BODY_TEXT_FONT_SIZE_PT = 12;
-const INLINE_CODE_FONT_SIZE_PT = 8.75;
-const INLINE_CODE_ONLY_LINE_HEIGHT_PT = 12.5;
-const INLINE_MATH_LINE_HEIGHT_PT = 18.75;
-
-const CODE_BLOCK_FONT_SIZE_PT = 13.5;
-const CODE_BLOCK_LINE_HEIGHT_PT = 18;
-const CODE_BLOCK_PADDING_TOP_PT = 12;
-const CODE_BLOCK_PADDING_RIGHT_PT = 12;
-const CODE_BLOCK_PADDING_BOTTOM_PT = 14;
-const CODE_BLOCK_PADDING_LEFT_PT = 12;
-const CODE_BLOCK_MARGIN_BOTTOM_PT = 5.5;
-
-const TABLE_TEXT_FONT_SIZE_PT = 10.5;
-
-// 이 값은 "표 전용 추가 top gap"이다.
-// 이전 문단 afterGap 6.6pt + TABLE_TOP_GAP_PT 5.0pt ≈ 실제 표 앞 시각 gap 11.6pt
-const TABLE_TOP_GAP_PT = 5.0;
-
-const EQUATION_DISPLAY_MARGIN_TOP_PT = 9;
-const EQUATION_DISPLAY_MARGIN_BOTTOM_PT = 11;
-
-const BlockType = Object.freeze({
-  PAGETITLE: 0,
-  PARAGRAPH: 1,
-  LIST: 2,
-  H2: 3,
-  H3: 4,
-  H4: 5,
-  EQUATION: 6,
-  TABLE: 7,
-  CODE: 8,
-  QUOTE: 9,
-  CALLOUT: 10,
-  MEDIA: 11,
-  COLUMNS: 12,
-  DIVIDER: 13,
-  BLANK: 14,
-  PAGEMETADATA: 15,
-  COLUMNSTART: 16,
-
-  // 실제 block 아님.
-  // list 내부 bullet text row gap 계산용 가상 타입.
-  LISTLINE: 17,
-});
-
-const T = BlockType;
-const BLOCK_TYPE_COUNT = Object.keys(BlockType).length;
-const DEFAULT_PAIRWISE_GAP_PT = 6.6;
-
-const BLOCK_TYPE_INDEX = Object.freeze({
-  pageTitle: T.PAGETITLE,
-  paragraph: T.PARAGRAPH,
-  list: T.LIST,
-  h2: T.H2,
-  h3: T.H3,
-  h4: T.H4,
-  equation: T.EQUATION,
-  table: T.TABLE,
-  code: T.CODE,
-  quote: T.QUOTE,
-  callout: T.CALLOUT,
-  media: T.MEDIA,
-  columns: T.COLUMNS,
-  divider: T.DIVIDER,
-  blank: T.BLANK,
-  pageMetadata: T.PAGEMETADATA,
-
-  columnStart: T.COLUMNSTART,
-  listLine: T.LISTLINE,
-});
-
-const PAIRWISE_GAP_PT = Array.from(
-  { length: BLOCK_TYPE_COUNT },
-  () => Array(BLOCK_TYPE_COUNT).fill(DEFAULT_PAIRWISE_GAP_PT)
-);
-
-const PAIRWISE_GAP_STORAGE_KEY = "notion-pdf-preview-pairwise-gap-v1";
-
-const BLOCK_TYPE_LABELS = Object.freeze([
-  "pageTitle",
-  "paragraph",
-  "list",
-  "h2",
-  "h3",
-  "h4",
-  "equation",
-  "table",
-  "code",
-  "quote",
-  "callout",
-  "media",
-  "columns",
-  "divider",
-  "blank",
-  "pageMetadata",
-  "columnStart",
-  "listLine",
-]);
-
-let PAIRWISE_GAP_DEFAULT_PT = null;
-
-function normalizeBlockTypeIndex(type) {
-  if (Number.isInteger(type) && type >= 0 && type < BLOCK_TYPE_COUNT) {
-    return type;
-  }
-
-  return BLOCK_TYPE_INDEX[type] ?? T.PARAGRAPH;
-}
-
-function getBlockTypeName(index) {
-  return BLOCK_TYPE_LABELS[index] ?? `type-${index}`;
-}
-
-function setPairwiseGap(prevType, nextType, gapPt) {
-  const prevIndex = normalizeBlockTypeIndex(prevType);
-  const nextIndex = normalizeBlockTypeIndex(nextType);
-  const value = Number(gapPt);
-
-  if (!Number.isFinite(value)) {
-    return;
-  }
-
-  PAIRWISE_GAP_PT[prevIndex][nextIndex] = value;
-}
-
-function getBlockTypeIndex(type) {
-  return normalizeBlockTypeIndex(type);
-}
-
-function getPairwiseGapPt(prevType, nextType) {
-  // 주의:
-  // numeric enum에서 pageTitle은 0이라서 !prevType 체크를 쓰면 안 됨.
-  if (
-    prevType === null ||
-    prevType === undefined ||
-    nextType === null ||
-    nextType === undefined ||
-    prevType === "" ||
-    nextType === ""
-  ) {
-    return 0;
-  }
-
-  const prevIndex = normalizeBlockTypeIndex(prevType);
-  const nextIndex = normalizeBlockTypeIndex(nextType);
-
-  return PAIRWISE_GAP_PT[prevIndex]?.[nextIndex] ?? DEFAULT_PAIRWISE_GAP_PT;
-}
-
-function captureDefaultPairwiseGapMatrix() {
-  PAIRWISE_GAP_DEFAULT_PT = PAIRWISE_GAP_PT.map((row) => row.slice());
-}
-
-function restoreDefaultPairwiseGapMatrix() {
-  if (!PAIRWISE_GAP_DEFAULT_PT) {
-    return;
-  }
-
-  for (let row = 0; row < BLOCK_TYPE_COUNT; row += 1) {
-    for (let col = 0; col < BLOCK_TYPE_COUNT; col += 1) {
-      PAIRWISE_GAP_PT[row][col] = PAIRWISE_GAP_DEFAULT_PT[row][col];
-    }
-  }
-}
-
-function savePairwiseGapOverrides() {
-  try {
-    localStorage.setItem(PAIRWISE_GAP_STORAGE_KEY, JSON.stringify(PAIRWISE_GAP_PT));
-  } catch (error) {
-    console.warn("[notion-pdf-preview] Failed to save pairwise gap matrix.", error);
-  }
-}
-
-function loadPairwiseGapOverrides() {
-  try {
-    const raw = localStorage.getItem(PAIRWISE_GAP_STORAGE_KEY);
-
-    if (!raw) {
-      return;
-    }
-
-    const parsed = JSON.parse(raw);
-
-    if (!Array.isArray(parsed)) {
-      return;
-    }
-
-    for (let row = 0; row < Math.min(parsed.length, BLOCK_TYPE_COUNT); row += 1) {
-      if (!Array.isArray(parsed[row])) {
-        continue;
-      }
-
-      for (let col = 0; col < Math.min(parsed[row].length, BLOCK_TYPE_COUNT); col += 1) {
-        const value = Number(parsed[row][col]);
-
-        if (Number.isFinite(value)) {
-          PAIRWISE_GAP_PT[row][col] = value;
-        }
-      }
-    }
-  } catch (error) {
-    console.warn("[notion-pdf-preview] Failed to load pairwise gap matrix.", error);
-  }
-}
-
-function clearPairwiseGapOverrides() {
-  try {
-    localStorage.removeItem(PAIRWISE_GAP_STORAGE_KEY);
-  } catch (error) {
-    console.warn("[notion-pdf-preview] Failed to clear pairwise gap matrix.", error);
-  }
-}
-
-function isDefaultPairwiseGapCell(row, col) {
-  if (!PAIRWISE_GAP_DEFAULT_PT) {
-    return true;
-  }
-
-  return Math.abs(PAIRWISE_GAP_PT[row][col] - PAIRWISE_GAP_DEFAULT_PT[row][col]) < 0.0001;
-}
-// pairwise gap matrix overrides
-// format: setPairwiseGap(prevType, nextType, gapPt);
-// pairwise gap matrix overrides
-// format: setPairwiseGap(prevType, nextType, gapPt);
-
-// pairwise gap matrix overrides
-// format: setPairwiseGap(prevType, nextType, gapPt);
-
-// pairwise gap matrix overrides
-// format: setPairwiseGap(prevType, nextType, gapPt);
-
-// pairwise gap matrix overrides
-// format: setPairwiseGap(prevType, nextType, gapPt);
-// pairwise gap matrix overrides
-// format: setPairwiseGap(prevType, nextType, gapPt);
-// pairwise gap matrix overrides
-// format: setPairwiseGap(prevType, nextType, gapPt);
-// pairwise gap matrix overrides
-// format: setPairwiseGap(prevType, nextType, gapPt);
-// pairwise gap matrix overrides
-// format: setPairwiseGap(prevType, nextType, gapPt);
-// pairwise gap matrix overrides
-// format: setPairwiseGap(prevType, nextType, gapPt);
-
-// pageTitle -> *
-setPairwiseGap(T.PAGETITLE, T.PAGETITLE, 6.6);
-setPairwiseGap(T.PAGETITLE, T.PARAGRAPH, 8.5);
-setPairwiseGap(T.PAGETITLE, T.LIST, 8.5);
-setPairwiseGap(T.PAGETITLE, T.H2, 15.4);
-setPairwiseGap(T.PAGETITLE, T.H3, 8.5);
-setPairwiseGap(T.PAGETITLE, T.H4, 8.5);
-setPairwiseGap(T.PAGETITLE, T.EQUATION, 10.0);
-setPairwiseGap(T.PAGETITLE, T.TABLE, 10.0);
-setPairwiseGap(T.PAGETITLE, T.CODE, 4.0);
-setPairwiseGap(T.PAGETITLE, T.QUOTE, 6.6);
-setPairwiseGap(T.PAGETITLE, T.CALLOUT, 6.6);
-setPairwiseGap(T.PAGETITLE, T.MEDIA, 18.2);
-setPairwiseGap(T.PAGETITLE, T.COLUMNS, 12.0);
-setPairwiseGap(T.PAGETITLE, T.DIVIDER, 6.6);
-setPairwiseGap(T.PAGETITLE, T.BLANK, 6.6);
-setPairwiseGap(T.PAGETITLE, T.PAGEMETADATA, 23.0);
-setPairwiseGap(T.PAGETITLE, T.COLUMNSTART, 6.6);
-
-// paragraph -> *
-setPairwiseGap(T.PARAGRAPH, T.PAGETITLE, 6.6);
-setPairwiseGap(T.PARAGRAPH, T.PARAGRAPH, 6.6);
-setPairwiseGap(T.PARAGRAPH, T.LIST, 7.0);
-setPairwiseGap(T.PARAGRAPH, T.H2, 19.3);
-setPairwiseGap(T.PARAGRAPH, T.H3, 15.5);
-setPairwiseGap(T.PARAGRAPH, T.H4, 14.5);
-setPairwiseGap(T.PARAGRAPH, T.EQUATION, 14.0);
-setPairwiseGap(T.PARAGRAPH, T.TABLE, 10.6);
-setPairwiseGap(T.PARAGRAPH, T.CODE, 4.0);
-setPairwiseGap(T.PARAGRAPH, T.QUOTE, 10.0);
-setPairwiseGap(T.PARAGRAPH, T.CALLOUT, 10.0);
-setPairwiseGap(T.PARAGRAPH, T.MEDIA, 18.2);
-setPairwiseGap(T.PARAGRAPH, T.COLUMNS, 12.0);
-setPairwiseGap(T.PARAGRAPH, T.DIVIDER, 6.6);
-setPairwiseGap(T.PARAGRAPH, T.BLANK, 6.6);
-setPairwiseGap(T.PARAGRAPH, T.PAGEMETADATA, 6.6);
-setPairwiseGap(T.PARAGRAPH, T.COLUMNSTART, 6.6);
-
-// list -> *
-setPairwiseGap(T.LIST, T.PAGETITLE, 6.6);
-setPairwiseGap(T.LIST, T.PARAGRAPH, 7.8);
-setPairwiseGap(T.LIST, T.LIST, 7.4);
-setPairwiseGap(T.LIST, T.H2, 19.2);
-setPairwiseGap(T.LIST, T.H3, 15.6);
-setPairwiseGap(T.LIST, T.H4, 12.9);
-setPairwiseGap(T.LIST, T.EQUATION, 13.2);
-setPairwiseGap(T.LIST, T.TABLE, 10.6);
-setPairwiseGap(T.LIST, T.CODE, 4.0);
-setPairwiseGap(T.LIST, T.QUOTE, 6.6);
-setPairwiseGap(T.LIST, T.CALLOUT, 6.6);
-setPairwiseGap(T.LIST, T.MEDIA, 18.2);
-setPairwiseGap(T.LIST, T.COLUMNS, 12.0);
-setPairwiseGap(T.LIST, T.DIVIDER, 6.6);
-setPairwiseGap(T.LIST, T.BLANK, 6.6);
-setPairwiseGap(T.LIST, T.PAGEMETADATA, 6.6);
-setPairwiseGap(T.LIST, T.COLUMNSTART, 6.6);
-
-// h2 -> *
-setPairwiseGap(T.H2, T.PAGETITLE, 6.6);
-setPairwiseGap(T.H2, T.PARAGRAPH, 3.7);
-setPairwiseGap(T.H2, T.LIST, 3.4);
-setPairwiseGap(T.H2, T.H2, 16.9);
-setPairwiseGap(T.H2, T.H3, 12.4);
-setPairwiseGap(T.H2, T.H4, 10.6);
-setPairwiseGap(T.H2, T.EQUATION, 10.0);
-setPairwiseGap(T.H2, T.TABLE, 10.6);
-setPairwiseGap(T.H2, T.CODE, 4.0);
-setPairwiseGap(T.H2, T.QUOTE, 6.6);
-setPairwiseGap(T.H2, T.CALLOUT, 6.6);
-setPairwiseGap(T.H2, T.MEDIA, 18.2);
-setPairwiseGap(T.H2, T.COLUMNS, 12.0);
-setPairwiseGap(T.H2, T.DIVIDER, 6.6);
-setPairwiseGap(T.H2, T.BLANK, 6.6);
-setPairwiseGap(T.H2, T.PAGEMETADATA, 6.6);
-setPairwiseGap(T.H2, T.COLUMNSTART, 6.6);
-
-// h3 -> *
-setPairwiseGap(T.H3, T.PAGETITLE, 6.6);
-setPairwiseGap(T.H3, T.PARAGRAPH, 4.7);
-setPairwiseGap(T.H3, T.LIST, 5.3);
-setPairwiseGap(T.H3, T.H2, 18.2);
-setPairwiseGap(T.H3, T.H3, 13.7);
-setPairwiseGap(T.H3, T.H4, 12.0);
-setPairwiseGap(T.H3, T.EQUATION, 15.0);
-setPairwiseGap(T.H3, T.TABLE, 9.0);
-setPairwiseGap(T.H3, T.CODE, 4.0);
-setPairwiseGap(T.H3, T.QUOTE, 7.8);
-setPairwiseGap(T.H3, T.CALLOUT, 6.6);
-setPairwiseGap(T.H3, T.MEDIA, 18.2);
-setPairwiseGap(T.H3, T.COLUMNS, 12.0);
-setPairwiseGap(T.H3, T.DIVIDER, 6.6);
-setPairwiseGap(T.H3, T.BLANK, 6.6);
-setPairwiseGap(T.H3, T.PAGEMETADATA, 6.6);
-setPairwiseGap(T.H3, T.COLUMNSTART, 6.6);
-
-// h4 -> *
-setPairwiseGap(T.H4, T.PAGETITLE, 6.6);
-setPairwiseGap(T.H4, T.PARAGRAPH, 4.5);
-setPairwiseGap(T.H4, T.LIST, 5.0);
-setPairwiseGap(T.H4, T.H2, 17.6);
-setPairwiseGap(T.H4, T.H3, 13.0);
-setPairwiseGap(T.H4, T.H4, 11.3);
-setPairwiseGap(T.H4, T.EQUATION, 10.0);
-setPairwiseGap(T.H4, T.TABLE, 10.6);
-setPairwiseGap(T.H4, T.CODE, 4.0);
-setPairwiseGap(T.H4, T.QUOTE, 6.6);
-setPairwiseGap(T.H4, T.CALLOUT, 6.6);
-setPairwiseGap(T.H4, T.MEDIA, 18.2);
-setPairwiseGap(T.H4, T.COLUMNS, 12.0);
-setPairwiseGap(T.H4, T.DIVIDER, 6.6);
-setPairwiseGap(T.H4, T.BLANK, 6.6);
-setPairwiseGap(T.H4, T.PAGEMETADATA, 6.6);
-setPairwiseGap(T.H4, T.COLUMNSTART, 6.6);
-
-// equation -> *
-setPairwiseGap(T.EQUATION, T.PAGETITLE, 6.6);
-setPairwiseGap(T.EQUATION, T.PARAGRAPH, 12.1);
-setPairwiseGap(T.EQUATION, T.LIST, 12.0);
-setPairwiseGap(T.EQUATION, T.H2, 14.0);
-setPairwiseGap(T.EQUATION, T.H3, 13.5);
-setPairwiseGap(T.EQUATION, T.H4, 13.0);
-setPairwiseGap(T.EQUATION, T.EQUATION, 11.2);
-setPairwiseGap(T.EQUATION, T.TABLE, 10.6);
-setPairwiseGap(T.EQUATION, T.CODE, 6.6);
-setPairwiseGap(T.EQUATION, T.QUOTE, 12.0);
-setPairwiseGap(T.EQUATION, T.CALLOUT, 6.6);
-setPairwiseGap(T.EQUATION, T.MEDIA, 18.2);
-setPairwiseGap(T.EQUATION, T.COLUMNS, 12.0);
-setPairwiseGap(T.EQUATION, T.DIVIDER, 6.6);
-setPairwiseGap(T.EQUATION, T.BLANK, 6.6);
-setPairwiseGap(T.EQUATION, T.PAGEMETADATA, 6.6);
-setPairwiseGap(T.EQUATION, T.COLUMNSTART, 6.6);
-
-// table -> *
-setPairwiseGap(T.TABLE, T.PAGETITLE, 6.6);
-setPairwiseGap(T.TABLE, T.PARAGRAPH, 6.6);
-setPairwiseGap(T.TABLE, T.LIST, 6.6);
-setPairwiseGap(T.TABLE, T.H2, 14.0);
-setPairwiseGap(T.TABLE, T.H3, 13.6);
-setPairwiseGap(T.TABLE, T.H4, 13.3);
-setPairwiseGap(T.TABLE, T.EQUATION, 13.6);
-setPairwiseGap(T.TABLE, T.TABLE, 8.0);
-setPairwiseGap(T.TABLE, T.CODE, 6.6);
-setPairwiseGap(T.TABLE, T.QUOTE, 6.6);
-setPairwiseGap(T.TABLE, T.CALLOUT, 6.6);
-setPairwiseGap(T.TABLE, T.MEDIA, 18.2);
-setPairwiseGap(T.TABLE, T.COLUMNS, 12.0);
-setPairwiseGap(T.TABLE, T.DIVIDER, 6.6);
-setPairwiseGap(T.TABLE, T.BLANK, 6.6);
-setPairwiseGap(T.TABLE, T.PAGEMETADATA, 6.6);
-setPairwiseGap(T.TABLE, T.COLUMNSTART, 6.6);
-
-// code -> *
-setPairwiseGap(T.CODE, T.PAGETITLE, 6.6);
-setPairwiseGap(T.CODE, T.PARAGRAPH, 5.5);
-setPairwiseGap(T.CODE, T.LIST, 5.5);
-setPairwiseGap(T.CODE, T.H2, 18.5);
-setPairwiseGap(T.CODE, T.H3, 13.5);
-setPairwiseGap(T.CODE, T.H4, 12.5);
-setPairwiseGap(T.CODE, T.EQUATION, 10.0);
-setPairwiseGap(T.CODE, T.TABLE, 6.6);
-setPairwiseGap(T.CODE, T.CODE, 8.0);
-setPairwiseGap(T.CODE, T.QUOTE, 6.6);
-setPairwiseGap(T.CODE, T.CALLOUT, 6.6);
-setPairwiseGap(T.CODE, T.MEDIA, 18.2);
-setPairwiseGap(T.CODE, T.COLUMNS, 12.0);
-setPairwiseGap(T.CODE, T.DIVIDER, 6.6);
-setPairwiseGap(T.CODE, T.BLANK, 6.6);
-setPairwiseGap(T.CODE, T.PAGEMETADATA, 6.6);
-setPairwiseGap(T.CODE, T.COLUMNSTART, 6.6);
-
-// quote -> *
-setPairwiseGap(T.QUOTE, T.PAGETITLE, 6.6);
-setPairwiseGap(T.QUOTE, T.PARAGRAPH, 12.6);
-setPairwiseGap(T.QUOTE, T.LIST, 6.6);
-setPairwiseGap(T.QUOTE, T.H2, 16.0);
-setPairwiseGap(T.QUOTE, T.H3, 14.0);
-setPairwiseGap(T.QUOTE, T.H4, 13.0);
-setPairwiseGap(T.QUOTE, T.EQUATION, 16.5);
-setPairwiseGap(T.QUOTE, T.TABLE, 6.6);
-setPairwiseGap(T.QUOTE, T.CODE, 6.6);
-setPairwiseGap(T.QUOTE, T.QUOTE, 6.6);
-setPairwiseGap(T.QUOTE, T.CALLOUT, 6.6);
-setPairwiseGap(T.QUOTE, T.MEDIA, 18.2);
-setPairwiseGap(T.QUOTE, T.COLUMNS, 12.0);
-setPairwiseGap(T.QUOTE, T.DIVIDER, 6.6);
-setPairwiseGap(T.QUOTE, T.BLANK, 6.6);
-setPairwiseGap(T.QUOTE, T.PAGEMETADATA, 6.6);
-setPairwiseGap(T.QUOTE, T.COLUMNSTART, 6.6);
-
-// callout -> *
-setPairwiseGap(T.CALLOUT, T.PAGETITLE, 6.6);
-setPairwiseGap(T.CALLOUT, T.PARAGRAPH, 18.0);
-setPairwiseGap(T.CALLOUT, T.LIST, 6.6);
-setPairwiseGap(T.CALLOUT, T.H2, 18.0);
-setPairwiseGap(T.CALLOUT, T.H3, 16.0);
-setPairwiseGap(T.CALLOUT, T.H4, 15.0);
-setPairwiseGap(T.CALLOUT, T.EQUATION, 10.0);
-setPairwiseGap(T.CALLOUT, T.TABLE, 6.6);
-setPairwiseGap(T.CALLOUT, T.CODE, 6.6);
-setPairwiseGap(T.CALLOUT, T.QUOTE, 6.6);
-setPairwiseGap(T.CALLOUT, T.CALLOUT, 6.6);
-setPairwiseGap(T.CALLOUT, T.MEDIA, 18.2);
-setPairwiseGap(T.CALLOUT, T.COLUMNS, 12.0);
-setPairwiseGap(T.CALLOUT, T.DIVIDER, 6.6);
-setPairwiseGap(T.CALLOUT, T.BLANK, 6.6);
-setPairwiseGap(T.CALLOUT, T.PAGEMETADATA, 6.6);
-setPairwiseGap(T.CALLOUT, T.COLUMNSTART, 6.6);
-
-// media -> *
-setPairwiseGap(T.MEDIA, T.PAGETITLE, 18.2);
-setPairwiseGap(T.MEDIA, T.PARAGRAPH, 18.2);
-setPairwiseGap(T.MEDIA, T.LIST, 18.2);
-setPairwiseGap(T.MEDIA, T.H2, 18.2);
-setPairwiseGap(T.MEDIA, T.H3, 18.2);
-setPairwiseGap(T.MEDIA, T.H4, 18.2);
-setPairwiseGap(T.MEDIA, T.EQUATION, 18.2);
-setPairwiseGap(T.MEDIA, T.TABLE, 18.2);
-setPairwiseGap(T.MEDIA, T.CODE, 18.2);
-setPairwiseGap(T.MEDIA, T.QUOTE, 18.2);
-setPairwiseGap(T.MEDIA, T.CALLOUT, 18.2);
-setPairwiseGap(T.MEDIA, T.MEDIA, 18.2);
-setPairwiseGap(T.MEDIA, T.COLUMNS, 12.0);
-setPairwiseGap(T.MEDIA, T.DIVIDER, 18.2);
-setPairwiseGap(T.MEDIA, T.BLANK, 18.2);
-setPairwiseGap(T.MEDIA, T.PAGEMETADATA, 18.2);
-setPairwiseGap(T.MEDIA, T.COLUMNSTART, 18.2);
-
-// columns -> *
-setPairwiseGap(T.COLUMNS, T.PAGETITLE, 25.0);
-setPairwiseGap(T.COLUMNS, T.PARAGRAPH, 25.0);
-setPairwiseGap(T.COLUMNS, T.LIST, 25.0);
-setPairwiseGap(T.COLUMNS, T.H2, 25.0);
-setPairwiseGap(T.COLUMNS, T.H3, 25.0);
-setPairwiseGap(T.COLUMNS, T.H4, 25.0);
-setPairwiseGap(T.COLUMNS, T.EQUATION, 10.0);
-setPairwiseGap(T.COLUMNS, T.TABLE, 25.0);
-setPairwiseGap(T.COLUMNS, T.CODE, 25.0);
-setPairwiseGap(T.COLUMNS, T.QUOTE, 25.0);
-setPairwiseGap(T.COLUMNS, T.CALLOUT, 25.0);
-setPairwiseGap(T.COLUMNS, T.MEDIA, 25.0);
-setPairwiseGap(T.COLUMNS, T.COLUMNS, 12.0);
-setPairwiseGap(T.COLUMNS, T.DIVIDER, 25.0);
-setPairwiseGap(T.COLUMNS, T.BLANK, 25.0);
-setPairwiseGap(T.COLUMNS, T.PAGEMETADATA, 25.0);
-setPairwiseGap(T.COLUMNS, T.COLUMNSTART, 25.0);
-
-// divider -> *
-setPairwiseGap(T.DIVIDER, T.PAGETITLE, 6.6);
-setPairwiseGap(T.DIVIDER, T.PARAGRAPH, 6.6);
-setPairwiseGap(T.DIVIDER, T.LIST, 6.6);
-setPairwiseGap(T.DIVIDER, T.H2, 6.6);
-setPairwiseGap(T.DIVIDER, T.H3, 6.6);
-setPairwiseGap(T.DIVIDER, T.H4, 6.6);
-setPairwiseGap(T.DIVIDER, T.EQUATION, 6.6);
-setPairwiseGap(T.DIVIDER, T.TABLE, 6.6);
-setPairwiseGap(T.DIVIDER, T.CODE, 6.6);
-setPairwiseGap(T.DIVIDER, T.QUOTE, 6.6);
-setPairwiseGap(T.DIVIDER, T.CALLOUT, 6.6);
-setPairwiseGap(T.DIVIDER, T.MEDIA, 18.2);
-setPairwiseGap(T.DIVIDER, T.COLUMNS, 12.0);
-setPairwiseGap(T.DIVIDER, T.DIVIDER, 6.6);
-setPairwiseGap(T.DIVIDER, T.BLANK, 6.6);
-setPairwiseGap(T.DIVIDER, T.PAGEMETADATA, 6.6);
-setPairwiseGap(T.DIVIDER, T.COLUMNSTART, 6.6);
-
-// blank -> *
-setPairwiseGap(T.BLANK, T.PAGETITLE, 6.6);
-setPairwiseGap(T.BLANK, T.PARAGRAPH, 6.6);
-setPairwiseGap(T.BLANK, T.LIST, 6.6);
-setPairwiseGap(T.BLANK, T.H2, 6.6);
-setPairwiseGap(T.BLANK, T.H3, 6.6);
-setPairwiseGap(T.BLANK, T.H4, 6.6);
-setPairwiseGap(T.BLANK, T.EQUATION, 6.6);
-setPairwiseGap(T.BLANK, T.TABLE, 6.6);
-setPairwiseGap(T.BLANK, T.CODE, 6.6);
-setPairwiseGap(T.BLANK, T.QUOTE, 6.6);
-setPairwiseGap(T.BLANK, T.CALLOUT, 6.6);
-setPairwiseGap(T.BLANK, T.MEDIA, 6.6);
-setPairwiseGap(T.BLANK, T.COLUMNS, 12.0);
-setPairwiseGap(T.BLANK, T.DIVIDER, 6.6);
-setPairwiseGap(T.BLANK, T.BLANK, 6.6);
-setPairwiseGap(T.BLANK, T.PAGEMETADATA, 6.6);
-setPairwiseGap(T.BLANK, T.COLUMNSTART, 6.6);
-
-// pageMetadata -> *
-setPairwiseGap(T.PAGEMETADATA, T.PAGETITLE, 12.0);
-setPairwiseGap(T.PAGEMETADATA, T.PARAGRAPH, 12.0);
-setPairwiseGap(T.PAGEMETADATA, T.LIST, 12.0);
-setPairwiseGap(T.PAGEMETADATA, T.H2, 24.0);
-setPairwiseGap(T.PAGEMETADATA, T.H3, 12.0);
-setPairwiseGap(T.PAGEMETADATA, T.H4, 12.0);
-setPairwiseGap(T.PAGEMETADATA, T.EQUATION, 12.0);
-setPairwiseGap(T.PAGEMETADATA, T.TABLE, 12.0);
-setPairwiseGap(T.PAGEMETADATA, T.CODE, 12.0);
-setPairwiseGap(T.PAGEMETADATA, T.QUOTE, 12.0);
-setPairwiseGap(T.PAGEMETADATA, T.CALLOUT, 12.0);
-setPairwiseGap(T.PAGEMETADATA, T.MEDIA, 18.2);
-setPairwiseGap(T.PAGEMETADATA, T.COLUMNS, 12.0);
-setPairwiseGap(T.PAGEMETADATA, T.DIVIDER, 12.0);
-setPairwiseGap(T.PAGEMETADATA, T.BLANK, 12.0);
-setPairwiseGap(T.PAGEMETADATA, T.PAGEMETADATA, 8.0);
-setPairwiseGap(T.PAGEMETADATA, T.COLUMNSTART, 6.6);
-
-// columnStart -> *
-setPairwiseGap(T.COLUMNSTART, T.PAGETITLE, 6.6);
-setPairwiseGap(T.COLUMNSTART, T.PARAGRAPH, 0.0);
-setPairwiseGap(T.COLUMNSTART, T.LIST, 6.6);
-setPairwiseGap(T.COLUMNSTART, T.H2, 6.6);
-setPairwiseGap(T.COLUMNSTART, T.H3, 6.6);
-setPairwiseGap(T.COLUMNSTART, T.H4, 6.6);
-setPairwiseGap(T.COLUMNSTART, T.EQUATION, 6.6);
-setPairwiseGap(T.COLUMNSTART, T.TABLE, 6.6);
-setPairwiseGap(T.COLUMNSTART, T.CODE, 6.6);
-setPairwiseGap(T.COLUMNSTART, T.QUOTE, 6.6);
-setPairwiseGap(T.COLUMNSTART, T.CALLOUT, 6.6);
-setPairwiseGap(T.COLUMNSTART, T.MEDIA, 12.0);
-setPairwiseGap(T.COLUMNSTART, T.COLUMNS, 6.6);
-setPairwiseGap(T.COLUMNSTART, T.DIVIDER, 6.6);
-setPairwiseGap(T.COLUMNSTART, T.BLANK, 6.6);
-setPairwiseGap(T.COLUMNSTART, T.PAGEMETADATA, 6.6);
-setPairwiseGap(T.COLUMNSTART, T.COLUMNSTART, 6.6);
-
-// listLine -> *
-// list 내부의 bullet text row를 paragraph처럼 취급하기 위한 기본값
-setPairwiseGap(T.LISTLINE, T.PAGETITLE, 6.6);
-setPairwiseGap(T.LISTLINE, T.PARAGRAPH, 6.6);
-setPairwiseGap(T.LISTLINE, T.LIST, 7.0);
-setPairwiseGap(T.LISTLINE, T.H2, 19.3);
-setPairwiseGap(T.LISTLINE, T.H3, 15.5);
-setPairwiseGap(T.LISTLINE, T.H4, 14.5);
-setPairwiseGap(T.LISTLINE, T.EQUATION, 14.0);
-setPairwiseGap(T.LISTLINE, T.TABLE, 10.6);
-setPairwiseGap(T.LISTLINE, T.CODE, 4.0);
-setPairwiseGap(T.LISTLINE, T.QUOTE, 10.0);
-setPairwiseGap(T.LISTLINE, T.CALLOUT, 10.0);
-setPairwiseGap(T.LISTLINE, T.MEDIA, 18.2);
-setPairwiseGap(T.LISTLINE, T.COLUMNS, 12.0);
-setPairwiseGap(T.LISTLINE, T.DIVIDER, 6.6);
-setPairwiseGap(T.LISTLINE, T.BLANK, 6.6);
-setPairwiseGap(T.LISTLINE, T.PAGEMETADATA, 6.6);
-setPairwiseGap(T.LISTLINE, T.COLUMNSTART, 6.6);
-
-// paragraph -> paragraph에 대응되는 값
-setPairwiseGap(T.LISTLINE, T.LISTLINE, 6.6);
-
-function copyPairwiseGapRow(fromType, toType) {
-  for (let nextType = 0; nextType < BLOCK_TYPE_COUNT; nextType += 1) {
-    setPairwiseGap(toType, nextType, getPairwiseGapPt(fromType, nextType));
-  }
-}
-
-function copyPairwiseGapColumn(fromType, toType) {
-  for (let prevType = 0; prevType < BLOCK_TYPE_COUNT; prevType += 1) {
-    setPairwiseGap(prevType, toType, getPairwiseGapPt(prevType, fromType));
-  }
-}
-
-// list 내부의 bullet text row는 paragraph처럼 취급.
-// listLine -> *  = paragraph -> *
-// * -> listLine  = * -> paragraph
-copyPairwiseGapRow(T.PARAGRAPH, T.LISTLINE);
-copyPairwiseGapColumn(T.PARAGRAPH, T.LISTLINE);
-
-// 안전하게 명시
-setPairwiseGap(T.LISTLINE, T.LISTLINE, getPairwiseGapPt(T.PARAGRAPH, T.PARAGRAPH));
-
-captureDefaultPairwiseGapMatrix();
-loadPairwiseGapOverrides();
-
-const pairwiseGapDebug = window.NotionPdfGapDebugPanel.createPairwiseGapDebugPanel({
-  blockTypeCount: BLOCK_TYPE_COUNT,
-  pairwiseGapPt: PAIRWISE_GAP_PT,
-  getBlockTypeName,
-  isDefaultPairwiseGapCell,
-  savePairwiseGapOverrides,
-  restoreDefaultPairwiseGapMatrix,
-  clearPairwiseGapOverrides,
+registerPairwiseGapDebug({
   refreshPreview: () => {
     document.querySelector(".notion-pdf-preview-pages")?.remove();
     openPdfPreview();
   }
 });
 
-window.__openPairwiseGapDebugPanel = pairwiseGapDebug.openPairwiseGapDebugPanel;
-window.__PAIRWISE_GAP_PT = PAIRWISE_GAP_PT;
-
-document.addEventListener("keydown", (event) => {
-  if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "g") {
-    event.preventDefault();
-    pairwiseGapDebug.openPairwiseGapDebugPanel();
-  }
-});
-
 // 연속 equation 사이의 최소 visual gap 참고값.
 // 실제 pushEquationBlock에서는 top gap 중복을 제거한다.
 
-const BODY_TEXT_FONT_SIZE_PX = BODY_TEXT_FONT_SIZE_PT * PT_TO_CSS_PX;
-const CODE_BLOCK_FONT_SIZE_PX = CODE_BLOCK_FONT_SIZE_PT * PT_TO_CSS_PX;
+const BODY_TEXT_FONT_SIZE_PX = ptToPx(BODY_TEXT_FONT_SIZE_PT);
+const CODE_BLOCK_FONT_SIZE_PX = ptToPx(CODE_BLOCK_FONT_SIZE_PT);
 const BODY_CJK_ADVANCE_RATIO = 0.92;
 const HEADING_CJK_ADVANCE_RATIO = 0.91;
 const LATIN_ADVANCE_RATIO = 1;
@@ -681,24 +112,12 @@ const INLINE_CODE_HORIZONTAL_PADDING_EM = 0.7;
 const BODY_FONT_STACK = "Inter, \"NotoSansCJKkr-Regular\", \"Noto Sans CJK KR\", \"Noto Sans KR\", \"Apple SD Gothic Neo\", \"Malgun Gothic\", Arial, sans-serif";
 const HEADING_FONT_STACK = "Inter, \"NotoSansCJKkr-Bold\", \"Noto Sans CJK KR\", \"Noto Sans KR\", \"Apple SD Gothic Neo\", \"Malgun Gothic\", Arial, sans-serif";
 const CODE_FONT_STACK = "\"DejaVu Sans Mono\", SFMono-Regular, Menlo, Consolas, \"PT Mono\", \"Liberation Mono\", Courier, monospace";
-const MIN_SCALE_PERCENT = 11;
-const MAX_SCALE_PERCENT = 199;
 let previewState = null;
 let previewUpdateQueued = false;
 let textMeasureContext = null;
-function ptToPx(pt) {
-  return pt * PT_TO_CSS_PX;
-}
 
 function blockHeightFromPt(lineCount, lineAdvancePt, extraPt = 0, afterGapPt = 0) {
   return ptToPx(lineAdvancePt * Math.max(1, lineCount) + extraPt + afterGapPt);
-}
-function clampScale(scalePercent) {
-  const value = Number(scalePercent);
-  if (!Number.isFinite(value)) {
-    return 100;
-  }
-  return Math.min(MAX_SCALE_PERCENT, Math.max(MIN_SCALE_PERCENT, value));
 }
 
 function clearPreview() {
@@ -712,19 +131,6 @@ function clearPreview() {
   previewUpdateQueued = false;
 }
 
-function getVisibleRect(element) {
-  const rect = element.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) {
-    return null;
-  }
-
-  const style = window.getComputedStyle(element);
-  if (style.display === "none" || style.visibility === "hidden") {
-    return null;
-  }
-
-  return rect;
-}
 function normalizeInlineWhitespacePreserveNewlines(text) {
   return (text || "")
     .replace(/\u200b/g, "")
@@ -978,107 +384,6 @@ function getBlockFontMetrics(block) {
     fontSize: Number.parseFloat(primaryStyle.fontSize) || 14,
     fontWeight: Number.parseInt(primaryStyle.fontWeight, 10) || 400
   };
-}
-
-function findNotionContentRoot() {
-  const selectors = [
-    ".notion-page-content",
-    "[data-testid='page-content']",
-    "main [data-block-id]"
-  ];
-
-  for (const selector of selectors) {
-    const element = document.querySelector(selector);
-    if (element && getVisibleRect(element)) {
-      return selector === "main [data-block-id]" ? element.closest(".notion-page-content") || element.parentElement : element;
-    }
-  }
-
-  const blocks = Array.from(document.querySelectorAll("[data-block-id]"));
-  if (!blocks.length) {
-    return null;
-  }
-
-  const roots = new Map();
-  for (const block of blocks) {
-    const root = block.closest(".notion-page-content") || block.parentElement;
-    if (!root) {
-      continue;
-    }
-    roots.set(root, (roots.get(root) || 0) + 1);
-  }
-
-  return Array.from(roots.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-}
-
-function isNestedBlock(block, allBlocks) {
-  const parentBlock = block.parentElement?.closest("[data-block-id]");
-  return parentBlock ? allBlocks.includes(parentBlock) : false;
-}
-
-function getSeparatorBlocks(contentRoot, existingBlocks = []) {
-  return Array.from(contentRoot.querySelectorAll("[role='separator']"))
-    .map((separator) => separator.parentElement || separator)
-    .filter((separatorBlock, index, separatorBlocks) => separatorBlocks.indexOf(separatorBlock) === index)
-    .filter((separatorBlock) => getVisibleRect(separatorBlock))
-    .filter((separatorBlock) => !existingBlocks.some((block) => block.contains(separatorBlock)));
-}
-
-function sortBlocksByPagePosition(blocks) {
-  return blocks.slice().sort((a, b) => {
-    const rectA = a.getBoundingClientRect();
-    const rectB = b.getBoundingClientRect();
-    return rectA.top - rectB.top || rectA.left - rectB.left;
-  });
-}
-
-function getContentBlocks(contentRoot) {
-  const notionBlocks = Array.from(contentRoot.querySelectorAll("[data-block-id]"));
-  const visibleBlocks = notionBlocks
-    .filter((block) => !isInsidePageMetadata(block))
-    .filter((block) => getVisibleRect(block))
-    .filter((block) => !isNestedBlock(block, notionBlocks));
-  const separatorBlocks = getSeparatorBlocks(contentRoot, visibleBlocks);
-
-  if (visibleBlocks.length || separatorBlocks.length) {
-    return sortBlocksByPagePosition([...visibleBlocks, ...separatorBlocks]);
-  }
-
-  const fallbackBlocks = Array.from(contentRoot.querySelectorAll("h1, h2, h3, h4, p, li, table, pre, blockquote, figure, img, hr, [role='separator']"))
-    .map((block) => block.getAttribute("role") === "separator" ? block.parentElement || block : block)
-    .filter((block, index, blocks) => blocks.indexOf(block) === index)
-    .filter((block) => getVisibleRect(block));
-
-  return sortBlocksByPagePosition(fallbackBlocks);
-}
-function findPageMetadataElement(root) {
-  const candidates = Array.from(
-    document.querySelectorAll("[role='table'][aria-label='페이지 속성']")
-  );
-
-  const table = candidates.find((candidate) => {
-    if (!candidate) return false;
-
-    // content root 주변에 있는 metadata만 사용.
-    if (root && root.parentElement && root.parentElement.contains(candidate)) {
-      return true;
-    }
-
-    // Notion 구조상 title 근처에 있으면 document 기준으로도 잡히게 fallback.
-    return true;
-  });
-
-  if (!table) {
-    return null;
-  }
-
-  return table.closest(".layout-content") || table;
-}
-
-function isInsidePageMetadata(element) {
-  return Boolean(
-    element?.closest?.("[role='table'][aria-label='페이지 속성']")
-  );
 }
 
 function estimatePageMetadataRowBlockHeight(row, layoutWidth) {
@@ -1375,25 +680,6 @@ function isListLikeBlock(block, tagName, blockInfo, text) {
   );
 }
 
-function hasExplicitMediaHint(blockInfo) {
-  return (
-    blockInfo.includes("image") ||
-    blockInfo.includes("video") ||
-    blockInfo.includes("embed") ||
-    blockInfo.includes("audio") ||
-    blockInfo.includes("pdf") ||
-    blockInfo.includes("file")
-  );
-}
-
-function getSubstantialMediaElement(block) {
-  const candidates = Array.from(block.querySelectorAll("img, video, iframe, canvas, figure"));
-
-  return candidates.find((element) => {
-    const rect = getVisibleRect(element);
-    return rect && rect.width >= 80 && rect.height >= 60;
-  }) || null;
-}
 function getClassNameText(element) {
   return String(element?.className || "").toLowerCase();
 }
@@ -2167,294 +1453,6 @@ function estimateTableHeight(block, layoutWidth) {
   return tableHeight + blockHeightFromPt(extraLines, 18, -0.62, 0);
 }
 
-function readInlineStyleValue(element, propertyName) {
-  if (!element) {
-    return "";
-  }
-
-  const inlineStyle = element.getAttribute("style") || "";
-  const pattern = new RegExp(`${propertyName}\\s*:\\s*([^;]+)`, "i");
-  const match = inlineStyle.match(pattern);
-
-  return match ? match[1].trim() : "";
-}
-
-function parseCssLengthToPx(value, baseWidth = 0) {
-  if (!value || typeof value !== "string") {
-    return null;
-  }
-
-  const normalized = value.trim().toLowerCase();
-
-  if (!normalized || normalized === "auto" || normalized === "none") {
-    return null;
-  }
-
-  const pxMatch = normalized.match(/^(-?\d+(?:\.\d+)?)px$/);
-
-  if (pxMatch) {
-    return Number(pxMatch[1]);
-  }
-
-  const percentMatch = normalized.match(/^(-?\d+(?:\.\d+)?)%$/);
-
-  if (percentMatch && baseWidth > 0) {
-    return baseWidth * (Number(percentMatch[1]) / 100);
-  }
-
-  return null;
-}
-
-function getMediaPrintReferenceRoot(block) {
-  return (
-    block.closest(".notion-page-content") ||
-    block.closest("[data-content-editable-root='true']") ||
-    document.querySelector(".notion-page-content") ||
-    block.parentElement
-  );
-}
-
-function findNotionColumnAncestor(block) {
-  let node = block.parentElement;
-
-  while (node && node !== document.body) {
-    const className = String(node.className || "").toLowerCase();
-
-    if (className.includes("notion-column-block")) {
-      return node;
-    }
-
-    node = node.parentElement;
-  }
-
-  return null;
-}
-
-function getPrintMediaContainerWidth(block, layoutWidth) {
-  return Math.max(1, Number(layoutWidth) || PAGE_BODY_WIDTH_PX);
-}
-const NOTION_PDF_MEDIA_MAX_WIDTH_PX = 500;
-
-function getPrintMediaMaxWidth(block, layoutWidth) {
-  const containerWidth = getPrintMediaContainerWidth(block, layoutWidth);
-
-  // column 안에서는 column width 자체가 이미 cap 역할을 하므로,
-  // 전역 media max width를 또 강하게 걸 필요가 없음.
-  if (findNotionColumnAncestor(block)) {
-    return containerWidth;
-  }
-
-  return Math.min(
-    containerWidth,
-    NOTION_PDF_MEDIA_MAX_WIDTH_PX
-  );
-}
-
-const NOTION_IMAGE_SRC_WIDTH_DPR_SCALE = 2;
-
-function getMediaImageElement(block) {
-  if (!block) {
-    return null;
-  }
-
-  if (block.matches?.("img")) {
-    return block;
-  }
-
-  return getSubstantialMediaElement(block) || block.querySelector("img");
-}
-
-function getNotionImageSrcWidthPx(block) {
-  const image = getMediaImageElement(block);
-
-  if (!image) {
-    return NaN;
-  }
-
-  const rawSrc = image.getAttribute("src") || "";
-  const src = rawSrc.replace(/&amp;/g, "&");
-
-  if (!src) {
-    return NaN;
-  }
-
-  try {
-    const url = new URL(src, window.location.href);
-    const widthParam = url.searchParams.get("width");
-
-    if (widthParam) {
-      const width = Number(widthParam);
-
-      if (Number.isFinite(width) && width > 0) {
-        return width;
-      }
-    }
-  } catch (error) {
-    // fallback regex below
-  }
-
-  const match = src.match(/[?&]width=(\d+)/);
-
-  if (!match) {
-    return NaN;
-  }
-
-  const width = Number(match[1]);
-
-  return Number.isFinite(width) && width > 0
-    ? width
-    : NaN;
-}
-
-function getNotionImageSrcDisplayWidthPx(block) {
-  const srcWidth = getNotionImageSrcWidthPx(block);
-
-  if (!Number.isFinite(srcWidth) || srcWidth <= 0) {
-    return NaN;
-  }
-
-  return srcWidth / NOTION_IMAGE_SRC_WIDTH_DPR_SCALE;
-}
-
-function getInlineStylePxValue(element, propertyName) {
-  if (!element) {
-    return NaN;
-  }
-
-  const value = element.style?.getPropertyValue?.(propertyName) || "";
-  const match = String(value).match(/(-?\d+(?:\.\d+)?)px/);
-
-  if (!match) {
-    return NaN;
-  }
-
-  const parsed = Number(match[1]);
-
-  return Number.isFinite(parsed) && parsed > 0
-    ? parsed
-    : NaN;
-}
-
-function getNotionImageInlineHeightPx(block) {
-  const image = getMediaImageElement(block);
-
-  if (!image) {
-    return NaN;
-  }
-
-  const heightPx = getInlineStylePxValue(image, "height");
-
-  if (Number.isFinite(heightPx) && heightPx > 0) {
-    return heightPx;
-  }
-
-  const maxHeightPx = getInlineStylePxValue(image, "max-height");
-
-  if (Number.isFinite(maxHeightPx) && maxHeightPx > 0) {
-    return maxHeightPx;
-  }
-
-  return NaN;
-}
-
-
-function getPrintMediaTargetWidth(block, layoutWidth) {
-  const containerWidth = getPrintMediaContainerWidth(block, layoutWidth);
-
-  const widthValue = readInlineStyleValue(block, "width");
-  const widthPx = parseCssLengthToPx(widthValue, containerWidth);
-
-  const srcDisplayWidthPx = getNotionImageSrcDisplayWidthPx(block);
-
-  let targetWidth = containerWidth;
-
-  // 1순위: Notion image src의 width 파라미터
-  // 예: width=640 → display width ≈ 320
-  if (Number.isFinite(srcDisplayWidthPx) && srcDisplayWidthPx > 0) {
-    targetWidth = Math.min(targetWidth, srcDisplayWidthPx);
-  }
-
-  // 2순위: inline width
-  // 단, width: 100%는 containerWidth라서 사실상 영향 없음.
-  if (Number.isFinite(widthPx) && widthPx > 0) {
-    targetWidth = Math.min(targetWidth, widthPx);
-  }
-
-  return Math.max(1, Math.min(containerWidth, targetWidth));
-}
-
-function getMediaAspectRatio(mediaElement) {
-  if (!mediaElement) {
-    return null;
-  }
-
-  const naturalWidth = Number(mediaElement.naturalWidth) || 0;
-  const naturalHeight = Number(mediaElement.naturalHeight) || 0;
-
-  if (naturalWidth > 0 && naturalHeight > 0) {
-    return naturalHeight / naturalWidth;
-  }
-
-  const rect = getVisibleRect(mediaElement);
-
-  if (rect && rect.width > 0 && rect.height > 0) {
-    return rect.height / rect.width;
-  }
-
-  const styleHeight = parseCssLengthToPx(
-    readInlineStyleValue(mediaElement, "height"),
-    0
-  );
-
-  const styleWidth = parseCssLengthToPx(
-    readInlineStyleValue(mediaElement, "width"),
-    0
-  );
-
-  if (
-    Number.isFinite(styleWidth) &&
-    styleWidth > 0 &&
-    Number.isFinite(styleHeight) &&
-    styleHeight > 0
-  ) {
-    return styleHeight / styleWidth;
-  }
-
-  return null;
-}
-
-function estimateMediaHeight(block, layoutWidth) {
-  const image = getMediaImageElement(block);
-  const targetWidth = getPrintMediaTargetWidth(block, layoutWidth);
-
-  const srcDisplayWidthPx = getNotionImageSrcDisplayWidthPx(block);
-  const inlineHeightPx = getNotionImageInlineHeightPx(block);
-
-  if (
-    Number.isFinite(srcDisplayWidthPx) &&
-    srcDisplayWidthPx > 0 &&
-    Number.isFinite(inlineHeightPx) &&
-    inlineHeightPx > 0
-  ) {
-    return targetWidth * (inlineHeightPx / srcDisplayWidthPx);
-  }
-
-  const naturalWidth = image?.naturalWidth || 0;
-  const naturalHeight = image?.naturalHeight || 0;
-
-  if (naturalWidth > 0 && naturalHeight > 0) {
-    return targetWidth * (naturalHeight / naturalWidth);
-  }
-
-  const blockRect = getVisibleRect(block);
-
-  if (blockRect && blockRect.height > 0) {
-    return blockRect.height;
-  }
-
-  return 220;
-}
-
 function hasMathElement(block) {
   return Boolean(block.querySelector(".katex, .katex-display"));
 }
@@ -2472,10 +1470,6 @@ function isStandaloneEquationBlock(block, blockInfo) {
     block.matches("[class*='notion-equation']")
   );
 }
-function cssPxToPt(px) {
-  return px / PT_TO_CSS_PX;
-}
-
 function getEquationOuterElement(block) {
   return block.matches?.(".notion-equation-block, [class*='notion-equation']")
     ? block
@@ -2563,9 +1557,6 @@ function getTextFlowLineHeights(element, lines, ownOnly = false) {
 function sumHeights(heights, start = 0, end = heights.length) {
   return heights.slice(start, end).reduce((sum, height) => sum + height, 0);
 }
-const LIST_MARKER_RESERVED_PT = 21.6;
-const LIST_NESTED_INDENT_PT = 18;
-
 function getListBlockInfo(block) {
   return `${block.tagName || ""} ${block.className || ""} ${block.getAttribute?.("role") || ""} ${block.getAttribute?.("aria-label") || ""}`.toLowerCase();
 }
@@ -3268,17 +2259,7 @@ function estimateListHeight(block, layoutWidth, compact = false) {
   }, 0);
 
   return estimateInlineMathAwareHeight(block, height);
-}
-const PAGE_METADATA_FONT_SIZE_PX = 14;
-const PAGE_METADATA_ROW_HEIGHT_PX = 22;
-const PAGE_METADATA_LINE_HEIGHT_PX = 20;
-const PAGE_METADATA_LABEL_MIN_WIDTH_PX = 42;
-const PAGE_METADATA_LABEL_MAX_WIDTH_PX = 88;
-const PAGE_METADATA_LABEL_RIGHT_GAP_PX = 10;
-
-const PAGE_METADATA_LABEL_COLOR = "rgba(55, 53, 47, 0.55)";
-const PAGE_METADATA_VALUE_COLOR = "rgb(55, 53, 47)";
-function measureMetadataTextWidth(text, fontSizePx = PAGE_METADATA_FONT_SIZE_PX) {
+}function measureMetadataTextWidth(text, fontSizePx = PAGE_METADATA_FONT_SIZE_PX) {
   if (!measureMetadataTextWidth.canvas) {
     measureMetadataTextWidth.canvas = document.createElement("canvas");
   }
@@ -3411,124 +2392,6 @@ function estimateBlockHeight(block, layoutWidth, type = classifyBlock(block)) {
       const baseHeight = estimateTextFlowHeight(block, text, layoutWidth, 0, 0);
       return estimateInlineMathAwareHeight(block, baseHeight);
     }
-  }
-}
-
-function getInheritedStyleSnapshot(element) {
-  const style = window.getComputedStyle(element);
-
-  return {
-    color: style.color,
-    fontFamily: style.fontFamily,
-    fontSize: style.fontSize,
-    fontWeight: style.fontWeight,
-    letterSpacing: style.letterSpacing,
-    lineHeight: style.lineHeight
-  };
-}
-
-function applyInheritedStyleSnapshot(element, styleSnapshot) {
-  if (!styleSnapshot) {
-    return;
-  }
-
-  Object.assign(element.style, styleSnapshot);
-}
-
-function createMeasurementRoot(contentRoot, layoutWidth) {
-  document.getElementById(MEASURE_ROOT_ID)?.remove();
-
-  const root = document.createElement("div");
-
-  root.id = MEASURE_ROOT_ID;
-  root.className = "notion-pdf-preview-measure-root";
-  root.style.width = `${layoutWidth}px`;
-  applyInheritedStyleSnapshot(root, getInheritedStyleSnapshot(contentRoot));
-
-  document.body.append(root);
-  return root;
-}
-
-function prepareCloneForMeasurement(clone, type = "paragraph") {
-  clone.dataset.pdfPreviewType = type;
-  clone.removeAttribute("id");
-  clone.removeAttribute("contenteditable");
-  clone.style.width = "100%";
-  clone.style.maxWidth = "100%";
-  clone.style.minWidth = "0";
-  clone.style.marginLeft = "0";
-  clone.style.marginRight = "0";
-  clone.style.alignSelf = "stretch";
-  clone.style.transform = "none";
-
-  clone.querySelectorAll("[id]").forEach((element) => element.removeAttribute("id"));
-  clone.querySelectorAll("[contenteditable]").forEach((element) => {
-    element.setAttribute("contenteditable", "false");
-  });
-
-  clone.querySelectorAll("img, video, canvas, iframe").forEach((element) => {
-    element.removeAttribute("loading");
-  });
-
-  return clone;
-}
-
-function shouldUseRenderedHeight(type) {
-  return false;
-}
-
-function getMarginBottom(element) {
-  return Number.parseFloat(window.getComputedStyle(element).marginBottom) || 0;
-}
-
-function getMeasuredStackHeight(clone, nextClone) {
-  const rect = clone.getBoundingClientRect();
-
-  if (!rect || rect.height <= 0) {
-    return 0;
-  }
-
-  if (nextClone) {
-    const nextRect = nextClone.getBoundingClientRect();
-    const stackedHeight = nextRect.top - rect.top;
-
-    if (Number.isFinite(stackedHeight) && stackedHeight > 0) {
-      return stackedHeight;
-    }
-  }
-
-  return rect.height + getMarginBottom(clone);
-}
-
-function applyRenderedMeasurements(contentRoot, measuredBlocks, layoutWidth) {
-  if (!measuredBlocks.length) {
-    return;
-  }
-
-  const root = createMeasurementRoot(contentRoot, layoutWidth);
-  const clones = [];
-
-  try {
-    for (const block of measuredBlocks) {
-      const clone = prepareCloneForMeasurement(block.element.cloneNode(true), block.type);
-      root.append(clone);
-      clones.push(clone);
-    }
-
-    // Force a single layout pass after every clone has been stacked at PDF body width.
-    root.getBoundingClientRect();
-
-    measuredBlocks.forEach((block, index) => {
-      const clone = clones[index];
-      const renderedHeight = getMeasuredStackHeight(clone, clones[index + 1]);
-
-      if (shouldUseRenderedHeight(block.type) && Number.isFinite(renderedHeight) && renderedHeight > 0) {
-        block.height = renderedHeight;
-        block.measurement = "rendered";
-      }
-    });
-  } finally {
-    root.remove();
   }
 }
 
@@ -4393,29 +3256,6 @@ function schedulePreviewUpdate() {
   requestAnimationFrame(updatePreviewPositions);
 }
 
-function truncateText(text, maxLength = 260) {
-  if (!text) {
-    return "(empty block)";
-  }
-
-  return text.length > maxLength ? `${text.slice(0, maxLength).trim()}...` : text;
-}
-
-function formatPdfPreviewForCopy(pages) {
-  return pages.map((pageBlocks, pageIndex) => {
-    const blocks = pageBlocks.map((segment) => {
-      const flags = [
-        segment.continued ? "continued" : "",
-        segment.splitAfter ? "splits" : ""
-      ].filter(Boolean);
-      const suffix = flags.length ? ` | ${flags.join(" | ")}` : "";
-      return `${segment.type} | ${Math.round(segment.segmentHeight ?? segment.height)}px${suffix}\n${formatSegmentTextForPreview(segment)}`;
-    });
-
-    return [`Page ${pageIndex + 1}`, ...blocks].join("\n\n");
-  }).join("\n\n");
-}
-
 function getSegmentWrapSettings(segment) {
   const layoutWidth = segment.layoutWidth || PAGE_BODY_WIDTH_PX;
 
@@ -4514,52 +3354,6 @@ function formatSegmentTextForPreview(segment) {
   return wrapTextLinesForPreview(segment.text || "", fontSize, layoutWidth, reservedWidth, inlineCodeFragments, fontKind, inlineMathFragments).join("\n");
 }
 
-function copyTextToClipboard(text) {
-  if (navigator.clipboard?.writeText) {
-    return navigator.clipboard.writeText(text);
-  }
-
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.style.position = "fixed";
-  textarea.style.inset = "0 auto auto 0";
-  textarea.style.opacity = "0";
-  document.body.append(textarea);
-  textarea.select();
-
-  try {
-    document.execCommand("copy");
-    return Promise.resolve();
-  } finally {
-    textarea.remove();
-  }
-}
-
-function setTemporaryButtonText(button, text) {
-  const originalText = button.textContent;
-  button.textContent = text;
-  window.setTimeout(() => {
-    button.textContent = originalText;
-  }, 1400);
-}
-
-function createPdfPreviewBlock(segment, pageScale) {
-  const block = document.createElement("article");
-  block.className = "notion-pdf-preview-page-block";
-  block.dataset.type = segment.type;
-  block.style.minHeight = `${Math.max(12, segment.segmentHeight * pageScale)}px`;
-
-  const meta = document.createElement("div");
-  meta.className = "notion-pdf-preview-page-block-meta";
-  meta.textContent = `${segment.type} | ${Math.round(segment.height)}px${segment.continued ? " | continued" : ""}${segment.splitAfter ? " | splits" : ""}`;
-
-  const text = document.createElement("p");
-  text.textContent = truncateText(segment.text);
-
-  block.append(meta, text);
-  return block;
-}
-
 function createRenderedTablePreview(segment) {
   const table = document.createElement("table");
   table.className = "notion-pdf-preview-synthetic-table";
@@ -4584,27 +3378,6 @@ function createRenderedTablePreview(segment) {
   }
 
   return table;
-}
-
-function appendStyledTextRun(parent, value) {
-  if (!value) {
-    return;
-  }
-
-  const runs = value.match(/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]+|[A-Za-z0-9_./:%+-]+|[^A-Za-z0-9_\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]+/g) || [value];
-
-  for (const run of runs) {
-    const span = document.createElement("span");
-    span.textContent = run;
-
-    if (/^[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u3040-\u30FF\u3400-\u9FFF]+$/.test(run)) {
-      span.className = "notion-pdf-preview-script-cjk";
-    } else if (/^[A-Za-z0-9_./:%+-]+$/.test(run)) {
-      span.className = "notion-pdf-preview-script-latin";
-    }
-
-    parent.append(span);
-  }
 }
 
 function appendSyntheticLineContent(lineElement, line, segment) {
@@ -5423,155 +4196,8 @@ function showPreview(scalePercentInput) {
   return { estimatedPages: layout.estimatedPages };
 }
 
+registerContentMessages({ showPreview, clearPreview });
 
-
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  try {
-    if (message?.type === "NOTION_PDF_PREVIEW_SHOW") {
-      const scalePercent =
-        message.scalePercent ??
-        message.settings?.scale ??
-        message.settings?.scalePercent;
-
-      sendResponse(showPreview(scalePercent));
-      return true;
-    }
-
-    if (message?.type === "NOTION_PDF_PREVIEW_CLEAR") {
-      clearPreview();
-      sendResponse({ ok: true });
-      return true;
-    }
-  } catch (error) {
-    sendResponse({ error: error.message || "Preview failed." });
-    return true;
-  }
-
-  return false;
-});
-
-const REQUIRED_NOTION_BODY_WIDTH_PX = 710;
-const NOTION_BODY_WIDTH_TOLERANCE_PX = 2;
-
-function findMainNotionPageContent() {
-  const candidates = Array.from(
-    document.querySelectorAll(".layout-content > .notion-page-content, .notion-page-content")
-  );
-
-  const visibleCandidates = candidates
-    .map((element) => {
-      const rect = element.getBoundingClientRect();
-
-      const directBlockCount = element.querySelectorAll(
-        ":scope > .notion-selectable, :scope > [data-block-id]"
-      ).length;
-
-      const nestedBlockCount = element.querySelectorAll(
-        ".notion-selectable, [data-block-id]"
-      ).length;
-
-      return {
-        element,
-        rect,
-        directBlockCount,
-        nestedBlockCount
-      };
-    })
-    .filter(({ rect, nestedBlockCount }) => {
-      return (
-        rect.width > 200 &&
-        rect.height > 100 &&
-        nestedBlockCount > 0
-      );
-    });
-
-  if (visibleCandidates.length === 0) {
-    return null;
-  }
-
-  visibleCandidates.sort((a, b) => {
-    if (b.directBlockCount !== a.directBlockCount) {
-      return b.directBlockCount - a.directBlockCount;
-    }
-
-    if (b.nestedBlockCount !== a.nestedBlockCount) {
-      return b.nestedBlockCount - a.nestedBlockCount;
-    }
-
-    return b.rect.height - a.rect.height;
-  });
-
-  return visibleCandidates[0].element;
 }
 
-function getMainNotionTextBlockWidth(pageContent) {
-  if (!pageContent) {
-    return 0;
-  }
-
-  const textLikeBlocks = Array.from(
-    pageContent.querySelectorAll(
-      [
-        ":scope > .notion-text-block",
-        ":scope > .notion-header-block",
-        ":scope > .notion-sub_header-block",
-        ":scope > .notion-sub_sub_header-block",
-        ":scope > .notion-bulleted_list-block",
-        ":scope > .notion-numbered_list-block",
-        ":scope > .notion-to_do-block",
-        ":scope > .notion-toggle-block",
-        ":scope > .notion-quote-block",
-        ":scope > .notion-callout-block",
-        ":scope > .notion-divider-block"
-      ].join(", ")
-    )
-  );
-
-  if (textLikeBlocks.length === 0) {
-    return 0;
-  }
-
-  return Math.round(
-    Math.max(
-      ...textLikeBlocks.map((block) => block.getBoundingClientRect().width)
-    )
-  );
-}
-
-function getNotionBodyWidthStatus() {
-  const pageContent = findMainNotionPageContent();
-
-  if (!pageContent) {
-    return {
-      found: false,
-      ready: false,
-      bodyWidth: 0,
-      textBlockWidth: 0,
-      requiredWidth: REQUIRED_NOTION_BODY_WIDTH_PX
-    };
-  }
-
-  const bodyWidth = Math.round(pageContent.getBoundingClientRect().width);
-  const textBlockWidth = getMainNotionTextBlockWidth(pageContent);
-
-  const ready =
-    bodyWidth + NOTION_BODY_WIDTH_TOLERANCE_PX >= REQUIRED_NOTION_BODY_WIDTH_PX;
-
-  return {
-    found: true,
-    ready,
-    bodyWidth,
-    textBlockWidth,
-    requiredWidth: REQUIRED_NOTION_BODY_WIDTH_PX
-  };
-}
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type === "NOTION_PDF_PREVIEW_WIDTH_STATUS") {
-    sendResponse(getNotionBodyWidthStatus());
-    return true;
-  }
-});
-
-
-})();
+installNotionPdfPreview();

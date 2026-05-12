@@ -1,0 +1,2 @@
+export const NOTION_PDF_MEDIA_MAX_WIDTH_PX = 500;
+export const NOTION_IMAGE_SRC_WIDTH_DPR_SCALE = 2;
